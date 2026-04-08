@@ -15,9 +15,9 @@ const GALICIA_PORTFOLIO = [
   { id:1,  ticker:"TZXD6",     name:"BONTES CER V15/12/26",          type:"bono_ars", qty:781503,   buyPrice:179,       currentPrice:269.35,   buyCurrency:"ARS", rendPct:50.53, buyDate:"2026-04-01" },
   { id:2,  ticker:"TZX27",     name:"BONO REP ARG CER V30/06/27",    type:"bono_ars", qty:428449,   buyPrice:355,       currentPrice:360.95,   buyCurrency:"ARS", rendPct:1.60,  buyDate:"2026-04-01" },
   // BONOS USD
-  { id:3,  ticker:"TLCUD",     name:"ON Telecom C28 05/03/29",       type:"bono_usd", qty:7000,     buyPrice:1.00,      currentPrice:1.016,    buyCurrency:"USD", rendPct:1.60,  buyDate:"2026-04-01" },
-  { id:4,  ticker:"AO27D",     name:"Bono Tesoro 6% V29/10/27",      type:"bono_usd", qty:2954,     buyPrice:1.02,      currentPrice:1.017,    buyCurrency:"USD", rendPct:0.10,  buyDate:"2026-04-01" },
-  { id:5,  ticker:"GD38D",     name:"BONOS REP ARG U$S V09/01/38",   type:"bono_usd", qty:1681,     buyPrice:0.78,      currentPrice:0.7982,   buyCurrency:"USD", rendPct:5.31,  buyDate:"2026-04-01" },
+  { id:3,  ticker:"TLCUD",     name:"ON Telecom C28 05/03/29",       type:"bono_usd", qty:7000,     buyPrice:100.0,     currentPrice:101.6,    buyCurrency:"USD", rendPct:1.60,  buyDate:"2026-04-01" },
+  { id:4,  ticker:"AO27D",     name:"Bono Tesoro 6% V29/10/27",      type:"bono_usd", qty:2954,     buyPrice:102.0,     currentPrice:101.7,    buyCurrency:"USD", rendPct:0.10,  buyDate:"2026-04-01" },
+  { id:5,  ticker:"GD38D",     name:"BONOS REP ARG U$S V09/01/38",   type:"bono_usd", qty:1681,     buyPrice:78.0,      currentPrice:79.82,    buyCurrency:"USD", rendPct:5.31,  buyDate:"2026-04-01" },
   // ACCIONES AR
   { id:6,  ticker:"TXAR",      name:"Siderar (Ternium Argentina)",   type:"accion_ar",qty:2467,     buyPrice:607.00,    currentPrice:710.50,   buyCurrency:"ARS", rendPct:16.89, buyDate:"2026-04-01" },
   { id:7,  ticker:"YPFD",      name:"YPF Ordinarias D",              type:"accion_ar",qty:21,       buyPrice:54214.29,  currentPrice:65250.00, buyCurrency:"ARS", rendPct:20.36, buyDate:"2026-04-01" },

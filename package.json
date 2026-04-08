@@ -1,0 +1,10 @@
+# Mi Portfolio - Galicia
+
+Dashboard de finanzas personales con precios en vivo.
+
+## Tecnología
+- React 18
+- Datos: data912, ArgentinaDatos, dolarapi, Anthropic API
+
+## Deploy
+Conectado a Vercel — cualquier push a `main` actualiza el sitio.

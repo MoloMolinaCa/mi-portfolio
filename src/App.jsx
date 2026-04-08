@@ -1,4 +1,3 @@
-
 /* eslint-disable */
 import React, { useState, useEffect } from "react";
 
@@ -671,6 +670,45 @@ function Modal({h,port=[],onSave,onClose}){
 }
 
 // ── AI Recommendations Tab — análisis inline con Claude API ──────────────────
+
+function Chart100({series}) {
+  if(!series?.length) return null;
+  const W=560,H=200,PL=44,PT=12,PR=12,PB=26;
+  const allV = series.flatMap(s=>s.data.map(d=>d.val));
+  const minV = Math.min(...allV)*0.997;
+  const maxV = Math.max(...allV)*1.003;
+  const n = series[0].data.length;
+  const xS = i => PL+(i/(n-1))*(W-PL-PR);
+  const yS = v => PT+(1-(v-minV)/(maxV-minV))*(H-PT-PB);
+  const path = data => data.map((d,i)=>`${i===0?"M":"L"}${xS(i).toFixed(1)},${yS(d.val).toFixed(1)}`).join(" ");
+  const yTicks = Array.from({length:5},(_,i)=>minV+(maxV-minV)*i/4);
+  const xLabels = [0, Math.floor(n/3), Math.floor(2*n/3), n-1].filter((v,i,a)=>a.indexOf(v)===i);
+  return(
+    <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:"100%"}}>
+      {/* Grid */}
+      {yTicks.map((v,i)=>(
+        <g key={i}>
+          <line x1={PL} x2={W-PR} y1={yS(v)} y2={yS(v)} stroke="var(--border)" strokeWidth="0.5"/>
+          <text x={PL-4} y={yS(v)+4} textAnchor="end" fontSize="9" fill="var(--text-muted)">{v.toFixed(0)}</text>
+        </g>
+      ))}
+      {/* Base 100 line */}
+      <line x1={PL} x2={W-PR} y1={yS(100)} y2={yS(100)} stroke="rgba(255,255,255,0.1)" strokeWidth="1" strokeDasharray="3,3"/>
+      {/* Series */}
+      {series.map(s=>(
+        <path key={s.key} d={path(s.data)} fill="none" stroke={s.color}
+          strokeWidth={s.bold?2:1.5} strokeLinejoin="round" opacity={s.bold?1:0.7}/>
+      ))}
+      {/* X labels */}
+      {xLabels.map(i=>(
+        <text key={i} x={xS(i)} y={H-4} textAnchor="middle" fontSize="9" fill="var(--text-muted)">
+          {series[0].data[i]?.date?.slice(5)}
+        </text>
+      ))}
+    </svg>
+  );
+};
+
 function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxRate,fx}){
   const PERIODS=[
     {key:"30d", label:"30d",  days:30},
@@ -925,43 +963,6 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
   },[period]);
 
   // ── SVG line chart ─────────────────────────────────────────────────────────
-  const Chart100 = ({series}) => {
-    if(!series?.length) return null;
-    const W=560,H=200,PL=44,PT=12,PR=12,PB=26;
-    const allV = series.flatMap(s=>s.data.map(d=>d.val));
-    const minV = Math.min(...allV)*0.997;
-    const maxV = Math.max(...allV)*1.003;
-    const n = series[0].data.length;
-    const xS = i => PL+(i/(n-1))*(W-PL-PR);
-    const yS = v => PT+(1-(v-minV)/(maxV-minV))*(H-PT-PB);
-    const path = data => data.map((d,i)=>`${i===0?"M":"L"}${xS(i).toFixed(1)},${yS(d.val).toFixed(1)}`).join(" ");
-    const yTicks = Array.from({length:5},(_,i)=>minV+(maxV-minV)*i/4);
-    const xLabels = [0, Math.floor(n/3), Math.floor(2*n/3), n-1].filter((v,i,a)=>a.indexOf(v)===i);
-    return(
-      <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:"100%"}}>
-        {/* Grid */}
-        {yTicks.map((v,i)=>(
-          <g key={i}>
-            <line x1={PL} x2={W-PR} y1={yS(v)} y2={yS(v)} stroke="var(--border)" strokeWidth="0.5"/>
-            <text x={PL-4} y={yS(v)+4} textAnchor="end" fontSize="9" fill="var(--text-muted)">{v.toFixed(0)}</text>
-          </g>
-        ))}
-        {/* Base 100 line */}
-        <line x1={PL} x2={W-PR} y1={yS(100)} y2={yS(100)} stroke="rgba(255,255,255,0.1)" strokeWidth="1" strokeDasharray="3,3"/>
-        {/* Series */}
-        {series.map(s=>(
-          <path key={s.key} d={path(s.data)} fill="none" stroke={s.color}
-            strokeWidth={s.bold?2:1.5} strokeLinejoin="round" opacity={s.bold?1:0.7}/>
-        ))}
-        {/* X labels */}
-        {xLabels.map(i=>(
-          <text key={i} x={xS(i)} y={H-4} textAnchor="middle" fontSize="9" fill="var(--text-muted)">
-            {series[0].data[i]?.date?.slice(5)}
-          </text>
-        ))}
-      </svg>
-    );
-  };
 
   const cd = chartData;
   const series = cd ? [

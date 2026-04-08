@@ -12,8 +12,8 @@ const ASSET_TYPES = {
 
 const GALICIA_PORTFOLIO = [
   // BONOS ARS
-  { id:1,  ticker:"TZXD6",     name:"BONTES CER V15/12/26",          type:"bono_ars", qty:781503,   buyPrice:1.79,      currentPrice:2.6935,   buyCurrency:"ARS", rendPct:50.53, buyDate:"2026-04-01" },
-  { id:2,  ticker:"TZX27",     name:"BONO REP ARG CER V30/06/27",    type:"bono_ars", qty:428449,   buyPrice:3.55,      currentPrice:3.6095,   buyCurrency:"ARS", rendPct:1.60,  buyDate:"2026-04-01" },
+  { id:1,  ticker:"TZXD6",     name:"BONTES CER V15/12/26",          type:"bono_ars", qty:781503,   buyPrice:179,       currentPrice:269.35,   buyCurrency:"ARS", rendPct:50.53, buyDate:"2026-04-01" },
+  { id:2,  ticker:"TZX27",     name:"BONO REP ARG CER V30/06/27",    type:"bono_ars", qty:428449,   buyPrice:355,       currentPrice:360.95,   buyCurrency:"ARS", rendPct:1.60,  buyDate:"2026-04-01" },
   // BONOS USD
   { id:3,  ticker:"TLCUD",     name:"ON Telecom C28 05/03/29",       type:"bono_usd", qty:7000,     buyPrice:1.00,      currentPrice:1.016,    buyCurrency:"USD", rendPct:1.60,  buyDate:"2026-04-01" },
   { id:4,  ticker:"AO27D",     name:"Bono Tesoro 6% V29/10/27",      type:"bono_usd", qty:2954,     buyPrice:1.02,      currentPrice:1.017,    buyCurrency:"USD", rendPct:0.10,  buyDate:"2026-04-01" },

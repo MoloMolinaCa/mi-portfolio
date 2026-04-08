@@ -1189,8 +1189,11 @@ export default function App(){
     const currentPrice=live?live.price:h.currentPrice;
     const liveChangePct=live?live.changePct:null;
     const ppc=ppcByTicker[h.ticker]||h.buyPrice;
-    const valARS=h.buyCurrency==="USD"?currentPrice*h.qty*fxRate:currentPrice*h.qty;
-    const costARS=h.buyCurrency==="USD"?ppc*h.qty*fxRate:ppc*h.qty;
+    // Bonos cotizan por cada 100 VN — dividir por 100 para obtener valor real
+    const isBond = h.type==="bono_usd" || h.type==="bono_ars";
+    const qtyFactor = isBond ? h.qty/100 : h.qty;
+    const valARS=h.buyCurrency==="USD"?currentPrice*qtyFactor*fxRate:currentPrice*qtyFactor;
+    const costARS=h.buyCurrency==="USD"?ppc*qtyFactor*fxRate:ppc*qtyFactor;
     const valUSD=valARS/fxRate; const costUSD=costARS/fxRate;
     const pnlUSD=valUSD-costUSD;
     const pnlPct=costUSD>0?(pnlUSD/costUSD)*100:0;

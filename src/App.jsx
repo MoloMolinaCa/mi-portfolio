@@ -841,10 +841,10 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
       setChartData({port100, t10y100, spy100, ccl100, spySource, cclSource,
         startDate:dates[0], endDate:dates[dates.length-1],
         portRet, t10yRet, spyRet, cclRet,
-        cclPoints: cclHist.length,
+        cclPoints: ccl100 ? ccl100.length : 0,
       });
     } catch(e){
-      setErr(`Error: ${e.message}`);
+      setErr("Error: "+e.message);
     }
     setLoading(false);
   };

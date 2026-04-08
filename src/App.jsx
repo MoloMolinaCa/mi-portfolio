@@ -737,37 +737,48 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
     return best?.ccl || fxRate;
   };
 
-  // ── Fetch SPY + CCL histórico vía Claude Haiku web_search ────────────────
-  // Única forma que funciona desde el artifact (no hay CORS para APIs externas)
+  // ── Fetch SPY histórico vía proxy Vercel + CCL vía ArgentinaDatos ─────────
   const fetchHistoricalData = async (dates) => {
-    const startDate = dates[0];
-    const endDate   = dates[dates.length-1];
-    const prompt = "Search and return ONLY a JSON object. No text, no markdown. "
-      + "Find monthly closing prices for: "
-      + "1) SPY ETF (S&P500) from "+startDate+" to "+endDate+" "
-      + "2) Dolar CCL Argentina (contado con liquidacion) from "+startDate+" to "+endDate+". "
-      + "Return: {spy:[{date:'YYYY-MM-DD',price:0}],ccl:[{date:'YYYY-MM-DD',price:0}]} "
-      + "Include one data point per month minimum. Use real values from web search.";
+    const d1 = new Date(dates[0]);
+    const d2 = new Date(dates[dates.length-1]);
+    const daysDiff = (d2-d1)/(1000*60*60*24);
+    const range    = daysDiff<=32?"1mo":daysDiff<=95?"3mo":daysDiff<=370?"1y":"3y";
+    const interval = daysDiff<=32?"1d":"1wk";
 
-    const res = await fetch("https://api.anthropic.com/v1/messages",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({
-        model:"claude-haiku-4-5-20251001", max_tokens:800,
-        tools:[{type:"web_search_20250305",name:"web_search"}],
-        messages:[{role:"user",content:prompt}]
-      })
-    });
-    if(!res.ok) throw new Error("API "+res.status);
-    const raw = await res.json();
-    const txt = (raw.content||[]).filter(c=>c.type==="text").map(c=>c.text).join("");
-    const f = txt.indexOf("{"); const l = txt.lastIndexOf("}");
-    if(f<0||l<0) throw new Error("no JSON");
-    const j = JSON.parse(txt.slice(f,l+1));
-    return {
-      spyBars: (j.spy||[]).filter(x=>x.date&&x.price>0),
-      cclBars: (j.ccl||[]).filter(x=>x.date&&x.price>0),
-    };
+    // SPY desde proxy Yahoo (funciona desde Vercel sin CORS)
+    const [spyRes, cclRes] = await Promise.allSettled([
+      fetch(YAHOO_PROXY+"?symbol=SPY&range="+range+"&interval="+interval),
+      fetch("https://api.argentinadatos.com/v1/cotizaciones/dolares/contadoconliqui"),
+    ]);
+
+    // Parse SPY
+    let spyBars = [];
+    if(spyRes.status==="fulfilled" && spyRes.value.ok){
+      const d = await spyRes.value.json();
+      const result = d?.chart?.result?.[0];
+      const ts = result?.timestamp;
+      const closes = result?.indicators?.adjclose?.[0]?.adjclose || result?.indicators?.quote?.[0]?.close;
+      if(ts && closes){
+        spyBars = ts.map((t,i)=>({
+          date: new Date(t*1000).toISOString().slice(0,10),
+          price: closes[i]
+        })).filter(x=>x.price>0);
+      }
+    }
+
+    // Parse CCL
+    let cclBars = [];
+    if(cclRes.status==="fulfilled" && cclRes.value.ok){
+      const arr = await cclRes.value.json();
+      if(Array.isArray(arr)){
+        cclBars = arr.map(x=>({
+          date: x.fecha||x.date,
+          price: parseFloat(x.venta||x.valor||x.compra||0)
+        })).filter(x=>x.date&&x.price>0);
+      }
+    }
+
+    return {spyBars, cclBars};
   };
 
   const load = async (p) => {
@@ -1292,23 +1303,37 @@ export default function App(){
       const {buyDate,sellDate}=ventaResult;
       const days=Math.max(1,(new Date(sellDate)-new Date(buyDate))/(1000*60*60*24));
       try{
-        const res=await fetch("https://api.anthropic.com/v1/messages",{
-          method:"POST",headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:400,
-            tools:[{type:"web_search_20250305",name:"web_search"}],
-            messages:[{role:"user",content:"Return ONLY JSON no text: {sp500_buy:0,sp500_sell:0,ccl_buy:0,ccl_sell:0,inf_months:[{fecha:'YYYY-MM',valor:0}]} with real S&P500 closes on "+buyDate+" and "+sellDate+", real Dolar CCL Argentina on those dates, and Argentina monthly CPI between those dates. Replace 0s with real values."}]})
-        });
-        const raw=await res.json();
-        const txt=(raw.content||[]).filter(c=>c.type==="text").map(c=>c.text).join("");
-        const f=txt.indexOf("{"); const l=txt.lastIndexOf("}");
-        if(f>=0&&l>=0){
-          const j=JSON.parse(txt.slice(f,l+1));
-          const result={loading:false,sources:{}};
-          if(j.sp500_buy&&j.sp500_sell){result.sp500Pct=((j.sp500_sell-j.sp500_buy)/j.sp500_buy)*100;result.sources.sp500="web search";}
-          if(j.ccl_buy&&j.ccl_sell){result.cclPct=((j.ccl_sell-j.ccl_buy)/j.ccl_buy)*100;result.cclBuy=j.ccl_buy;result.cclSell=j.ccl_sell;result.sources.ccl="web search";}
-          if(j.inf_months?.length){const c=j.inf_months.reduce((a,x)=>a*(1+(x.valor||0)/100),1);result.infArPct=(c-1)*100;result.infArMonths=j.inf_months.length;result.sources.infAr="INDEC via web";}
-          setBenchmarkData(result);
-        } else setBenchmarkData({loading:false,error:true,sources:{}});
+        // Fetch SPY histórico para el período de la operación
+        const range = days<=32?"1mo":days<=95?"3mo":days<=370?"1y":"3y";
+        const [spyRes, cclRes] = await Promise.allSettled([
+          fetch(YAHOO_PROXY+"?symbol=SPY&range="+range+"&interval=1wk"),
+          fetch("https://api.argentinadatos.com/v1/cotizaciones/dolares/contadoconliqui"),
+        ]);
+        const result={loading:false,sources:{}};
+
+        if(spyRes.status==="fulfilled"&&spyRes.value.ok){
+          const d=await spyRes.value.json();
+          const res0=d?.chart?.result?.[0];
+          const ts=res0?.timestamp; const cl=res0?.indicators?.adjclose?.[0]?.adjclose||res0?.indicators?.quote?.[0]?.close;
+          if(ts&&cl){
+            const bars=ts.map((t,i)=>({date:new Date(t*1000).toISOString().slice(0,10),price:cl[i]})).filter(x=>x.price>0);
+            const findP=date=>bars.reduce((b,x)=>Math.abs(new Date(x.date)-new Date(date))<Math.abs(new Date(b.date)-new Date(date))?x:b,bars[0])?.price;
+            const pb=findP(buyDate), ps=findP(sellDate);
+            if(pb&&ps){result.sp500Pct=((ps-pb)/pb)*100;result.sources.sp500="Yahoo Finance";}
+          }
+        }
+
+        if(cclRes.status==="fulfilled"&&cclRes.value.ok){
+          const arr=await cclRes.value.json();
+          if(Array.isArray(arr)){
+            const bars=arr.map(x=>({date:x.fecha,price:parseFloat(x.venta||0)})).filter(x=>x.price>0);
+            const findP=date=>bars.reduce((b,x)=>Math.abs(new Date(x.date)-new Date(date))<Math.abs(new Date(b.date)-new Date(date))?x:b,bars[0])?.price;
+            const pb=findP(buyDate), ps=findP(sellDate);
+            if(pb&&ps){result.cclPct=((ps-pb)/pb)*100;result.cclBuy=pb;result.cclSell=ps;result.sources.ccl="ArgentinaDatos";}
+          }
+        }
+
+        setBenchmarkData(result);
       }catch{setBenchmarkData({loading:false,error:true,sources:{}});}
     })();
   },[ventaResult?.ticker,ventaResult?.buyDate,ventaResult?.sellDate]);

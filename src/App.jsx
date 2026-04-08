@@ -113,7 +113,7 @@ async function fetchFXLive() {
   // Fallback: Yahoo Finance
   try {
     const res = await fetch(
-      "https://query1.finance.yahoo.com/v7/finance/quote?symbols=USDARS%3DX&fields=regularMarketPrice",
+      YAHOO_PROXY+"?symbol=USDARS%3DX&range=5d&interval=1d",
       {signal:AbortSignal.timeout(6000)}
     );
     if (res.ok) {
@@ -172,22 +172,25 @@ async function fetchData912Prices() {
 
 // ── Yahoo Finance: fallback para CEDEARs y acciones ─────────────────────────
 async function fetchYahooPrices() {
-  const symbols = Object.values(YAHOO_TICKERS).join(",");
-  const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols}&fields=regularMarketPrice,regularMarketChangePercent,regularMarketPreviousClose,symbol`;
-  try {
-    const res = await fetch(url,{signal:AbortSignal.timeout(8000)});
-    const data = await res.json();
-    const quotes = data?.quoteResponse?.result || [];
-    const result = {};
-    for (const q of quotes) {
-      const ourTicker = Object.entries(YAHOO_TICKERS).find(([,v])=>v===q.symbol)?.[0];
-      if (ourTicker) {
-        const price = q.regularMarketPrice ?? q.regularMarketPreviousClose;
-        if (price != null) result[ourTicker] = { price, changePct: q.regularMarketChangePercent||0, source:"yahoo" };
-      }
-    }
-    return result;
-  } catch { return {}; }
+  // Use proxy to avoid CORS
+  const result = {};
+  const entries = Object.entries(YAHOO_TICKERS);
+  await Promise.allSettled(entries.map(async ([ticker, sym]) => {
+    try {
+      // Strip .BA suffix to get base symbol for proxy
+      const baseSym = sym.replace(".BA","");
+      const res = await fetch(YAHOO_PROXY+"?symbol="+baseSym+"&range=5d&interval=1d",
+        {signal:AbortSignal.timeout(8000)});
+      if(!res.ok) return;
+      const d = await res.json();
+      const quotes = d?.chart?.result?.[0];
+      if(!quotes) return;
+      const closes = quotes.indicators?.quote?.[0]?.close || [];
+      const price = closes.filter(Boolean).pop();
+      if(price > 0) result[ticker] = {price, changePct:0, source:"yahoo_proxy"};
+    } catch {}
+  }));
+  return result;
 }
 
 // ── FCIs: argentinadatos.com vía CAFCI ───────────────────────────────────────
@@ -229,12 +232,11 @@ async function fetchFCIPrices() {
 // ── Treasury 10Y via Yahoo Finance (^TNX) ────────────────────────────────────
 async function fetchTreasury10Y() {
   try {
-    const res = await fetch(
-      "https://query1.finance.yahoo.com/v7/finance/quote?symbols=%5ETNX&fields=regularMarketPrice",
-      {signal:AbortSignal.timeout(6000)}
-    );
-    const data = await res.json();
-    const price = data?.quoteResponse?.result?.[0]?.regularMarketPrice;
+    const res = await fetch(YAHOO_PROXY+"?symbol=%5ETNX&range=5d&interval=1d",
+      {signal:AbortSignal.timeout(6000)});
+    const d = await res.json();
+    const closes = d?.chart?.result?.[0]?.indicators?.quote?.[0]?.close||[];
+    const price = closes.filter(Boolean).pop();
     return price ? parseFloat(price.toFixed(2)) : T10Y_FALLBACK;
   } catch { return T10Y_FALLBACK; }
 }
@@ -965,11 +967,6 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
         )}
 
         {/* Nota T10Y */}
-        {debugLog.length>0&&(
-          <div style={{fontSize:9,color:"var(--yellow)",marginTop:6,fontFamily:"monospace",lineHeight:1.6}}>
-            {debugLog.map((l,i)=><div key={i}>{l}</div>)}
-          </div>
-        )}
         <div style={{fontSize:10,color:"var(--text-muted)",marginTop:8}}>
           {"T10Y: tasa "+liveT10Y+"% compuesta · "}
           {cd?.spy100 ? "S&P: "+cd.spySource : "S&P: sin datos"}

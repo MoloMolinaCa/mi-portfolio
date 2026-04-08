@@ -935,12 +935,6 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
 
       const portBase = portPts[0].val;
       const port100 = portPts.map(x=>({date:x.date, val:portBase>0?100*x.val/portBase:100}));
-
-        setD912ok(false);
-        spySource = "err: "+e.message;
-        cclSource = "err: "+e.message;
-      }
-
       const spyRet  = spy100 ? (spy100[spy100.length-1].val-100).toFixed(2) : null;
       const cclRet  = ccl100 ? (ccl100[ccl100.length-1].val-100).toFixed(2) : null;
       const t10yRet = (t10y100[t10y100.length-1].val-100).toFixed(2);

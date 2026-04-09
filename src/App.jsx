@@ -1212,6 +1212,14 @@ export default function App(){
   const [trades,setTrades]     = useState(SEED_TRADES);
   const [storageReady,setStorageReady] = useState(false);
   const [historicos,setHistoricos] = useState(null);
+
+  // Cargar históricos desde JSON generado por GitHub Actions
+  useEffect(()=>{
+    fetch("/historicos.json")
+      .then(r=>r.ok?r.json():null)
+      .then(d=>{ if(d && Object.keys(d).length>1) setHistoricos(d); })
+      .catch(()=>{});
+  },[]);
   const [tab,setTab]           = useState("dashboard");
   const [modal,setModal]       = useState(null);
   const [ventaResult,setVentaResult] = useState(null);

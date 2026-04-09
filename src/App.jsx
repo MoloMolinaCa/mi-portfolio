@@ -955,6 +955,8 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
   };
 
   useEffect(()=>{
+    // Solo cargar cuando historicos está disponible (no null ni vacío)
+    if(!historicos || Object.keys(historicos).length === 0) return;
     const p=PERIODS.find(x=>x.key===period);
     if(p) load(p, historicos);
   },[period, currency, historicos]);

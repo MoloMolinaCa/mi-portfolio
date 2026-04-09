@@ -877,14 +877,7 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
         const bars = _getTicker(ticker);
         if(bars) tickerBars[ticker] = bars;
       }
-      console.log("[EvoTab] hist keys:", Object.keys(_hist));
-      console.log("[EvoTab] tickerBars loaded:", Object.keys(tickerBars));
-      console.log("[EvoTab] CCL bars:", cclBars.length, "MEP:", _getMEP().length);
-      console.log("[EvoTab] dates:", dates[0], "→", dates[dates.length-1]);
-      if(tickerBars.TZXD6){
-        const b=tickerBars.TZXD6;
-        console.log("[EvoTab] TZXD6 sample:", b[0].date, b[0].close, "→", b[b.length-1].date, b[b.length-1].close);
-      }
+
 
       // MEP bars para conversión
       const mepBars = _getMEP();

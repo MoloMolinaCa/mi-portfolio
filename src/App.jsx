@@ -778,81 +778,37 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
     return best?.ccl || fxRate;
   };
 
-  // ── Mapeo ticker → símbolo Yahoo ─────────────────────────────────────────
-  // Todos los instrumentos BYMA usan sufijo .BA en Yahoo Finance
-  // CEDEARs en USD usan símbolo directo (SPY, META, etc.)
-  const YAHOO_MAP = {
-    // CEDEARs — precio en ARS en Yahoo (.BA), pero el subyacente es USD
-    GLD:"GLD.BA", NU:"NU.BA", SPY:"SPY.BA", META:"META.BA",
-    MSFT:"MSFT.BA", VIST:"VIST.BA",
-    // Acciones AR
-    TXAR:"TXAR.BA", YPFD:"YPFD.BA",
-    // Bonos USD (cotizan en USD en BYMA)
-    GD38D:"GD38D.BA", AO27D:"AO27D.BA", TLCUD:"TLCUD.BA",
-    // Bonos CER (cotizan en ARS en BYMA)
-    TZXD6:"TZXD6.BA", TZX27:"TZX27.BA",
-    // FCIs — sin histórico en Yahoo, usar precio actual
-    "FIMA-PREM":null, "FIMA-AHP":null, "FIMA-AHPP":null, "FIMA-PREMD":null,
-  };
+  // ── Leer históricos desde JSON generado por GitHub Actions ─────────────────
+  // El archivo public/historicos.json se actualiza automáticamente cada día hábil
+  const [historicos, setHistoricos] = React.useState(null);
 
-  // ── Fetch histórico de un ticker vía proxy ────────────────────────────────
-  const fetchTickerHistory = async (ticker, range, interval) => {
-    const sym = YAHOO_MAP[ticker];
-    if(sym === null) return []; // FCIs sin histórico
-    const finalSym = sym || ticker;
-    const url = YAHOO_PROXY+"?symbol="+encodeURIComponent(finalSym)+"&range="+range+"&interval="+interval;
-    const res = await fetch(url, {signal:AbortSignal.timeout(10000)});
-    if(!res.ok) return [];
-    const d = await res.json();
-    const result = d?.chart?.result?.[0];
-    const ts = result?.timestamp;
-    const closes = result?.indicators?.adjclose?.[0]?.adjclose || result?.indicators?.quote?.[0]?.close;
-    if(!ts || !closes) return [];
-    return ts.map((t,i)=>({
-      date: new Date(t*1000).toISOString().slice(0,10),
-      price: closes[i]
-    })).filter(x=>x.price!=null && x.price>0);
-  };
-
-  // ── Fetch CCL histórico ───────────────────────────────────────────────────
-  const fetchCCLHistory = async () => {
-    try {
-      const res = await fetch("https://api.argentinadatos.com/v1/cotizaciones/dolares/contadoconliqui",
-        {signal:AbortSignal.timeout(8000)});
-      if(!res.ok) return [];
-      const arr = await res.json();
-      if(!Array.isArray(arr)) return [];
-      return arr.map(x=>({
-        date: x.fecha||x.date,
-        price: parseFloat(x.venta||x.valor||x.compra||0)
-      })).filter(x=>x.date&&x.price>0);
-    } catch { return []; }
-  };
+  React.useEffect(()=>{
+    fetch("/historicos.json")
+      .then(r=>r.ok?r.json():null)
+      .then(d=>{ if(d) setHistoricos(d); })
+      .catch(()=>{});
+  },[]);
 
   // ── Interpolador: precio más cercano a una fecha ──────────────────────────
   const findPrice = (bars, dateStr) => {
     if(!bars||!bars.length) return null;
     const t = new Date(dateStr).getTime();
-    return bars.reduce((best,b)=>
-      Math.abs(new Date(b.date)-t) < Math.abs(new Date(best.date)-t) ? b : best
-    , bars[0])?.price || null;
+    const best = bars.reduce((b,x)=>
+      Math.abs(new Date(x.date)-t) < Math.abs(new Date(b.date)-t) ? x : b
+    , bars[0]);
+    return best?.close || best?.price || null;
   };
 
-  // ── Fetch SPY histórico vía proxy (para benchmark) ────────────────────────
-  const fetchHistoricalData = async (dates) => {
-    const d1 = new Date(dates[0]);
-    const d2 = new Date(dates[dates.length-1]);
-    const daysDiff = (d2-d1)/(1000*60*60*24);
-    const range    = daysDiff<=32?"1mo":daysDiff<=95?"3mo":daysDiff<=370?"1y":"3y";
-    const interval = daysDiff<=32?"1d":"1wk";
-
-    const [spyBars, cclBars] = await Promise.all([
-      fetchTickerHistory("SPY", range, interval).catch(()=>[]),
-      fetchCCLHistory().catch(()=>[]),
-    ]);
-
-    return {spyBars, cclBars};
+  // ── Obtener barras históricas para un ticker ──────────────────────────────
+  const getTickerBars = (ticker) => {
+    if(!historicos) return null;
+    const bars = historicos[ticker];
+    return bars?.length ? bars : null;
   };
+
+  // ── Datos para benchmarks ─────────────────────────────────────────────────
+  const getCCLBars  = () => historicos?.CCL   || [];
+  const getSPYBars  = () => historicos?.sp500  || [];
 
   const load = async (p) => {
     setLoading(true); setErr(""); setChartData(null);
@@ -860,15 +816,9 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
       const dates = getDates(p, 16);
       const startDate = dates[0];
 
-      const daysDiff2 = (new Date(dates[dates.length-1])-new Date(dates[0]))/(1000*60*60*24);
-      const range2    = daysDiff2<=32?"1mo":daysDiff2<=95?"3mo":daysDiff2<=370?"1y":"3y";
-      const interval2 = "1d";
-
-      // Fetch CCL histórico y SPY en paralelo
-      const [cclBars, spyBarsRaw] = await Promise.all([
-        fetchCCLHistory().catch(()=>[]),
-        fetchTickerHistory("SPY", range2, interval2).catch(()=>[]),
-      ]);
+      // Usar datos del JSON pre-generado por GitHub Actions
+      const cclBars   = getCCLBars();
+      const spyBarsRaw = getSPYBars();
 
       // SPY benchmark base-100
       let spy100 = null, spySource = "sin datos";
@@ -894,13 +844,14 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
         return {date:d, val:100*Math.pow(1+liveT10Y/100, days/365)};
       });
 
-      // Portfolio histórico real por ticker
+      // Histórico por ticker desde JSON pre-generado
       const allTickers = [...new Set(en.map(h=>h.ticker))];
       const tickerBars = {};
-      await Promise.allSettled(allTickers.map(async ticker => {
-        const bars = await fetchTickerHistory(ticker, range2, interval2).catch(()=>[]);
-        if(bars.length > 0) tickerBars[ticker] = bars;
-      }));
+      for(const ticker of allTickers){
+        const bars = getTickerBars(ticker);
+        if(bars) tickerBars[ticker] = bars;
+      }
+      const hasHistorico = Object.keys(tickerBars).length > 0;
 
       // Para cada fecha calcular valor total
       const portPts = dates.map(dateStr => {
@@ -1370,32 +1321,19 @@ export default function App(){
       try{
         // Fetch SPY histórico para el período de la operación
         const range = days<=32?"1mo":days<=95?"3mo":days<=370?"1y":"3y";
-        const [spyRes, cclRes] = await Promise.allSettled([
-          fetch(YAHOO_PROXY+"?symbol=SPY&range="+range+"&interval=1wk"),
-          fetch("https://api.argentinadatos.com/v1/cotizaciones/dolares/contadoconliqui"),
-        ]);
         const result={loading:false,sources:{}};
 
-        if(spyRes.status==="fulfilled"&&spyRes.value.ok){
-          const d=await spyRes.value.json();
-          const res0=d?.chart?.result?.[0];
-          const ts=res0?.timestamp; const cl=res0?.indicators?.adjclose?.[0]?.adjclose||res0?.indicators?.quote?.[0]?.close;
-          if(ts&&cl){
-            const bars=ts.map((t,i)=>({date:new Date(t*1000).toISOString().slice(0,10),price:cl[i]})).filter(x=>x.price>0);
-            const findP=date=>bars.reduce((b,x)=>Math.abs(new Date(x.date)-new Date(date))<Math.abs(new Date(b.date)-new Date(date))?x:b,bars[0])?.price;
-            const pb=findP(buyDate), ps=findP(sellDate);
-            if(pb&&ps){result.sp500Pct=((ps-pb)/pb)*100;result.sources.sp500="Yahoo Finance";}
-          }
+        // Usar histórico del JSON pre-generado
+        const spyBarsB = getSPYBars();
+        if(spyBarsB.length){
+          const pb=findPrice(spyBarsB,buyDate), ps=findPrice(spyBarsB,sellDate);
+          if(pb&&ps){result.sp500Pct=((ps-pb)/pb)*100;result.sources.sp500="historicos.json";}
         }
 
-        if(cclRes.status==="fulfilled"&&cclRes.value.ok){
-          const arr=await cclRes.value.json();
-          if(Array.isArray(arr)){
-            const bars=arr.map(x=>({date:x.fecha,price:parseFloat(x.venta||0)})).filter(x=>x.price>0);
-            const findP=date=>bars.reduce((b,x)=>Math.abs(new Date(x.date)-new Date(date))<Math.abs(new Date(b.date)-new Date(date))?x:b,bars[0])?.price;
-            const pb=findP(buyDate), ps=findP(sellDate);
-            if(pb&&ps){result.cclPct=((ps-pb)/pb)*100;result.cclBuy=pb;result.cclSell=ps;result.sources.ccl="ArgentinaDatos";}
-          }
+        const cclBarsB = getCCLBars();
+        if(cclBarsB.length){
+          const pb=findPrice(cclBarsB,buyDate), ps=findPrice(cclBarsB,sellDate);
+          if(pb&&ps){result.cclPct=((ps-pb)/pb)*100;result.cclBuy=pb;result.cclSell=ps;result.sources.ccl="historicos.json";}
         }
 
         setBenchmarkData(result);

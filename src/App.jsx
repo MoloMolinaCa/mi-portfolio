@@ -750,13 +750,12 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
   };
 
   // ── Generar fechas del período ─────────────────────────────────────────────
-  const getDates = (p, n=20) => {
+  const getDates = (p, n=30) => {
     const end = new Date();
     let start;
-    if(p.key==="ytd") start = new Date(end.getFullYear()+"-01-01");
+    if(p.key==="ytd")   start = new Date(end.getFullYear()+"-01-01");
     else { start = new Date(); start.setDate(start.getDate()-p.days); }
-    const earliest = trades.filter(t=>t.tipo==="compra").sort((a,b)=>a.date.localeCompare(b.date))[0]?.date;
-    if(earliest && new Date(earliest)>start) start = new Date(earliest);
+    // No limitar por buyDate — mostrar todo el período, portfolio = 0 antes de primera compra
     const dates=[];
     for(let i=0;i<=n;i++){
       const d=new Date(start.getTime()+(end-start)*(i/n));
@@ -882,8 +881,6 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
         const dateT = new Date(dateStr).getTime();
         let total = 0;
         for(const h of en){
-          const buyT = new Date(h.buyDate||"2026-04-01").getTime();
-          if(buyT > dateT + 86400000) continue;
           const buys = trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra"&&new Date(t.date).getTime()<=dateT);
           const sells = trades.filter(t=>t.ticker===h.ticker&&t.tipo==="venta"&&new Date(t.date).getTime()<=dateT);
           const qty = Math.max(0, buys.reduce((a,t)=>a+t.qty,0) - sells.reduce((a,t)=>a+t.qty,0));
@@ -1263,7 +1260,16 @@ export default function App(){
   const en=port.map(h=>{
     const live=livePrices[h.ticker];
     const currentPrice=live?live.price:h.currentPrice;
-    const liveChangePct=live?live.changePct:null;
+    // changePct: usar data912 si trae valor, sino calcular desde histórico
+    let liveChangePct=live?live.changePct:null;
+    if((liveChangePct===0||liveChangePct==null) && historicos?.[h.ticker]){
+      const bars = historicos[h.ticker];
+      if(bars && bars.length>=2){
+        const last = bars[bars.length-1].close;
+        const prev = bars[bars.length-2].close;
+        if(prev>0) liveChangePct = parseFloat(((last-prev)/prev*100).toFixed(2));
+      }
+    }
     const ppc=ppcByTicker[h.ticker]||h.buyPrice;
     // Bonos cotizan por cada 100 VN — dividir por 100 para obtener valor real
     const isBond = h.type==="bono_usd" || h.type==="bono_ars";

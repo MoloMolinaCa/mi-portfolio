@@ -709,7 +709,7 @@ function Chart100({series}) {
   );
 };
 
-function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxRate,fx}){
+function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxRate,fx,historicos}){
   const PERIODS=[
     {key:"30d", label:"30d",  days:30},
     {key:"90d", label:"90d",  days:90},
@@ -778,17 +778,6 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
     return best?.ccl || fxRate;
   };
 
-  // ── Leer históricos desde JSON generado por GitHub Actions ─────────────────
-  // El archivo public/historicos.json se actualiza automáticamente cada día hábil
-  const [historicos, setHistoricos] = React.useState(null);
-
-  React.useEffect(()=>{
-    fetch("/historicos.json")
-      .then(r=>r.ok?r.json():null)
-      .then(d=>{ if(d) setHistoricos(d); })
-      .catch(()=>{});
-  },[]);
-
   // ── Interpolador: precio más cercano a una fecha ──────────────────────────
   const findPrice = (bars, dateStr) => {
     if(!bars||!bars.length) return null;
@@ -799,16 +788,9 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
     return best?.close || best?.price || null;
   };
 
-  // ── Obtener barras históricas para un ticker ──────────────────────────────
-  const getTickerBars = (ticker) => {
-    if(!historicos) return null;
-    const bars = historicos[ticker];
-    return bars?.length ? bars : null;
-  };
-
-  // ── Datos para benchmarks ─────────────────────────────────────────────────
-  const getCCLBars  = () => historicos?.CCL   || [];
-  const getSPYBars  = () => historicos?.sp500  || [];
+  const getTickerBars = (ticker) => { const bars=historicos?.[ticker]; return bars?.length?bars:null; };
+  const getCCLBars    = () => historicos?.CCL   || [];
+  const getSPYBars    = () => historicos?.sp500  || [];
 
   const load = async (p) => {
     setLoading(true); setErr(""); setChartData(null);
@@ -1139,6 +1121,7 @@ export default function App(){
   const [port,setPort]         = useState(GALICIA_PORTFOLIO);
   const [trades,setTrades]     = useState(SEED_TRADES);
   const [storageReady,setStorageReady] = useState(false);
+  const [historicos,setHistoricos] = useState(null);
   const [tab,setTab]           = useState("dashboard");
   const [modal,setModal]       = useState(null);
   const [ventaResult,setVentaResult] = useState(null);
@@ -1466,7 +1449,7 @@ export default function App(){
             <EvoTab en={en} trades={trades} totUSD={totUSD} totPct={totPct}
               benchPct={benchPct} alpha={alpha} liveT10Y={liveT10Y}
               byType={byType} history={history} fxRate={fxRate} fx={fx}
-              fxMode={fx} card={card}/>
+              fxMode={fx} card={card} historicos={historicos}/>
           )}
 
         </div>

@@ -927,7 +927,7 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
         return {date:dateStr, val:Math.max(total,0.01)};
       });
 
-      // Agregar punto de hoy con precio en vivo
+      // Agregar punto de hoy con precio en vivo (o último cierre si es feriado/fin de semana)
       const today = new Date().toISOString().slice(0,10);
       if(portPts.length>0 && portPts[portPts.length-1].date !== today){
         const dateT = new Date().getTime();
@@ -939,16 +939,22 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
           if(qty<=0) continue;
           const isBond = h.type==="bono_usd"||h.type==="bono_ars";
           const qtyFactor = isBond ? qty/100 : qty;
-          // Usar precio en vivo (currentPrice ya fue actualizado con livePrices)
-          const priceVivo = h.currentPrice;
+
+          // Precio: usar en vivo si está disponible, sino último histórico
+          const liveEntry = en.find(x=>x.ticker===h.ticker);
+          const livePrice = liveEntry?.isLive ? liveEntry.currentPrice : null;
+          const histBars = _getTicker(h.ticker);
+          const histPrice = histBars ? histBars[histBars.length-1].close : null;
+          const priceHoy = livePrice || histPrice || h.currentPrice;
+
           const cclDay = fxRate;
           const mepDay = _getMEP().length ? (findPrice(_getMEP(),today)||fxRate) : fxRate;
           if(currency==="ARS"){
-            totalToday += priceVivo * qtyFactor;
+            totalToday += priceHoy * qtyFactor;
           } else if(currency==="USD_CCL"){
-            totalToday += priceVivo * qtyFactor / cclDay;
+            totalToday += priceHoy * qtyFactor / cclDay;
           } else {
-            totalToday += priceVivo * qtyFactor / mepDay;
+            totalToday += priceHoy * qtyFactor / mepDay;
           }
         }
         if(totalToday > 0) portPts.push({date:today, val:totalToday});

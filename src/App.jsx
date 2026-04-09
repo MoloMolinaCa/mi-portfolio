@@ -49,17 +49,9 @@ const pc   = (n) => n>=0?"var(--green)":"var(--red)";
 // data912: bonos, ONs, CEDEARs, acciones AR — precios en vivo (2h cache)
 // Yahoo Finance (.BA): fallback para CEDEARs y acciones si data912 falla
 
-// Tickers de data912 por endpoint
-const D912_BONDS    = ["TZXD6","TZX27","TLCUD","AO27D","GD38D"]; // bonos CER + soberanos USD + ONs
-const D912_CEDEARS  = ["GLD","NU","SPY","META","MSFT","VIST"];    // CEDEARs en ARS
-const D912_STOCKS   = ["TXAR","YPFD"];                             // acciones AR
-
-// Yahoo Finance fallback para CEDEARs y acciones (en caso que data912 falle)
-const YAHOO_TICKERS = {
-  "TXAR": "TXAR.BA", "YPFD": "YPFD.BA",
-  "GLD":  "GLD.BA",  "NU":   "NU.BA",   "SPY":  "SPY.BA",
-  "META": "META.BA", "MSFT": "MSFT.BA", "VIST": "VIST.BA",
-};
+// Tickers se determinan dinámicamente desde el portfolio activo
+// data912 descarga todos los instrumentos y filtra por los tickers del portfolio
+// Yahoo se usa como fallback para CEDEARs y acciones
 
 // FCI tickers → id CAFCI para argentinadatos
 const FCI_IDS = {
@@ -138,18 +130,20 @@ async function fetchFXLive() {
 // ── data912: precios en vivo de todos los instrumentos AR ────────────────────
 // Endpoints: /live/arg_bonds, /live/arg_cedears, /live/arg_stocks, /live/arg_corp
 // Sin key, ~2h de cache Cloudflare, CORS ok desde browser
-async function fetchData912Prices() {
+async function fetchData912Prices(activeTickers=[]) {
   const result = {};
   const base = "https://data912.com/live";
 
-  const parseD912 = (arr, tickers) => {
+  // Parsea todos los items del endpoint y guarda los que matcheen con activeTickers
+  // Si activeTickers está vacío, guarda todos
+  const parseD912 = (arr) => {
     if (!Array.isArray(arr)) return;
     for (const item of arr) {
-      // data912 usa campo "ticker" o "symbol", precio en "price", "last", o "c"
       const sym = item.ticker || item.symbol || item.s || "";
       const price = item.price ?? item.last ?? item.c ?? item.close ?? null;
       const change = item.change_pct ?? item.dp ?? item.change ?? 0;
-      if (tickers.includes(sym) && price != null && price > 0) {
+      const match = activeTickers.length===0 || activeTickers.includes(sym);
+      if (match && price != null && price > 0) {
         result[sym] = { price: parseFloat(price), changePct: parseFloat(change)||0, source: "data912" };
       }
     }
@@ -162,32 +156,42 @@ async function fetchData912Prices() {
     fetch(`${base}/arg_corp`,    {signal:AbortSignal.timeout(8000)}).then(r=>r.json()),
   ]);
 
-  if (rBonds.status   === "fulfilled") parseD912(rBonds.value,   [...D912_BONDS]);
-  if (rCedears.status === "fulfilled") parseD912(rCedears.value, D912_CEDEARS);
-  if (rStocks.status  === "fulfilled") parseD912(rStocks.value,  D912_STOCKS);
-  if (rCorp.status    === "fulfilled") parseD912(rCorp.value,    D912_BONDS); // ONs también en arg_corp
+  if (rBonds.status   === "fulfilled") parseD912(rBonds.value);
+  if (rCedears.status === "fulfilled") parseD912(rCedears.value);
+  if (rStocks.status  === "fulfilled") parseD912(rStocks.value);
+  if (rCorp.status    === "fulfilled") parseD912(rCorp.value);
 
   return result;
 }
 
-// ── Yahoo Finance: fallback para CEDEARs y acciones ─────────────────────────
-async function fetchYahooPrices() {
-  // Use proxy to avoid CORS
+// ── Yahoo Finance: fallback dinámico para cualquier ticker ───────────────────
+async function fetchYahooPrices(activeTickers=[]) {
   const result = {};
-  const entries = Object.entries(YAHOO_TICKERS);
-  await Promise.allSettled(entries.map(async ([ticker, sym]) => {
+  // Para cada ticker activo que no fue cubierto por data912, intentar Yahoo
+  // Tickers BYMA usan sufijo .BA, tickers US directos no
+  const bymaTypes = ["cedear","accion_ar","bono_usd","bono_ars"];
+  await Promise.allSettled(activeTickers.map(async (ticker) => {
     try {
-      // Strip .BA suffix to get base symbol for proxy
-      const baseSym = sym.replace(".BA","");
-      const res = await fetch(YAHOO_PROXY+"?symbol="+baseSym+"&range=5d&interval=1d",
+      // Intentar primero con .BA (instrumento BYMA)
+      const symBA = ticker+".BA";
+      const res = await fetch(YAHOO_PROXY+"?symbol="+encodeURIComponent(symBA)+"&range=5d&interval=1d",
         {signal:AbortSignal.timeout(8000)});
-      if(!res.ok) return;
-      const d = await res.json();
-      const quotes = d?.chart?.result?.[0];
-      if(!quotes) return;
-      const closes = quotes.indicators?.quote?.[0]?.close || [];
-      const price = closes.filter(Boolean).pop();
-      if(price > 0) result[ticker] = {price, changePct:0, source:"yahoo_proxy"};
+      if(res.ok){
+        const d = await res.json();
+        const quotes = d?.chart?.result?.[0];
+        const closes = quotes?.indicators?.quote?.[0]?.close||[];
+        const price = closes.filter(Boolean).pop();
+        if(price>0){ result[ticker]={price,changePct:0,source:"yahoo_proxy"}; return; }
+      }
+      // Fallback: símbolo directo (para tickers US como AAPL, MSFT, etc.)
+      const res2 = await fetch(YAHOO_PROXY+"?symbol="+encodeURIComponent(ticker)+"&range=5d&interval=1d",
+        {signal:AbortSignal.timeout(8000)});
+      if(res2.ok){
+        const d2 = await res2.json();
+        const closes2 = d2?.chart?.result?.[0]?.indicators?.quote?.[0]?.close||[];
+        const price2 = closes2.filter(Boolean).pop();
+        if(price2>0) result[ticker]={price:price2,changePct:0,source:"yahoo_us"};
+      }
     } catch {}
   }));
   return result;
@@ -242,15 +246,15 @@ async function fetchTreasury10Y() {
 }
 
 // ── Orquestador: lanza todo en paralelo ──────────────────────────────────────
-async function fetchAllLivePrices() {
+async function fetchAllLivePrices(activeTickers=[]) {
   const [fx, d912P, yahooP, fciP, t10y] = await Promise.all([
     fetchFXLive(),
-    fetchData912Prices(),
-    fetchYahooPrices(),
+    fetchData912Prices(activeTickers),
+    fetchYahooPrices(activeTickers.filter(t=>!t.startsWith("FIMA"))),
     fetchFCIPrices(),
     fetchTreasury10Y(),
   ]);
-  // Merge: data912 primero (más completo para AR), Yahoo como fallback, FCIs aparte
+  // Merge: data912 primero, Yahoo como fallback para tickers no cubiertos
   const prices = { ...yahooP, ...d912P, ...fciP };
   return { fx, prices, t10y };
 }
@@ -432,8 +436,8 @@ function Modal({h,port=[],onSave,onClose}){
 
     // 1. Check local known-tickers list first (instant, no CORS)
     if(AR_TICKERS[ticker]){
-      // Also try to get live price from the already-loaded livePrices via YAHOO_TICKERS
-      const yahooSym = YAHOO_TICKERS[ticker];
+      // Also try to get live price from the already-loaded livePrices
+      const yahooSym = ticker+".BA";
       // We know the name at minimum
       const knownName = AR_TICKERS[ticker];
       // Try Yahoo to get price (same call that works for prices tab)
@@ -1219,7 +1223,9 @@ export default function App(){
   const refreshPrices = async () => {
     setPriceStatus("loading");
     try {
-      const {fx:newFX,prices:newPrices,t10y:newT10Y} = await fetchAllLivePrices();
+      // Pasar tickers activos del portfolio para fetch dinámico
+      const activeTickers = [...new Set(port.map(h=>h.ticker))];
+      const {fx:newFX,prices:newPrices,t10y:newT10Y} = await fetchAllLivePrices(activeTickers);
       setLiveFX(newFX);
       setLivePrices(newPrices);
       setLiveT10Y(newT10Y);

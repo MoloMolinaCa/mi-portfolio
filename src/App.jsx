@@ -794,24 +794,29 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
   const getCCLBars    = () => historicos?.CCL   || [];
   const getSPYBars    = () => historicos?.sp500  || [];
 
-  const load = async (p) => {
+  const load = async (p, hist) => {
     setLoading(true); setErr(""); setChartData(null);
+    // Usar hist pasado explícitamente para evitar closures obsoletos
+    const _hist = hist || historicos || {};
+    const _getCCL  = () => _hist.CCL  || [];
+    const _getMEP  = () => _hist.MEP  || [];
+    const _getSPY  = () => _hist.sp500 || [];
+    const _getTicker = (t) => { const b=_hist[t]; return b?.length?b:null; };
     try {
       const dates = getDates(p, 16);
       const startDate = dates[0];
 
-      // Usar datos del JSON pre-generado por GitHub Actions
-      const cclBars   = getCCLBars();
-      const spyBarsRaw = getSPYBars();
+      const cclBars   = _getCCL();
+      const spyBarsRaw = _getSPY();
 
-      const mepBars2 = historicos?.MEP || [];
+      const mepBars2 = _getMEP();
 
       // SPY benchmark base-100 — convertido según moneda seleccionada
       let spy100 = null, spySource = "sin datos";
       // S&P500: usar historicos.sp500 (yfinance USD) si está disponible,
       // sino usar SPY.BA de BYMA dividido por TC
-      const sp500Bars = historicos?.sp500 || [];
-      const spyByma   = getTickerBars("SPY") || [];
+      const sp500Bars = _getSPY();
+      const spyByma   = _getTicker("SPY") || [];
 
       if(sp500Bars.length >= 2 && currency!=="ARS"){
         // Datos reales S&P500 en USD desde yfinance
@@ -865,12 +870,12 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
       const allTickers = [...new Set(en.map(h=>h.ticker))];
       const tickerBars = {};
       for(const ticker of allTickers){
-        const bars = getTickerBars(ticker);
+        const bars = _getTicker(ticker);
         if(bars) tickerBars[ticker] = bars;
       }
 
       // MEP bars para conversión
-      const mepBars = historicos?.MEP || [];
+      const mepBars = _getMEP();
 
       // Para cada fecha calcular valor total según moneda seleccionada
       const portPts = dates.map(dateStr => {
@@ -941,7 +946,7 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
 
   useEffect(()=>{
     const p=PERIODS.find(x=>x.key===period);
-    if(p) load(p);
+    if(p) load(p, historicos);
   },[period, currency, historicos]);
 
   // ── SVG line chart ─────────────────────────────────────────────────────────

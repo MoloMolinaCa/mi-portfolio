@@ -869,13 +869,10 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
           const bars = tickerBars[h.ticker];
           const price = (bars && findPrice(bars,dateStr)) || h.currentPrice;
           let valueUSD;
-          const sym = YAHOO_MAP[h.ticker];
-          const isBASymbol = sym && sym.endsWith(".BA");
-          if(h.buyCurrency==="USD" && !isBASymbol){
-            // USD instrument with USD price (CEDEARs USD subyacente sin .BA)
+          if(h.buyCurrency==="USD" && !["bono_usd","bono_ars","cedear","accion_ar"].includes(h.type)){
             valueUSD = price * qtyFactor;
           } else {
-            // ARS price (todos los .BA) → dividir por CCL
+            // Todos los instrumentos BYMA están en ARS → dividir por CCL
             const cclDay = cclBars.length ? (findPrice(cclBars,dateStr)||fxRate) : fxRate;
             valueUSD = price * qtyFactor / cclDay;
           }

@@ -718,6 +718,7 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
     {key:"3y",  label:"3 años",days:1095},
   ];
   const [period,setPeriod]=useState("90d");
+  const [currency,setCurrency]=useState("USD_CCL"); // "ARS" | "USD_CCL" | "USD_MEP"
   const [chartData,setChartData]=useState(null);
   const [loading,setLoading]=useState(false);
   const [err,setErr]=useState("");
@@ -802,22 +803,43 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
       const cclBars   = getCCLBars();
       const spyBarsRaw = getSPYBars();
 
-      // SPY benchmark base-100
+      const mepBars2 = historicos?.MEP || [];
+
+      // SPY benchmark base-100 — convertido según moneda seleccionada
       let spy100 = null, spySource = "sin datos";
-      if(spyBarsRaw.length >= 2){
-        const pts = dates.map(d=>({date:d, val:findPrice(spyBarsRaw,d)||spyBarsRaw[0].price}));
-        const base = pts[0].val;
-        spy100 = pts.map(x=>({date:x.date, val:base>0?100*x.val/base:100}));
-        spySource = "Yahoo proxy ("+spyBarsRaw.length+" pts)";
+      const spyByma = getTickerBars("SPY") || [];
+      if(spyByma.length >= 2){
+        const tcBars = currency==="USD_MEP" ? mepBars2 : cclBars;
+        const tcFallback = fxRate;
+        const pts = dates.map(d=>{
+          const pARS = findPrice(spyByma,d);
+          if(!pARS) return {date:d, val:null};
+          if(currency==="ARS") return {date:d, val:pARS};
+          const tc = tcBars.length ? (findPrice(tcBars,d)||tcFallback) : tcFallback;
+          return {date:d, val:pARS/tc};
+        }).filter(x=>x.val!=null);
+        if(pts.length>=2){
+          const base = pts[0].val;
+          spy100 = pts.map(x=>({date:x.date, val:base>0?100*x.val/base:100}));
+          spySource = "BYMA SPY.BA ("+spyByma.length+" pts)";
+        }
       }
 
-      // CCL base-100
+      // CCL base-100 — solo en modo ARS
       let ccl100 = null, cclSource = "sin datos";
-      if(cclBars.length >= 2){
-        const pts = dates.map(d=>({date:d, val:findPrice(cclBars,d)||cclBars[0].price}));
+      if(currency==="ARS" && cclBars.length >= 2){
+        const pts = dates.map(d=>({date:d, val:findPrice(cclBars,d)||cclBars[0].close}));
         const base = pts[0].val;
         ccl100 = pts.map(x=>({date:x.date, val:base>0?100*x.val/base:100}));
         cclSource = "ArgentinaDatos ("+cclBars.length+" pts)";
+      }
+
+      // MEP base-100 — solo en modo ARS
+      let mep100 = null;
+      if(currency==="ARS" && mepBars2.length >= 2){
+        const pts = dates.map(d=>({date:d, val:findPrice(mepBars2,d)||mepBars2[0].close}));
+        const base = pts[0].val;
+        mep100 = pts.map(x=>({date:x.date, val:base>0?100*x.val/base:100}));
       }
 
       // T10Y base-100
@@ -833,12 +855,14 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
         const bars = getTickerBars(ticker);
         if(bars) tickerBars[ticker] = bars;
       }
-      const hasHistorico = Object.keys(tickerBars).length > 0;
 
-      // Para cada fecha calcular valor total
+      // MEP bars para conversión
+      const mepBars = historicos?.MEP || [];
+
+      // Para cada fecha calcular valor total según moneda seleccionada
       const portPts = dates.map(dateStr => {
         const dateT = new Date(dateStr).getTime();
-        let totalUSD = 0;
+        let total = 0;
         for(const h of en){
           const buyT = new Date(h.buyDate||"2026-04-01").getTime();
           if(buyT > dateT + 86400000) continue;
@@ -846,21 +870,40 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
           const sells = trades.filter(t=>t.ticker===h.ticker&&t.tipo==="venta"&&new Date(t.date).getTime()<=dateT);
           const qty = Math.max(0, buys.reduce((a,t)=>a+t.qty,0) - sells.reduce((a,t)=>a+t.qty,0));
           if(qty<=0) continue;
+
           const isBond = h.type==="bono_usd"||h.type==="bono_ars";
+          const isUSDAsset = h.type==="bono_usd"||h.type==="fci_usd";
           const qtyFactor = isBond ? qty/100 : qty;
           const bars = tickerBars[h.ticker];
-          const price = (bars && findPrice(bars,dateStr)) || h.currentPrice;
-          let valueUSD;
-          if(h.buyCurrency==="USD" && !["bono_usd","bono_ars","cedear","accion_ar"].includes(h.type)){
-            valueUSD = price * qtyFactor;
-          } else {
-            // Todos los instrumentos BYMA están en ARS → dividir por CCL
-            const cclDay = cclBars.length ? (findPrice(cclBars,dateStr)||fxRate) : fxRate;
-            valueUSD = price * qtyFactor / cclDay;
+          const priceByma = (bars && findPrice(bars,dateStr)) || h.currentPrice;
+
+          const cclDay = cclBars.length ? (findPrice(cclBars,dateStr)||fxRate) : fxRate;
+          const mepDay = mepBars.length ? (findPrice(mepBars,dateStr)||fxRate) : fxRate;
+
+          if(currency==="ARS"){
+            // Todo en pesos
+            if(isUSDAsset){
+              // Bonos USD: precio BYMA en ARS (ya está en ARS via BYMA)
+              total += priceByma * qtyFactor;
+            } else {
+              total += priceByma * qtyFactor;
+            }
+          } else if(currency==="USD_CCL"){
+            if(isUSDAsset){
+              // Activos en USD: ya están en USD, no convertir
+              total += priceByma * qtyFactor / cclDay; // precio BYMA en ARS / CCL = USD
+            } else {
+              total += priceByma * qtyFactor / cclDay;
+            }
+          } else { // USD_MEP
+            if(isUSDAsset){
+              total += priceByma * qtyFactor / mepDay;
+            } else {
+              total += priceByma * qtyFactor / mepDay;
+            }
           }
-          totalUSD += valueUSD;
         }
-        return {date:dateStr, val:Math.max(totalUSD,0.01)};
+        return {date:dateStr, val:Math.max(total,0.01)};
       });
 
       const portBase = portPts[0].val;
@@ -870,10 +913,12 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
       const t10yRet = (t10y100[t10y100.length-1].val-100).toFixed(2);
       const portRet = (port100[port100.length-1].val-100).toFixed(2);
 
-      setChartData({port100, t10y100, spy100, ccl100, spySource, cclSource,
+      const mepRet = mep100 ? (mep100[mep100.length-1].val-100).toFixed(2) : null;
+      setChartData({port100, t10y100, spy100, ccl100, mep100, spySource, cclSource,
         startDate:dates[0], endDate:dates[dates.length-1],
-        portRet, t10yRet, spyRet, cclRet,
+        portRet, t10yRet, spyRet, cclRet, mepRet,
         cclPoints: ccl100 ? ccl100.length : 0,
+        currency,
       });
     } catch(e){
       setErr("Error: "+e.message);
@@ -884,16 +929,17 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
   useEffect(()=>{
     const p=PERIODS.find(x=>x.key===period);
     if(p) load(p);
-  },[period]);
+  },[period, currency, historicos]);
 
   // ── SVG line chart ─────────────────────────────────────────────────────────
 
   const cd = chartData;
   const series = cd ? [
-    {key:"port",data:cd.port100,color:"var(--green)",bold:true},
-    ...(cd.spy100?[{key:"spy",data:cd.spy100,color:"#60A5FA",bold:false}]:[]),
-    {key:"t10y",data:cd.t10y100,color:"var(--yellow)",bold:false},
-    ...(cd.ccl100?[{key:"ccl",data:cd.ccl100,color:"#A78BFA",bold:false}]:[]),
+    {key:"port", data:cd.port100, color:"var(--green)",  bold:true},
+    ...(cd.spy100  ? [{key:"spy",  data:cd.spy100,  color:"#60A5FA", bold:false}] : []),
+    ...(cd.currency==="ARS" ? [{key:"t10y", data:cd.t10y100, color:"var(--yellow)", bold:false}] : []),
+    ...(cd.ccl100  ? [{key:"ccl",  data:cd.ccl100,  color:"#A78BFA", bold:false}] : []),
+    ...(cd.mep100  ? [{key:"mep",  data:cd.mep100,  color:"#F472B6", bold:false}] : []),
   ] : [];
 
   return(
@@ -918,12 +964,25 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
       <div style={{...card,padding:20}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14,flexWrap:"wrap",gap:10}}>
           <div>
-            <div style={{fontWeight:600,fontSize:14,marginBottom:4}}>Rendimiento base 100 · en USD</div>
-            <div style={{display:"flex",gap:14,fontSize:11,flexWrap:"wrap"}}>
+            <div style={{fontWeight:600,fontSize:14,marginBottom:6}}>
+              Rendimiento base 100 · {currency==="ARS"?"en ARS":currency==="USD_CCL"?"en USD (CCL)":"en USD (MEP)"}
+            </div>
+            <div style={{display:"flex",gap:12,fontSize:11,flexWrap:"wrap",alignItems:"center"}}>
+              {/* Currency toggle */}
+              {["ARS","USD_CCL","USD_MEP"].map(c=>(
+                <button key={c} onClick={()=>setCurrency(c)}
+                  style={{padding:"2px 8px",borderRadius:5,border:"1px solid var(--border)",cursor:"pointer",fontSize:10,
+                    background:currency===c?"var(--accent)":"transparent",
+                    color:currency===c?"#fff":"var(--text-muted)"}}>
+                  {c==="ARS"?"ARS":c==="USD_CCL"?"USD CCL":"USD MEP"}
+                </button>
+              ))}
+              <span style={{color:"var(--text-muted)",fontSize:10}}>|</span>
               <span style={{color:"var(--green)"}}>— Portfolio</span>
-              {cd?.spy100&&<span style={{color:"#60A5FA"}}>— S&amp;P 500 (aprox.)</span>}
-              <span style={{color:"var(--yellow)"}}>— Treasury 10Y</span>
-              <span style={{color:"#A78BFA"}}>— Dólar CCL</span>
+              {cd?.spy100&&<span style={{color:"#60A5FA"}}>— S&amp;P 500</span>}
+              {cd?.currency==="ARS"&&<span style={{color:"var(--yellow)"}}>— T10Y</span>}
+              {cd?.ccl100&&<span style={{color:"#A78BFA"}}>— CCL</span>}
+              {cd?.mep100&&<span style={{color:"#F472B6"}}>— MEP</span>}
             </div>
           </div>
           <div style={{display:"flex",gap:4}}>
@@ -955,8 +1014,9 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
           <div style={{display:"flex",gap:20,marginTop:10,paddingTop:10,borderTop:"1px solid var(--border)",fontSize:12,flexWrap:"wrap"}}>
             <span style={{color:"var(--text-muted)"}}>Portfolio: <b style={{color:pc(+cd.portRet)}}>{cd.portRet>=0?"+":""}{cd.portRet}%</b></span>
             {cd.spy100&&<span style={{color:"var(--text-muted)"}}>S&amp;P 500: <b style={{color:pc(+cd.spyRet)}}>{cd.spyRet>=0?"+":""}{cd.spyRet}%</b></span>}
-            <span style={{color:"var(--text-muted)"}}>T10Y: <b style={{color:"var(--yellow)"}}>{cd.t10yRet>=0?"+":""}{cd.t10yRet}%</b></span>
+            {cd.currency==="ARS"&&<span style={{color:"var(--text-muted)"}}>T10Y: <b style={{color:"var(--yellow)"}}>{cd.t10yRet>=0?"+":""}{cd.t10yRet}%</b></span>}
             {cd.ccl100&&<span style={{color:"var(--text-muted)"}}>CCL: <b style={{color:pc(+cd.cclRet)}}>{cd.cclRet>=0?"+":""}{cd.cclRet}%</b></span>}
+            {cd.mep100&&<span style={{color:"var(--text-muted)"}}>MEP: <b style={{color:"#F472B6"}}>{cd.mepRet>=0?"+":""}{cd.mepRet}%</b></span>}
             <span style={{color:"var(--text-muted)",marginLeft:"auto",fontSize:10}}>{cd.startDate} → {cd.endDate}</span>
           </div>
         )}

@@ -1156,7 +1156,7 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
                     </td>
                     <td style={{...tdR,fontSize:11}}>
                       {h.buyCurrency==="USD"?fmtU(h.currentPrice,4):fmtA(h.currentPrice)}
-                      {h.liveChangePct!=null&&<span style={{display:"block",fontSize:9,color:pc(h.liveChangePct)}}>{fmtP(h.liveChangePct)} hoy</span>}
+                      {h.liveChangePct!=null&&h.isLive&&<span style={{display:"block",fontSize:9,color:pc(h.liveChangePct)}}>{fmtP(h.liveChangePct)} hoy</span>}
                       {!h.isLive&&<span style={{display:"block",fontSize:8,color:"var(--text-muted)"}}>guardado</span>}
                     </td>
                     {(view==="dual"||view==="native")&&<td style={{...tdR,fontWeight:600}}>{nativeFmt(nativeVal)}</td>}
@@ -1266,15 +1266,17 @@ export default function App(){
     const live=livePrices[h.ticker];
     const currentPrice=live?live.price:h.currentPrice;
     // changePct: precio en vivo vs último cierre del histórico (día anterior)
-    let liveChangePct=null;
-    if(live?.price && historicos?.[h.ticker]){
+    let liveChangePct = live?.changePct || null;
+    if(live?.price && historicos){
       const bars = historicos[h.ticker];
       if(bars && bars.length>=1){
         const prevClose = bars[bars.length-1].close;
-        if(prevClose>0) liveChangePct = parseFloat(((live.price-prevClose)/prevClose*100).toFixed(2));
+        if(prevClose>0){
+          const pct = parseFloat(((live.price-prevClose)/prevClose*100).toFixed(2));
+          if(pct !== 0) liveChangePct = pct; // solo pisar si es distinto de 0
+          else liveChangePct = pct; // igual mostrarlo aunque sea 0
+        }
       }
-    } else if(live?.changePct) {
-      liveChangePct = live.changePct;
     }
     const ppc=ppcByTicker[h.ticker]||h.buyPrice;
     // Bonos cotizan por cada 100 VN — dividir por 100 para obtener valor real

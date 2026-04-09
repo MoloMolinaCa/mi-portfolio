@@ -167,31 +167,28 @@ async function fetchData912Prices(activeTickers=[]) {
 // ── Yahoo Finance: fallback dinámico para cualquier ticker ───────────────────
 async function fetchYahooPrices(activeTickers=[]) {
   const result = {};
-  // Para cada ticker activo que no fue cubierto por data912, intentar Yahoo
-  // Tickers BYMA usan sufijo .BA, tickers US directos no
-  const bymaTypes = ["cedear","accion_ar","bono_usd","bono_ars"];
+
+  const parseYahoo = (d, ticker, source) => {
+    const quotes = d?.chart?.result?.[0];
+    const closes = (quotes?.indicators?.quote?.[0]?.close||[]).filter(Boolean);
+    if(closes.length === 0) return false;
+    const price = closes[closes.length-1];
+    const prev  = closes.length>1 ? closes[closes.length-2] : price;
+    const changePct = prev>0 ? ((price-prev)/prev)*100 : 0;
+    result[ticker] = {price, changePct:parseFloat(changePct.toFixed(2)), source};
+    return true;
+  };
+
   await Promise.allSettled(activeTickers.map(async (ticker) => {
     try {
       // Intentar primero con .BA (instrumento BYMA)
-      const symBA = ticker+".BA";
-      const res = await fetch(YAHOO_PROXY+"?symbol="+encodeURIComponent(symBA)+"&range=5d&interval=1d",
+      const res = await fetch(YAHOO_PROXY+"?symbol="+encodeURIComponent(ticker+".BA")+"&range=5d&interval=1d",
         {signal:AbortSignal.timeout(8000)});
-      if(res.ok){
-        const d = await res.json();
-        const quotes = d?.chart?.result?.[0];
-        const closes = quotes?.indicators?.quote?.[0]?.close||[];
-        const price = closes.filter(Boolean).pop();
-        if(price>0){ result[ticker]={price,changePct:0,source:"yahoo_proxy"}; return; }
-      }
-      // Fallback: símbolo directo (para tickers US como AAPL, MSFT, etc.)
+      if(res.ok){ const d=await res.json(); if(parseYahoo(d,ticker,"yahoo_proxy")) return; }
+      // Fallback: símbolo directo US
       const res2 = await fetch(YAHOO_PROXY+"?symbol="+encodeURIComponent(ticker)+"&range=5d&interval=1d",
         {signal:AbortSignal.timeout(8000)});
-      if(res2.ok){
-        const d2 = await res2.json();
-        const closes2 = d2?.chart?.result?.[0]?.indicators?.quote?.[0]?.close||[];
-        const price2 = closes2.filter(Boolean).pop();
-        if(price2>0) result[ticker]={price:price2,changePct:0,source:"yahoo_us"};
-      }
+      if(res2.ok){ const d2=await res2.json(); parseYahoo(d2,ticker,"yahoo_us"); }
     } catch {}
   }));
   return result;
@@ -811,21 +808,33 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
 
       // SPY benchmark base-100 — convertido según moneda seleccionada
       let spy100 = null, spySource = "sin datos";
-      const spyByma = getTickerBars("SPY") || [];
-      if(spyByma.length >= 2){
+      // S&P500: usar historicos.sp500 (yfinance USD) si está disponible,
+      // sino usar SPY.BA de BYMA dividido por TC
+      const sp500Bars = historicos?.sp500 || [];
+      const spyByma   = getTickerBars("SPY") || [];
+
+      if(sp500Bars.length >= 2 && currency!=="ARS"){
+        // Datos reales S&P500 en USD desde yfinance
+        const pts = dates.map(d=>({date:d, val:findPrice(sp500Bars,d)||null})).filter(x=>x.val);
+        if(pts.length>=2){
+          const base = pts[0].val;
+          spy100 = pts.map(x=>({date:x.date, val:base>0?100*x.val/base:100}));
+          spySource = "S&P500 USD (yfinance)";
+        }
+      } else if(spyByma.length >= 2){
+        // SPY.BA en ARS desde BYMA, convertido según moneda
         const tcBars = currency==="USD_MEP" ? mepBars2 : cclBars;
-        const tcFallback = fxRate;
         const pts = dates.map(d=>{
           const pARS = findPrice(spyByma,d);
           if(!pARS) return {date:d, val:null};
           if(currency==="ARS") return {date:d, val:pARS};
-          const tc = tcBars.length ? (findPrice(tcBars,d)||tcFallback) : tcFallback;
+          const tc = tcBars.length ? (findPrice(tcBars,d)||fxRate) : fxRate;
           return {date:d, val:pARS/tc};
         }).filter(x=>x.val!=null);
         if(pts.length>=2){
           const base = pts[0].val;
           spy100 = pts.map(x=>({date:x.date, val:base>0?100*x.val/base:100}));
-          spySource = "BYMA SPY.BA ("+spyByma.length+" pts)";
+          spySource = "SPY.BA BYMA"+(currency!=="ARS"?" ÷ "+currency.replace("USD_",""):"");
         }
       }
 

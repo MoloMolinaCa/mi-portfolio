@@ -2,7 +2,7 @@ name: Actualizar históricos
 
 on:
   schedule:
-    - cron: '0 21 * * 1-5'  # 18hs Argentina (UTC-3) = 21hs UTC, lunes a viernes
+    - cron: '0 00 * * 2-6'
   workflow_dispatch:          # también se puede correr manualmente desde GitHub
 
 jobs:

@@ -39,161 +39,113 @@ const fmtA = (n) => new Intl.NumberFormat("es-AR",{style:"currency",currency:"AR
 const fmtP = (n) => `${n>=0?"+":""}${n.toFixed(2)}%`;
 const pc   = (n) => n>=0?"var(--green)":"var(--red)";
 
-const FCI_IDS = {
-  "FIMA-PREM":  { fondo: "1", clase: "A", nombre: "FIMA Premium" },
-  "FIMA-AHP":   { fondo: "2", clase: "A", nombre: "FIMA Ahorro Pesos" },
-  "FIMA-AHPP":  { fondo: "3", clase: "A", nombre: "FIMA Ahorro Plus" },
-  "FIMA-PREMD": { fondo: "4", clase: "A", nombre: "FIMA Premium Dólares" },
-};
-
 async function fetchFXLive() {
   const today = new Date();
   const time  = today.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"});
   const label = today.toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit"});
   try {
-    const res = await fetch("https://dolarapi.com/v1/dolares", {
-      signal: AbortSignal.timeout(7000),
-      headers: { "Accept": "application/json" }
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) {
-        const get    = (casa) => data.find(d => d.casa === casa);
-        const venta  = (d)    => (d && d.venta && d.venta > 100) ? d.venta : null;
-        const compra = (d)    => (d && d.compra && d.compra > 100) ? d.compra : null;
-        const CCL     = venta(get("contadoconliqui"));
-        const MEP     = venta(get("bolsa"));
-        const oficial = venta(get("oficial"));
-        if (CCL && MEP) {
-          return {
-            CCL, MEP,
-            oficial: oficial || Math.round(CCL * 0.94),
-            cclCompra: compra(get("contadoconliqui")),
-            mepCompra: compra(get("bolsa")),
-            ofCompra:  compra(get("oficial")),
-            source: "dolarapi.com · tiempo real",
-            sourceNote: "Oficial = BNA minorista.",
-            dateLabel: label, timeLabel: time,
-          };
-        }
+    const res = await fetch("https://dolarapi.com/v1/dolares",{signal:AbortSignal.timeout(7000),headers:{"Accept":"application/json"}});
+    if(res.ok){
+      const data=await res.json();
+      if(Array.isArray(data)&&data.length>0){
+        const get=(casa)=>data.find(d=>d.casa===casa);
+        const venta=(d)=>(d&&d.venta&&d.venta>100)?d.venta:null;
+        const compra=(d)=>(d&&d.compra&&d.compra>100)?d.compra:null;
+        const CCL=venta(get("contadoconliqui")),MEP=venta(get("bolsa")),oficial=venta(get("oficial"));
+        if(CCL&&MEP)return{CCL,MEP,oficial:oficial||Math.round(CCL*0.94),cclCompra:compra(get("contadoconliqui")),mepCompra:compra(get("bolsa")),ofCompra:compra(get("oficial")),source:"dolarapi.com · tiempo real",sourceNote:"Oficial = BNA minorista.",dateLabel:label,timeLabel:time};
       }
     }
-  } catch {}
-  try {
-    const res = await fetch(YAHOO_PROXY+"?symbol=USDARS%3DX&range=5d&interval=1d",{signal:AbortSignal.timeout(6000)});
-    if (res.ok) {
-      const d = await res.json();
-      const price = d?.quoteResponse?.result?.[0]?.regularMarketPrice;
-      if (price && price > 100) {
-        return { CCL:Math.round(price*1.065), MEP:Math.round(price*1.027), oficial:Math.round(price),
-          source:"Yahoo Finance · estimado", sourceNote:"Valores estimados.", dateLabel:label, timeLabel:time };
-      }
-    }
-  } catch {}
-  return { ...FX_FALLBACK, source:"fallback", sourceNote:"Sin conexión.", dateLabel:label, timeLabel:time };
+  }catch{}
+  try{
+    const res=await fetch(YAHOO_PROXY+"?symbol=USDARS%3DX&range=5d&interval=1d",{signal:AbortSignal.timeout(6000)});
+    if(res.ok){const d=await res.json();const price=d?.quoteResponse?.result?.[0]?.regularMarketPrice;if(price&&price>100)return{CCL:Math.round(price*1.065),MEP:Math.round(price*1.027),oficial:Math.round(price),source:"Yahoo Finance · estimado",sourceNote:"Valores estimados.",dateLabel:label,timeLabel:time};}
+  }catch{}
+  return{...FX_FALLBACK,source:"fallback",sourceNote:"Sin conexión.",dateLabel:label,timeLabel:time};
 }
 
-async function fetchData912Prices(activeTickers=[]) {
-  const result = {};
-  const base = "https://data912.com/live";
-  const parseD912 = (arr) => {
-    if (!Array.isArray(arr)) return;
-    for (const item of arr) {
-      const sym = item.ticker || item.symbol || item.s || "";
-      const price = item.price ?? item.last ?? item.c ?? item.close ?? null;
-      const change = item.change_pct ?? item.dp ?? item.change ?? 0;
-      const match = activeTickers.length===0 || activeTickers.includes(sym);
-      if (match && price != null && price > 0)
-        result[sym] = { price: parseFloat(price), changePct: parseFloat(change)||0, source:"data912" };
+async function fetchData912Prices(activeTickers=[]){
+  const result={};
+  const base="https://data912.com/live";
+  const parseD912=(arr)=>{
+    if(!Array.isArray(arr))return;
+    for(const item of arr){
+      const sym=item.ticker||item.symbol||item.s||"";
+      const price=item.price??item.last??item.c??item.close??null;
+      const change=item.change_pct??item.dp??item.change??0;
+      const match=activeTickers.length===0||activeTickers.includes(sym);
+      if(match&&price!=null&&price>0)result[sym]={price:parseFloat(price),changePct:parseFloat(change)||0,source:"data912"};
     }
   };
-  const [rBonds,rCedears,rStocks,rCorp] = await Promise.allSettled([
-    fetch(`${base}/arg_bonds`,   {signal:AbortSignal.timeout(8000)}).then(r=>r.json()),
-    fetch(`${base}/arg_cedears`, {signal:AbortSignal.timeout(8000)}).then(r=>r.json()),
-    fetch(`${base}/arg_stocks`,  {signal:AbortSignal.timeout(8000)}).then(r=>r.json()),
-    fetch(`${base}/arg_corp`,    {signal:AbortSignal.timeout(8000)}).then(r=>r.json()),
+  const [rBonds,rCedears,rStocks,rCorp]=await Promise.allSettled([
+    fetch(`${base}/arg_bonds`,{signal:AbortSignal.timeout(8000)}).then(r=>r.json()),
+    fetch(`${base}/arg_cedears`,{signal:AbortSignal.timeout(8000)}).then(r=>r.json()),
+    fetch(`${base}/arg_stocks`,{signal:AbortSignal.timeout(8000)}).then(r=>r.json()),
+    fetch(`${base}/arg_corp`,{signal:AbortSignal.timeout(8000)}).then(r=>r.json()),
   ]);
-  if (rBonds.status==="fulfilled")   parseD912(rBonds.value);
-  if (rCedears.status==="fulfilled") parseD912(rCedears.value);
-  if (rStocks.status==="fulfilled")  parseD912(rStocks.value);
-  if (rCorp.status==="fulfilled")    parseD912(rCorp.value);
+  if(rBonds.status==="fulfilled")parseD912(rBonds.value);
+  if(rCedears.status==="fulfilled")parseD912(rCedears.value);
+  if(rStocks.status==="fulfilled")parseD912(rStocks.value);
+  if(rCorp.status==="fulfilled")parseD912(rCorp.value);
   return result;
 }
 
-async function fetchYahooPrices(activeTickers=[]) {
-  const result = {};
-  const parseYahoo = (d, ticker, source) => {
-    const quotes = d?.chart?.result?.[0];
-    const closes = (quotes?.indicators?.quote?.[0]?.close||[]).filter(Boolean);
-    if(closes.length===0) return false;
-    const price = closes[closes.length-1];
-    const prev  = closes.length>1 ? closes[closes.length-2] : price;
-    const changePct = prev>0 ? ((price-prev)/prev)*100 : 0;
-    result[ticker] = {price, changePct:parseFloat(changePct.toFixed(2)), source};
+async function fetchYahooPrices(activeTickers=[]){
+  const result={};
+  const parseYahoo=(d,ticker,source)=>{
+    const quotes=d?.chart?.result?.[0];
+    const closes=(quotes?.indicators?.quote?.[0]?.close||[]).filter(Boolean);
+    if(closes.length===0)return false;
+    const price=closes[closes.length-1],prev=closes.length>1?closes[closes.length-2]:price;
+    const changePct=prev>0?((price-prev)/prev)*100:0;
+    result[ticker]={price,changePct:parseFloat(changePct.toFixed(2)),source};
     return true;
   };
-  await Promise.allSettled(activeTickers.map(async (ticker) => {
-    try {
-      const res = await fetch(YAHOO_PROXY+"?symbol="+encodeURIComponent(ticker+".BA")+"&range=5d&interval=1d",{signal:AbortSignal.timeout(8000)});
-      if(res.ok){ const d=await res.json(); if(parseYahoo(d,ticker,"yahoo_proxy")) return; }
-      const res2 = await fetch(YAHOO_PROXY+"?symbol="+encodeURIComponent(ticker)+"&range=5d&interval=1d",{signal:AbortSignal.timeout(8000)});
-      if(res2.ok){ const d2=await res2.json(); parseYahoo(d2,ticker,"yahoo_us"); }
-    } catch {}
+  await Promise.allSettled(activeTickers.map(async(ticker)=>{
+    try{
+      const res=await fetch(YAHOO_PROXY+"?symbol="+encodeURIComponent(ticker+".BA")+"&range=5d&interval=1d",{signal:AbortSignal.timeout(8000)});
+      if(res.ok){const d=await res.json();if(parseYahoo(d,ticker,"yahoo_proxy"))return;}
+      const res2=await fetch(YAHOO_PROXY+"?symbol="+encodeURIComponent(ticker)+"&range=5d&interval=1d",{signal:AbortSignal.timeout(8000)});
+      if(res2.ok){const d2=await res2.json();parseYahoo(d2,ticker,"yahoo_us");}
+    }catch{}
   }));
   return result;
 }
 
-async function fetchFCIPrices() {
-  const result = {};
-  try {
-    const [rMM,rRF] = await Promise.allSettled([
+async function fetchFCIPrices(){
+  const result={};
+  try{
+    const [rMM,rRF]=await Promise.allSettled([
       fetch("https://api.argentinadatos.com/v1/finanzas/fci/mercadoDinero/ultimo",{signal:AbortSignal.timeout(8000)}).then(r=>r.json()),
-      fetch("https://api.argentinadatos.com/v1/finanzas/fci/rentaFija/ultimo",    {signal:AbortSignal.timeout(8000)}).then(r=>r.json()),
+      fetch("https://api.argentinadatos.com/v1/finanzas/fci/rentaFija/ultimo",{signal:AbortSignal.timeout(8000)}).then(r=>r.json()),
     ]);
-    const all = [
-      ...(rMM.status==="fulfilled"&&Array.isArray(rMM.value)?rMM.value:[]),
-      ...(rRF.status==="fulfilled"&&Array.isArray(rRF.value)?rRF.value:[]),
+    const all=[...(rMM.status==="fulfilled"&&Array.isArray(rMM.value)?rMM.value:[]),...(rRF.status==="fulfilled"&&Array.isArray(rRF.value)?rRF.value:[])];
+    const MAP=[
+      {ticker:"FIMA-PREM",keywords:["fima premium","fima prem"],usd:false},
+      {ticker:"FIMA-AHP",keywords:["fima ahorro pesos","ahorro pesos"],usd:false},
+      {ticker:"FIMA-AHPP",keywords:["fima ahorro plus","ahorro plus"],usd:false},
+      {ticker:"FIMA-PREMD",keywords:["fima premium dolar","fima premium d"],usd:true},
     ];
-    const MAP = [
-      { ticker:"FIMA-PREM",  keywords:["fima premium","fima prem"],           usd:false },
-      { ticker:"FIMA-AHP",   keywords:["fima ahorro pesos","ahorro pesos"],    usd:false },
-      { ticker:"FIMA-AHPP",  keywords:["fima ahorro plus","ahorro plus"],      usd:false },
-      { ticker:"FIMA-PREMD", keywords:["fima premium dolar","fima premium d"], usd:true  },
-    ];
-    for (const m of MAP) {
-      const match = all.find(f => {
-        const nombre = (f.fondo||f.nombre||f.name||"").toLowerCase();
-        return m.keywords.some(k=>nombre.includes(k));
-      });
-      if (match) {
-        const vcp = parseFloat(match.vCuotaparte||match.cuotaparte||match.precio||0);
-        if (vcp>0) result[m.ticker] = { price:vcp, changePct:0, source:"argentinadatos/CAFCI" };
-      }
+    for(const m of MAP){
+      const match=all.find(f=>{const nombre=(f.fondo||f.nombre||f.name||"").toLowerCase();return m.keywords.some(k=>nombre.includes(k));});
+      if(match){const vcp=parseFloat(match.vCuotaparte||match.cuotaparte||match.precio||0);if(vcp>0)result[m.ticker]={price:vcp,changePct:0,source:"argentinadatos/CAFCI"};}
     }
-  } catch {}
+  }catch{}
   return result;
 }
 
-async function fetchTreasury10Y() {
-  try {
-    const res = await fetch(YAHOO_PROXY+"?symbol=%5ETNX&range=5d&interval=1d",{signal:AbortSignal.timeout(6000)});
-    const d = await res.json();
-    const closes = d?.chart?.result?.[0]?.indicators?.quote?.[0]?.close||[];
-    const price = closes.filter(Boolean).pop();
-    return price ? parseFloat(price.toFixed(2)) : T10Y_FALLBACK;
-  } catch { return T10Y_FALLBACK; }
+async function fetchTreasury10Y(){
+  try{
+    const res=await fetch(YAHOO_PROXY+"?symbol=%5ETNX&range=5d&interval=1d",{signal:AbortSignal.timeout(6000)});
+    const d=await res.json();
+    const closes=d?.chart?.result?.[0]?.indicators?.quote?.[0]?.close||[];
+    const price=closes.filter(Boolean).pop();
+    return price?parseFloat(price.toFixed(2)):T10Y_FALLBACK;
+  }catch{return T10Y_FALLBACK;}
 }
 
-async function fetchAllLivePrices(activeTickers=[]) {
-  const [fx,d912P,yahooP,fciP,t10y] = await Promise.all([
-    fetchFXLive(),
-    fetchData912Prices(activeTickers),
-    fetchYahooPrices(activeTickers.filter(t=>!t.startsWith("FIMA"))),
-    fetchFCIPrices(),
-    fetchTreasury10Y(),
-  ]);
-  const prices = { ...yahooP, ...d912P, ...fciP };
-  return { fx, prices, t10y };
+async function fetchAllLivePrices(activeTickers=[]){
+  const [fx,d912P,yahooP,fciP,t10y]=await Promise.all([fetchFXLive(),fetchData912Prices(activeTickers),fetchYahooPrices(activeTickers.filter(t=>!t.startsWith("FIMA"))),fetchFCIPrices(),fetchTreasury10Y()]);
+  return{fx,prices:{...yahooP,...d912P,...fciP},t10y};
 }
 
 function Spark({pct}){
@@ -223,67 +175,99 @@ function Donut({segs}){
   );
 }
 
-function LineChart({history}){
-  const W=900,H=170;
-  const pD=history.map(d=>d.pPct),bD=history.map(d=>d.bPct);
-  const all=[...pD,...bD];const minV=Math.min(...all)-0.4,maxV=Math.max(...all)+0.4,rng=maxV-minV||1;
-  const tx=i=>38+(i/(history.length-1))*(W-46);
-  const ty=v=>H-18-((v-minV)/rng)*(H-28);
-  const pPts=pD.map((v,i)=>`${tx(i)},${ty(v)}`).join(" ");
-  const bPts=bD.map((v,i)=>`${tx(i)},${ty(v)}`).join(" ");
-  const fill=pPts+` ${tx(history.length-1)},${H-18} 38,${H-18}`;
-  const zero=ty(0);
+function Chart100({series}){
+  if(!series?.length)return null;
+  const W=560,H=200,PL=44,PT=12,PR=12,PB=26;
+  const allV=series.flatMap(s=>s.data.map(d=>d.val));
+  const minV=Math.min(...allV)*0.997,maxV=Math.max(...allV)*1.003;
+  const n=series[0].data.length;
+  const xS=i=>PL+(i/(n-1))*(W-PL-PR);
+  const yS=v=>PT+(1-(v-minV)/(maxV-minV))*(H-PT-PB);
+  const path=data=>data.map((d,i)=>`${i===0?"M":"L"}${xS(i).toFixed(1)},${yS(d.val).toFixed(1)}`).join(" ");
+  const yTicks=Array.from({length:5},(_,i)=>minV+(maxV-minV)*i/4);
+  const xLabels=[0,Math.floor(n/3),Math.floor(2*n/3),n-1].filter((v,i,a)=>a.indexOf(v)===i);
   return(
-    <svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
-      <defs><linearGradient id="lg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10B981" stopOpacity="0.3"/><stop offset="100%" stopColor="#10B981" stopOpacity="0"/></linearGradient></defs>
-      <line x1="38" y1={zero} x2={W} y2={zero} stroke="rgba(255,255,255,0.07)" strokeDasharray="4,3"/>
-      {[minV,(minV+maxV)/2,maxV].map((v,i)=><text key={i} x="32" y={ty(v)+4} textAnchor="end" fontSize="9" fill="rgba(255,255,255,0.22)">{v.toFixed(1)}%</text>)}
-      {history.filter((_,i)=>i%15===0).map((d,i)=>{
-        const idx=history.findIndex(h=>h.date===d.date);
-        return <text key={i} x={tx(idx)} y={H-3} textAnchor="middle" fontSize="9" fill="rgba(255,255,255,0.22)">{d.date}</text>;
-      })}
-      <polygon points={fill} fill="url(#lg)"/>
-      <polyline points={bPts} fill="none" stroke="#FBBF24" strokeWidth="1.5" strokeDasharray="5,3" opacity="0.8"/>
-      <polyline points={pPts} fill="none" stroke="#34D399" strokeWidth="2"/>
+    <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:"100%"}}>
+      {yTicks.map((v,i)=>(
+        <g key={i}>
+          <line x1={PL} x2={W-PR} y1={yS(v)} y2={yS(v)} stroke="var(--border)" strokeWidth="0.5"/>
+          <text x={PL-4} y={yS(v)+4} textAnchor="end" fontSize="9" fill="var(--text-muted)">{v.toFixed(0)}</text>
+        </g>
+      ))}
+      <line x1={PL} x2={W-PR} y1={yS(100)} y2={yS(100)} stroke="rgba(255,255,255,0.1)" strokeWidth="1" strokeDasharray="3,3"/>
+      {series.map(s=>(
+        <path key={s.key} d={path(s.data)} fill="none" stroke={s.color} strokeWidth={s.bold?2:1.5} strokeLinejoin="round" opacity={s.bold?1:0.7}/>
+      ))}
+      {xLabels.map(i=>(
+        <text key={i} x={xS(i)} y={H-4} textAnchor="middle" fontSize="9" fill="var(--text-muted)">{series[0].data[i]?.date?.slice(5)}</text>
+      ))}
     </svg>
   );
 }
 
-function makeHistory(totalUSD,costUSD,t10y=4.35){
-  return Array.from({length:91},(_,i)=>{
-    const d=new Date();d.setDate(d.getDate()-(90-i));
-    const trend=(i/90)*((totalUSD/costUSD-1)*100);
-    const noise=Math.sin(i*0.4)*1.1+Math.cos(i*0.7)*0.7;
-    const pPct=trend*0.75+noise;
-    const bPct=(Math.pow(1+t10y/100,i/365)-1)*100;
-    return{date:d.toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit"}),pPct,bPct,usd:costUSD*(1+pPct/100)};
-  });
-}
+function EvoMini({en,trades,fxRate,historicos,liveT10Y}){
+  const [series,setSeries]=useState(null);
+  const [rets,setRets]=useState(null);
 
-const AR_TICKERS = {
-  GGAL:"Grupo Financiero Galicia",YPFD:"YPF Ordinarias D",TXAR:"Siderar (Ternium)",
-  BMA:"Banco Macro",BBAR:"BBVA Argentina",SUPV:"Grupo Supervielle",VALO:"Grupo Financiero Valores",
-  BYMA:"Bolsas y Mercados Arg.",CEPU:"Central Puerto",PAMP:"Pampa Energía",TGSU2:"Transportadora Gas Sur",
-  TGNO4:"Transportadora Gas Norte",COME:"Sociedad Comercial del Plata",LOMA:"Loma Negra",
-  ALUA:"Aluar Aluminio",CRES:"Cresud",IRSA:"IRSA",MOLI:"Molinos Río de la Plata",
-  RICH:"Laboratorios Richmond",HARG:"Holcim Argentina",EDN:"Edenor",TECO2:"Telecom Argentina",
-  METR:"Metrogas",GARO:"Garovaglio y Zorraquín",AGRO:"AgroEtanol",BOLT:"Boldt",
-  GLD:"ETF SPDR Gold Trust",SPY:"ETF SPDR S&P500",QQQ:"ETF Invesco QQQ (Nasdaq)",
-  AAPL:"Apple Inc",MSFT:"Microsoft Corp",GOOGL:"Alphabet (Google)",AMZN:"Amazon.com",
-  META:"Meta Platforms",NVDA:"NVIDIA Corp",TSLA:"Tesla Inc",BRKB:"Berkshire Hathaway B",
-  JPM:"JPMorgan Chase",BAC:"Bank of America",XOM:"ExxonMobil",CVX:"Chevron",
-  WMT:"Walmart",JNJ:"Johnson & Johnson",PG:"Procter & Gamble",KO:"Coca-Cola",
-  DIS:"Walt Disney",NFLX:"Netflix",PYPL:"PayPal",ADBE:"Adobe",
-  NU:"NU Holdings",MELI:"MercadoLibre",GLOB:"Globant",LRCX:"Lam Research",
-  VIST:"Vista Oil & Gas",YPF:"YPF S.A. (ADR)",PAM:"Pampa Energía (ADR)",
-  TZXD6:"BONTES CER V15/12/26",TZX27:"BONO CER V30/06/27",TZXD7:"BONTES CER V15/12/27",
-  TZX28:"BONO CER V30/06/28",LECAP:"LECAP",
-  GD30D:"Global 2030 USD (BCBA)",GD35D:"Global 2035 USD (BCBA)",
-  GD38D:"Global 2038 USD (BCBA)",GD41D:"Global 2041 USD (BCBA)",
-  AL29D:"Bono 2029 Ley Arg. USD",AL30D:"Bono 2030 Ley Arg. USD",AO27D:"Bono Tesoro 6% V2027 USD",
-  TLCUD:"ON Telecom C28 USD",YCA6O:"ON YPF USD",YMCXO:"ON YPF USD",
-  "FIMA-PREM":"FIMA Premium ARS","FIMA-PREMD":"FIMA Premium USD",
-};
+  useEffect(()=>{
+    if(!historicos||!Object.keys(historicos).length)return;
+    const _h=historicos;
+    const findP=(bars,d)=>{if(!bars?.length)return null;const t=new Date(d).getTime();return bars.reduce((b,x)=>Math.abs(new Date(x.date)-t)<Math.abs(new Date(b.date)-t)?x:b,bars[0])?.close||null;};
+    const cclBars=_h.CCL||[],sp500Bars=_h.sp500||[];
+    const end=new Date(),start=new Date();start.setDate(start.getDate()-90);
+    const dates=[];
+    for(let i=0;i<=24;i++){const d=new Date(start.getTime()+(end-start)*(i/24));dates.push(d.toISOString().slice(0,10));}
+    const uniq=[...new Set(dates)];
+
+    const portPts=uniq.map(dateStr=>{
+      const dateT=new Date(dateStr).getTime();
+      let total=0;
+      for(const h of en){
+        const buys=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra"&&new Date(t.date).getTime()<=dateT);
+        const sells=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="venta"&&new Date(t.date).getTime()<=dateT);
+        const qty=Math.max(0,buys.reduce((a,t)=>a+t.qty,0)-sells.reduce((a,t)=>a+t.qty,0));
+        if(qty<=0)continue;
+        const isBond=h.type==="bono_usd"||h.type==="bono_ars";
+        const qtyFactor=isBond?qty/100:qty;
+        const bars=_h[h.ticker];
+        const price=(bars&&findP(bars,dateStr))||h.currentPrice;
+        const cclDay=cclBars.length?(findP(cclBars,dateStr)||fxRate):fxRate;
+        total+=price*qtyFactor/cclDay;
+      }
+      return{date:dateStr,val:Math.max(total,0.01)};
+    });
+
+    const spyPts=sp500Bars.length>=2?uniq.map(d=>({date:d,val:findP(sp500Bars,d)||null})).filter(x=>x.val):[];
+    if(portPts.length<2)return;
+    const pb=portPts[0].val;
+    const port100=portPts.map(x=>({date:x.date,val:pb>0?100*x.val/pb:100}));
+    let spy100=null;
+    if(spyPts.length>=2){const sb=spyPts[0].val;spy100=spyPts.map(x=>({date:x.date,val:sb>0?100*x.val/sb:100}));}
+
+    const portRet=port100[port100.length-1].val-100;
+    const spyRet=spy100?spy100[spy100.length-1].val-100:null;
+
+    setSeries([
+      {key:"port",data:port100,color:"var(--green)",bold:true},
+      ...(spy100?[{key:"spy",data:spy100,color:"#60A5FA",bold:false}]:[]),
+    ]);
+    setRets({portRet,spyRet});
+  },[historicos,fxRate]);
+
+  if(!series)return <div style={{height:"100%",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--text-muted)",fontSize:12}}>Cargando históricos...</div>;
+  return(
+    <div style={{height:"100%",display:"flex",flexDirection:"column"}}>
+      <div style={{flex:1}}><Chart100 series={series}/></div>
+      {rets&&(
+        <div style={{display:"flex",gap:16,fontSize:11,paddingTop:6,borderTop:"1px solid var(--border)",marginTop:4}}>
+          <span style={{color:"var(--text-muted)"}}>Portfolio: <b style={{color:rets.portRet>=0?"var(--green)":"var(--red)"}}>{rets.portRet>=0?"+":""}{rets.portRet.toFixed(2)}%</b></span>
+          {rets.spyRet!=null&&<span style={{color:"var(--text-muted)"}}>S&amp;P 500: <b style={{color:"#60A5FA"}}>{rets.spyRet>=0?"+":""}{rets.spyRet.toFixed(2)}%</b></span>}
+          <span style={{color:"var(--text-muted)",marginLeft:"auto",fontSize:10}}>90d · USD CCL</span>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function VentaTickerSearch({port,value,onSelect}){
   const [query,setQuery]=useState(value||"");
@@ -332,13 +316,14 @@ function Modal({h,port=[],onSave,onClose}){
   const validateTicker=async(ticker)=>{
     if(!ticker||ticker.length<2){setTickerStatus("idle");setTickerInfo(null);return;}
     setTickerStatus("checking");setTickerInfo(null);
-    if(AR_TICKERS[ticker]){
-      const knownName=AR_TICKERS[ticker];
+    const AR_TICKERS_LOCAL={GGAL:"Grupo Financiero Galicia",YPFD:"YPF Ordinarias D",TXAR:"Siderar (Ternium)",BMA:"Banco Macro",BBAR:"BBVA Argentina",GLD:"ETF SPDR Gold Trust",SPY:"ETF SPDR S&P500",MSFT:"Microsoft Corp",META:"Meta Platforms",NU:"NU Holdings",VIST:"Vista Oil & Gas",TZXD6:"BONTES CER V15/12/26",TZX27:"BONO CER V30/06/27",GD38D:"Global 2038 USD",AO27D:"Bono Tesoro 6% V2027 USD",TLCUD:"ON Telecom C28 USD"};
+    if(AR_TICKERS_LOCAL[ticker]){
+      const knownName=AR_TICKERS_LOCAL[ticker];
       try{
         const res=await fetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${ticker}.BA&fields=shortName,regularMarketPrice,regularMarketPreviousClose,currency`,{signal:AbortSignal.timeout(5000)});
         if(res.ok){const data=await res.json();const q=data?.quoteResponse?.result?.[0];const price=q?.regularMarketPrice||q?.regularMarketPreviousClose;if(price){setTickerStatus("found");setTickerInfo({name:q?.shortName||knownName,price,currency:q?.currency||"ARS",source:"Yahoo Finance"});setF(p=>({...p,name:q?.shortName||knownName}));return;}}
       }catch{}
-      setTickerStatus("found");setTickerInfo({name:knownName,price:null,currency:ticker.endsWith("D")||ticker.includes("USD")?"USD":"ARS",source:"Lista local AR"});setF(p=>({...p,name:knownName}));return;
+      setTickerStatus("found");setTickerInfo({name:knownName,price:null,currency:"ARS",source:"Lista local"});setF(p=>({...p,name:knownName}));return;
     }
     try{
       const res=await fetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${ticker}.BA&fields=shortName,regularMarketPrice,regularMarketPreviousClose,currency`,{signal:AbortSignal.timeout(6000)});
@@ -367,8 +352,7 @@ function Modal({h,port=[],onSave,onClose}){
           <button onClick={onClose} style={{background:"transparent",border:"none",color:"var(--text-muted)",cursor:"pointer",fontSize:18}}>×</button>
         </div>
         {!h&&<div style={{background:"rgba(37,99,235,0.08)",border:"1px solid rgba(37,99,235,0.2)",borderRadius:8,padding:"10px 14px",marginBottom:16,fontSize:12,color:"var(--text-secondary)",lineHeight:1.6}}>
-          <b style={{color:"var(--accent)"}}>¿Cómo agregar un papel?</b><br/>
-          Ingresá el ticker (ej: <code style={{background:"var(--bg-input)",padding:"1px 5px",borderRadius:4}}>GGAL</code>) — la app lo busca automáticamente.
+          <b style={{color:"var(--accent)"}}>¿Cómo agregar un papel?</b><br/>Ingresá el ticker (ej: <code style={{background:"var(--bg-input)",padding:"1px 5px",borderRadius:4}}>GGAL</code>) — la app lo busca automáticamente.
         </div>}
         <div style={{display:"grid",gap:14}}>
           <div>
@@ -378,13 +362,8 @@ function Modal({h,port=[],onSave,onClose}){
                 const disabled=op==="venta"&&port.length===0;
                 return(
                   <button key={op} disabled={disabled}
-                    onClick={()=>{
-                      if(op==="venta"&&port.length>0){const first=port[0];setF(p=>({...p,operacion:"venta",ticker:first.ticker,name:first.name,type:first.type,buyCurrency:first.buyCurrency,qty:"",buyPrice:""}));setTickerStatus("confirmed");}
-                      else{setF(p=>({...p,operacion:op,qty:"",buyPrice:""}));if(op==="compra")setTickerStatus("idle");}
-                    }}
-                    style={{flex:1,padding:"9px 0",border:"none",borderRadius:6,fontSize:14,fontWeight:700,transition:"all 0.15s",
-                      background:f.operacion===op?(op==="compra"?"var(--green)":"var(--red)"):"transparent",
-                      color:f.operacion===op?"#fff":"var(--text-muted)",opacity:disabled?0.3:1,cursor:disabled?"not-allowed":"pointer"}}>
+                    onClick={()=>{if(op==="venta"&&port.length>0){const first=port[0];setF(p=>({...p,operacion:"venta",ticker:first.ticker,name:first.name,type:first.type,buyCurrency:first.buyCurrency,qty:"",buyPrice:""}));setTickerStatus("confirmed");}else{setF(p=>({...p,operacion:op,qty:"",buyPrice:""}));if(op==="compra")setTickerStatus("idle");}}}
+                    style={{flex:1,padding:"9px 0",border:"none",borderRadius:6,fontSize:14,fontWeight:700,transition:"all 0.15s",background:f.operacion===op?(op==="compra"?"var(--green)":"var(--red)"):"transparent",color:f.operacion===op?"#fff":"var(--text-muted)",opacity:disabled?0.3:1,cursor:disabled?"not-allowed":"pointer"}}>
                     {op==="compra"?"↑ Compra":"↓ Venta"}
                   </button>
                 );
@@ -410,19 +389,11 @@ function Modal({h,port=[],onSave,onClose}){
                 <div style={{marginTop:8,background:"rgba(52,211,153,0.07)",border:"1px solid rgba(52,211,153,0.2)",borderRadius:8,padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <div><div style={{fontSize:13,fontWeight:600}}>{tickerInfo.name}</div><div style={{fontSize:11,color:"var(--text-muted)"}}>📡 {tickerInfo.source}</div></div>
                   <div style={{textAlign:"right"}}>
-                    {tickerInfo.price?<><div style={{fontSize:14,fontWeight:700,color:"var(--green)"}}>{tickerInfo.currency==="USD"?fmtU(tickerInfo.price,3):fmtA(tickerInfo.price)}</div><div style={{fontSize:10,color:"var(--text-muted)"}}>precio actual</div></>
-                    :<><div style={{fontSize:12,color:"var(--yellow)"}}>precio al abrir</div><div style={{fontSize:10,color:"var(--text-muted)"}}>se carga con refresh ↻</div></>}
+                    {tickerInfo.price?<><div style={{fontSize:14,fontWeight:700,color:"var(--green)"}}>{tickerInfo.currency==="USD"?fmtU(tickerInfo.price,3):fmtA(tickerInfo.price)}</div><div style={{fontSize:10,color:"var(--text-muted)"}}>precio actual</div></>:<><div style={{fontSize:12,color:"var(--yellow)"}}>precio al abrir</div><div style={{fontSize:10,color:"var(--text-muted)"}}>se carga con refresh ↻</div></>}
                   </div>
                 </div>
               )}
               {tickerStatus==="notfound"&&<div style={{marginTop:8,background:"rgba(251,191,36,0.07)",border:"1px solid rgba(251,191,36,0.2)",borderRadius:8,padding:"10px 12px",fontSize:12,color:"var(--yellow)"}}>⚠️ Ticker no encontrado — podés guardarlo igual.</div>}
-              {tickerStatus==="checking"&&(
-                <div style={{marginTop:6,fontSize:11,color:"var(--text-muted)"}}>
-                  Buscando...{Object.keys(AR_TICKERS).filter(t=>t.startsWith(f.ticker)&&t!==f.ticker).slice(0,4).map(t=>(
-                    <button key={t} onClick={()=>onTickerChange(t)} style={{background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:4,padding:"1px 8px",cursor:"pointer",fontSize:11,color:"var(--accent)",marginLeft:4}}>{t}</button>
-                  ))}
-                </div>
-              )}
             </div>
           )}
           <label style={{display:"flex",flexDirection:"column",gap:4}}>
@@ -431,9 +402,7 @@ function Modal({h,port=[],onSave,onClose}){
           </label>
           <label style={{display:"flex",flexDirection:"column",gap:4}}>
             <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Tipo de activo</span>
-            {f.operacion==="venta"
-              ?<div style={{...inp,color:"var(--text-secondary)",background:"var(--bg-card)",cursor:"default"}}>{ASSET_TYPES[f.type]?.icon} {ASSET_TYPES[f.type]?.label||f.type}</div>
-              :<select value={f.type} onChange={e=>set("type",e.target.value)} style={inp}>{Object.entries(ASSET_TYPES).map(([k,v])=><option key={k} value={k}>{v.icon} {v.label}</option>)}</select>}
+            {f.operacion==="venta"?<div style={{...inp,color:"var(--text-secondary)",background:"var(--bg-card)",cursor:"default"}}>{ASSET_TYPES[f.type]?.icon} {ASSET_TYPES[f.type]?.label||f.type}</div>:<select value={f.type} onChange={e=>set("type",e.target.value)} style={inp}>{Object.entries(ASSET_TYPES).map(([k,v])=><option key={k} value={k}>{v.icon} {v.label}</option>)}</select>}
           </label>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
             <label style={{display:"flex",flexDirection:"column",gap:4}}>
@@ -441,9 +410,7 @@ function Modal({h,port=[],onSave,onClose}){
               <input type="number" min="0" max={f.operacion==="venta"?availableQty:undefined} value={f.qty}
                 onChange={e=>{const v=+e.target.value;set("qty",f.operacion==="venta"?Math.min(v,availableQty):v||e.target.value);}}
                 style={{...inp,borderColor:overSelling?"var(--red)":undefined}}/>
-              {f.operacion==="venta"&&f.ticker&&<div style={{fontSize:10,color:overSelling?"var(--red)":"var(--text-muted)",marginTop:3}}>
-                {overSelling?`⚠ Solo tenés ${availableQty.toLocaleString("es-AR")}`:`Disponible: ${availableQty.toLocaleString("es-AR")}`}
-              </div>}
+              {f.operacion==="venta"&&f.ticker&&<div style={{fontSize:10,color:overSelling?"var(--red)":"var(--text-muted)",marginTop:3}}>{overSelling?`⚠ Solo tenés ${availableQty.toLocaleString("es-AR")}`:`Disponible: ${availableQty.toLocaleString("es-AR")}`}</div>}
             </label>
             <label style={{display:"flex",flexDirection:"column",gap:4}}>
               <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>{f.operacion==="venta"?"Precio de venta":"Precio de compra (PPC)"}</span>
@@ -487,41 +454,8 @@ function Modal({h,port=[],onSave,onClose}){
   );
 }
 
-function Chart100({series}){
-  if(!series?.length)return null;
-  const W=560,H=200,PL=44,PT=12,PR=12,PB=26;
-  const allV=series.flatMap(s=>s.data.map(d=>d.val));
-  const minV=Math.min(...allV)*0.997,maxV=Math.max(...allV)*1.003;
-  const n=series[0].data.length;
-  const xS=i=>PL+(i/(n-1))*(W-PL-PR);
-  const yS=v=>PT+(1-(v-minV)/(maxV-minV))*(H-PT-PB);
-  const path=data=>data.map((d,i)=>`${i===0?"M":"L"}${xS(i).toFixed(1)},${yS(d.val).toFixed(1)}`).join(" ");
-  const yTicks=Array.from({length:5},(_,i)=>minV+(maxV-minV)*i/4);
-  const xLabels=[0,Math.floor(n/3),Math.floor(2*n/3),n-1].filter((v,i,a)=>a.indexOf(v)===i);
-  return(
-    <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:"100%"}}>
-      {yTicks.map((v,i)=>(
-        <g key={i}>
-          <line x1={PL} x2={W-PR} y1={yS(v)} y2={yS(v)} stroke="var(--border)" strokeWidth="0.5"/>
-          <text x={PL-4} y={yS(v)+4} textAnchor="end" fontSize="9" fill="var(--text-muted)">{v.toFixed(0)}</text>
-        </g>
-      ))}
-      <line x1={PL} x2={W-PR} y1={yS(100)} y2={yS(100)} stroke="rgba(255,255,255,0.1)" strokeWidth="1" strokeDasharray="3,3"/>
-      {series.map(s=>(
-        <path key={s.key} d={path(s.data)} fill="none" stroke={s.color} strokeWidth={s.bold?2:1.5} strokeLinejoin="round" opacity={s.bold?1:0.7}/>
-      ))}
-      {xLabels.map(i=>(
-        <text key={i} x={xS(i)} y={H-4} textAnchor="middle" fontSize="9" fill="var(--text-muted)">{series[0].data[i]?.date?.slice(5)}</text>
-      ))}
-    </svg>
-  );
-}
-
-function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxRate,fx,historicos}){
-  const PERIODS=[
-    {key:"30d",label:"30d",days:30},{key:"90d",label:"90d",days:90},
-    {key:"ytd",label:"YTD",days:null},{key:"1y",label:"1 año",days:365},{key:"3y",label:"3 años",days:1095},
-  ];
+function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxRate,historicos}){
+  const PERIODS=[{key:"30d",label:"30d",days:30},{key:"90d",label:"90d",days:90},{key:"ytd",label:"YTD",days:null},{key:"1y",label:"1 año",days:365},{key:"3y",label:"3 años",days:1095}];
   const [period,setPeriod]=useState("90d");
   const [currency,setCurrency]=useState("USD_CCL");
   const [chartData,setChartData]=useState(null);
@@ -677,8 +611,7 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
             <div style={{display:"flex",gap:12,fontSize:11,flexWrap:"wrap",alignItems:"center"}}>
               {["ARS","USD_CCL","USD_MEP"].map(c=>(
                 <button key={c} onClick={()=>setCurrency(c)}
-                  style={{padding:"2px 8px",borderRadius:5,border:"1px solid var(--border)",cursor:"pointer",fontSize:10,
-                    background:currency===c?"var(--accent)":"transparent",color:currency===c?"#fff":"var(--text-muted)"}}>
+                  style={{padding:"2px 8px",borderRadius:5,border:"1px solid var(--border)",cursor:"pointer",fontSize:10,background:currency===c?"var(--accent)":"transparent",color:currency===c?"#fff":"var(--text-muted)"}}>
                   {c==="ARS"?"ARS":c==="USD_CCL"?"USD CCL":"USD MEP"}
                 </button>
               ))}
@@ -693,8 +626,7 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
           <div style={{display:"flex",gap:4}}>
             {PERIODS.map(p=>(
               <button key={p.key} onClick={()=>setPeriod(p.key)}
-                style={{padding:"4px 10px",borderRadius:6,border:"1px solid var(--border)",cursor:"pointer",fontSize:12,fontWeight:period===p.key?700:400,
-                  background:period===p.key?"var(--accent)":"var(--bg-input)",color:period===p.key?"#fff":"var(--text-secondary)"}}>
+                style={{padding:"4px 10px",borderRadius:6,border:"1px solid var(--border)",cursor:"pointer",fontSize:12,fontWeight:period===p.key?700:400,background:period===p.key?"var(--accent)":"var(--bg-input)",color:period===p.key?"#fff":"var(--text-secondary)"}}>
                 {p.label}
               </button>
             ))}
@@ -772,8 +704,7 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
           <div style={{display:"flex",gap:4}}>
             {[["dual","⇄ Dual"],["native","Moneda orig."],["usd","USD"]].map(([k,l])=>(
               <button key={k} onClick={()=>setView(k)}
-                style={{padding:"3px 10px",borderRadius:6,border:"1px solid var(--border)",cursor:"pointer",fontSize:11,
-                  background:view===k?"var(--accent)":"var(--bg-input)",color:view===k?"#fff":"var(--text-secondary)"}}>
+                style={{padding:"3px 10px",borderRadius:6,border:"1px solid var(--border)",cursor:"pointer",fontSize:11,background:view===k?"var(--accent)":"var(--bg-input)",color:view===k?"#fff":"var(--text-secondary)"}}>
                 {l}
               </button>
             ))}
@@ -792,15 +723,14 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
             </thead>
             <tbody>
               {[...en].sort((a,b)=>b.valUSD-a.valUSD).map(h=>{
-                const nativeVal=h.buyCurrency==="USD"?h.currentPrice*h.qty:h.currentPrice*h.qty;
+                const nativeVal=h.currentPrice*h.qty;
                 const nativeCost=(h.ppc||h.buyPrice)*h.qty;
                 const nativePnl=nativeVal-nativeCost;
                 const nativeFmt=h.buyCurrency==="USD"?(v=>fmtU(v,2)):(v=>fmtA(v));
                 return(
                   <tr key={h.id||h.ticker} style={{borderTop:"1px solid var(--border)"}}>
                     <td style={{...tdL,fontWeight:700,fontFamily:"monospace",color:"var(--accent)"}}>
-                      {h.ticker}
-                      {h.isLive&&<span style={{display:"block",fontSize:9,color:"var(--green)",fontFamily:"sans-serif",fontWeight:400}}>● live</span>}
+                      {h.ticker}{h.isLive&&<span style={{display:"block",fontSize:9,color:"var(--green)",fontFamily:"sans-serif",fontWeight:400}}>● live</span>}
                     </td>
                     <td style={{...tdL,color:"var(--text-secondary)",maxWidth:180,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.name}</td>
                     <td style={tdR}>{Number(h.qty).toLocaleString("es-AR",{maximumFractionDigits:4})}</td>
@@ -838,10 +768,7 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
 }
 
 export default function App(){
-  const SEED_TRADES=GALICIA_PORTFOLIO.map(h=>({
-    id:h.id,ticker:h.ticker,tipo:"compra",qty:h.qty,price:h.buyPrice,currency:h.buyCurrency,
-    date:h.buyDate||"2026-04-01",ts:h.id*1000,name:h.name,
-  }));
+  const SEED_TRADES=GALICIA_PORTFOLIO.map(h=>({id:h.id,ticker:h.ticker,tipo:"compra",qty:h.qty,price:h.buyPrice,currency:h.buyCurrency,date:h.buyDate||"2026-04-01",ts:h.id*1000,name:h.name}));
 
   const [port,setPort]             = useState(GALICIA_PORTFOLIO);
   const [trades,setTrades]         = useState(SEED_TRADES);
@@ -858,12 +785,8 @@ export default function App(){
   const [lastRefresh,setLastRefresh] = useState(null);
   const [countdown,setCountdown]   = useState(300);
 
-  // Históricos
-  useEffect(()=>{
-    fetch("/historicos.json").then(r=>r.ok?r.json():null).then(d=>{if(d&&Object.keys(d).length>1)setHistoricos(d);}).catch(()=>{});
-  },[]);
+  useEffect(()=>{fetch("/historicos.json").then(r=>r.ok?r.json():null).then(d=>{if(d&&Object.keys(d).length>1)setHistoricos(d);}).catch(()=>{});},[]);
 
-  // Storage
   useEffect(()=>{
     try{const sp=localStorage.getItem("gal_port_v1");const st=localStorage.getItem("gal_trades_v3");if(sp)setPort(JSON.parse(sp));if(st)setTrades(JSON.parse(st));}catch{}
     setStorageReady(true);
@@ -871,7 +794,6 @@ export default function App(){
   useEffect(()=>{if(!storageReady)return;try{localStorage.setItem("gal_port_v1",JSON.stringify(port));}catch{};},[port,storageReady]);
   useEffect(()=>{if(!storageReady)return;try{localStorage.setItem("gal_trades_v3",JSON.stringify(trades));}catch{};},[trades,storageReady]);
 
-  // Countdown
   useEffect(()=>{
     if(!lastRefresh)return;
     setCountdown(300);
@@ -892,10 +814,8 @@ export default function App(){
     }catch{setPriceStatus("error");}
   };
 
-  // ── Auto-refresh cada 5 minutos ───────────────────────────────────────────
   useEffect(()=>{refreshPrices();const iv=setInterval(refreshPrices,5*60*1000);return()=>clearInterval(iv);},[]);
 
-  // Cálculos portfolio
   const ppcByTicker=port.reduce((acc,t)=>{
     const buys=trades.filter(tr=>tr.ticker===t.ticker&&tr.tipo==="compra");
     if(!buys.length){acc[t.ticker]=t.buyPrice;return acc;}
@@ -934,7 +854,6 @@ export default function App(){
   const totPct=totCost>0?(totPnl/totCost)*100:0;
   const benchPct=(Math.pow(1+liveT10Y/100,90/365)-1)*100;
   const alpha=totPct-benchPct;
-  const history=makeHistory(totUSD,totCost,liveT10Y);
   const liveCount=en.filter(h=>h.isLive).length;
 
   const byType=Object.entries(ASSET_TYPES).map(([key,meta])=>{
@@ -949,11 +868,7 @@ export default function App(){
   const saveOrDelete=(h)=>{
     if(!h){
       const id=modal?.id;
-      if(id){
-        const pos=port.find(x=>x.id===id);
-        if(pos){const ts=Date.now();const live=livePrices[pos.ticker];const sellPrice=live?live.price:pos.currentPrice;setTrades(t=>[...t,{id:ts,ticker:pos.ticker,tipo:"venta",qty:pos.qty,price:sellPrice,currency:pos.buyCurrency,date:new Date().toISOString().slice(0,10),ts,name:pos.name}]);}
-        setPort(p=>p.filter(x=>x.id!==id));
-      }
+      if(id){const pos=port.find(x=>x.id===id);if(pos){const ts=Date.now();const live=livePrices[pos.ticker];const sellPrice=live?live.price:pos.currentPrice;setTrades(t=>[...t,{id:ts,ticker:pos.ticker,tipo:"venta",qty:pos.qty,price:sellPrice,currency:pos.buyCurrency,date:new Date().toISOString().slice(0,10),ts,name:pos.name}]);}setPort(p=>p.filter(x=>x.id!==id));}
       setModal(null);return;
     }
     const existing=port.find(x=>x.id===h.id)||port.find(x=>x.ticker===h.ticker.toUpperCase());
@@ -1007,9 +922,9 @@ export default function App(){
       const findP=(bars,d)=>{if(!bars?.length)return null;const t=new Date(d).getTime();return bars.reduce((b,x)=>Math.abs(new Date(x.date)-t)<Math.abs(new Date(b.date)-t)?x:b,bars[0])?.close||null;};
       try{
         const result={loading:false,sources:{}};
-        const sp500B=historicos?.sp500||[];const cclB=historicos?.CCL||[];
-        if(sp500B.length){const pb=findP(sp500B,buyDate),ps=findP(sp500B,sellDate);if(pb&&ps){result.sp500Pct=((ps-pb)/pb)*100;result.sources.sp500="historicos.json";}}
-        if(cclB.length){const pb=findP(cclB,buyDate),ps=findP(cclB,sellDate);if(pb&&ps){result.cclPct=((ps-pb)/pb)*100;result.sources.ccl="historicos.json";}}
+        const sp500B=historicos?.sp500||[],cclB=historicos?.CCL||[];
+        if(sp500B.length){const pb=findP(sp500B,buyDate),ps=findP(sp500B,sellDate);if(pb&&ps){result.sp500Pct=((ps-pb)/pb)*100;}}
+        if(cclB.length){const pb=findP(cclB,buyDate),ps=findP(cclB,sellDate);if(pb&&ps){result.cclPct=((ps-pb)/pb)*100;}}
         setBenchmarkData(result);
       }catch{setBenchmarkData({loading:false,error:true,sources:{}});}
     })();
@@ -1026,28 +941,17 @@ export default function App(){
         :root{--bg:#07101f;--bg-card:#0d1a2e;--bg-input:#152030;--border:#1c2e44;--accent:#2563EB;--text-primary:#E8F0FE;--text-secondary:#7A9EC4;--text-muted:#364F6B;--red:#F87171;--green:#34D399;--yellow:#FBBF24;}
         @keyframes spin{to{transform:rotate(360deg)}}
         .fi *{box-sizing:border-box;}
-        ::-webkit-scrollbar{width:4px;height:4px}
-        ::-webkit-scrollbar-track{background:var(--bg)}
-        ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+        ::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
       `}</style>
       <div style={{minHeight:"100vh",background:"var(--bg)"}}>
-        {/* Header */}
         <div style={{background:"var(--bg-card)",borderBottom:"1px solid var(--border)",padding:"10px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <div style={{width:28,height:28,borderRadius:8,background:"var(--accent)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>📊</div>
             <div>
               <div style={{fontWeight:700,fontSize:14}}>Mi Portfolio - Galicia</div>
               <div style={{fontSize:11,color:"var(--text-muted)"}}>
-                {priceStatus==="live"&&(
-                  <span style={{color:"var(--green)"}}>
-                    ● {liveCount}/{port.length} · actualizado {lastRefresh?.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})} · próx. {cdStr}
-                  </span>
-                )}
-                {priceStatus==="partial"&&(
-                  <span style={{color:"var(--yellow)"}}>
-                    ◐ Parcial · actualizado {lastRefresh?.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})} · próx. {cdStr}
-                  </span>
-                )}
+                {priceStatus==="live"&&<span style={{color:"var(--green)"}}>● {liveCount}/{port.length} · actualizado {lastRefresh?.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})} · próx. {cdStr}</span>}
+                {priceStatus==="partial"&&<span style={{color:"var(--yellow)"}}>◐ Parcial · actualizado {lastRefresh?.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})} · próx. {cdStr}</span>}
                 {priceStatus==="loading"&&<span style={{color:"var(--text-muted)"}}>⟳ Actualizando precios...</span>}
                 {priceStatus==="idle"&&<span style={{color:"var(--text-muted)"}}>Cargando...</span>}
               </div>
@@ -1065,12 +969,9 @@ export default function App(){
           </div>
         </div>
 
-        {/* Nav */}
         <div style={{background:"var(--bg-card)",borderBottom:"1px solid var(--border)",padding:"0 20px",display:"flex",gap:0}}>
           {[["dashboard","📊 Dashboard"],["portfolio","💼 Portfolio"],["evolutivo","📈 Evolutivo"]].map(([id,lbl])=>(
-            <button key={id} onClick={()=>setTab(id)} style={{padding:"12px 16px",background:"transparent",border:"none",borderBottom:tab===id?"2px solid var(--accent)":"2px solid transparent",color:tab===id?"var(--text-primary)":"var(--text-muted)",cursor:"pointer",fontSize:13,fontWeight:tab===id?600:400}}>
-              {lbl}
-            </button>
+            <button key={id} onClick={()=>setTab(id)} style={{padding:"12px 16px",background:"transparent",border:"none",borderBottom:tab===id?"2px solid var(--accent)":"2px solid transparent",color:tab===id?"var(--text-primary)":"var(--text-muted)",cursor:"pointer",fontSize:13,fontWeight:tab===id?600:400}}>{lbl}</button>
           ))}
         </div>
 
@@ -1109,8 +1010,10 @@ export default function App(){
                   </div>
                 </div>
                 <div style={{...card,padding:18}}>
-                  <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Retorno 90 días vs T10Y</div>
-                  <div style={{height:170}}><LineChart history={history}/></div>
+                  <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Rendimiento base 100 · 90d · USD CCL</div>
+                  <div style={{height:190}}>
+                    <EvoMini en={en} trades={trades} fxRate={fxRate} historicos={historicos} liveT10Y={liveT10Y}/>
+                  </div>
                 </div>
               </div>
               <div style={{...card,overflow:"hidden"}}>
@@ -1131,19 +1034,16 @@ export default function App(){
           )}
           {tab==="portfolio"&&(
             <PortfolioTab byType={byType} en={enGrouped} totUSD={totUSD} totCost={totCost}
-              totPnl={totPnl} totPct={totPct} fxRate={fxRate} fxMode={fx}
-              setModal={setModal} card={card}/>
+              totPnl={totPnl} totPct={totPct} fxRate={fxRate} fxMode={fx} setModal={setModal} card={card}/>
           )}
           {tab==="evolutivo"&&(
             <EvoTab en={en} trades={trades} totUSD={totUSD} totPct={totPct}
               benchPct={benchPct} alpha={alpha} liveT10Y={liveT10Y}
-              byType={byType} history={history} fxRate={fxRate} fx={fx}
-              fxMode={fx} card={card} historicos={historicos}/>
+              byType={byType} fxRate={fxRate} fx={fx} card={card} historicos={historicos}/>
           )}
         </div>
       </div>
 
-      {/* Venta result modal */}
       {ventaResult&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300}}>
           <div style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:16,padding:28,width:460,maxWidth:"95vw",maxHeight:"90vh",overflowY:"auto"}}>
@@ -1201,7 +1101,6 @@ export default function App(){
           </div>
         </div>
       )}
-
       {modal&&<Modal h={modal==="add"?null:modal} port={port} onSave={saveOrDelete} onClose={()=>setModal(null)}/>}
     </>
   );

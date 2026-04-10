@@ -2,8 +2,8 @@ name: Actualizar históricos
 
 on:
   schedule:
-    - cron: '0 00 * * 2-6'
-  workflow_dispatch:          # también se puede correr manualmente desde GitHub
+    - cron: '0 00 * * 2-6'  # 21hs Argentina (UTC-3), martes a sábado
+  workflow_dispatch:
 
 jobs:
   update:
@@ -14,6 +14,8 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -32,4 +34,5 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add public/historicos.json
           git diff --staged --quiet || git commit -m "chore: actualizar históricos $(date -u +%Y-%m-%d)"
+          git pull --rebase origin main
           git push

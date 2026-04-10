@@ -30,6 +30,7 @@ jobs:
             echo "Sin cambios, nada que pushear"
           else
             git commit -m "chore: actualizar históricos $(date -u +%Y-%m-%d)"
-            git pull --rebase origin main
+            git fetch origin main
+            git rebase origin/main
             git push origin main
           fi

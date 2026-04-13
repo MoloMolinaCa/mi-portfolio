@@ -318,20 +318,17 @@ function Chart100({series}){
 function EvoMini({en,trades,fxRate,historicos}){
   const [series,setSeries]=useState(null);
   const [rets,setRets]=useState(null);
-
   useEffect(()=>{
     if(!historicos||!Object.keys(historicos).length)return;
     const _h=historicos;
     const findP=(bars,d)=>{if(!bars?.length)return null;const t=new Date(d).getTime();return bars.reduce((b,x)=>Math.abs(new Date(x.date)-t)<Math.abs(new Date(b.date)-t)?x:b,bars[0])?.close||null;};
     const cclBars=_h.CCL||[],sp500Bars=_h.sp500||[];
-
     const firstBuy=trades.filter(t=>t.tipo==="compra").sort((a,b)=>a.date.localeCompare(b.date))[0]?.date;
     if(!firstBuy)return;
     const start=new Date(firstBuy),end=new Date();
     const dates=[];
     for(let i=0;i<=24;i++){const d=new Date(start.getTime()+(end-start)*(i/24));dates.push(d.toISOString().slice(0,10));}
     const uniq=[...new Set(dates)];
-
     const portPts=uniq.map(dateStr=>{
       const dateT=new Date(dateStr).getTime();
       let total=0;
@@ -349,25 +346,18 @@ function EvoMini({en,trades,fxRate,historicos}){
       }
       return{date:dateStr,val:total};
     }).filter(x=>x.val>0);
-
     if(portPts.length<2)return;
     const pb=portPts[0].val;
     const port100=portPts.map(x=>({date:x.date,val:parseFloat((100*x.val/pb).toFixed(4))}));
-
     const spyPts=sp500Bars.length>=2?uniq.map(d=>({date:d,val:findP(sp500Bars,d)||null})).filter(x=>x.val):[];
     let spy100=null;
     if(spyPts.length>=2){
       const spyFiltered=spyPts.filter(x=>x.date>=portPts[0].date);
       if(spyFiltered.length>=2){const sb=spyFiltered[0].val;spy100=spyFiltered.map(x=>({date:x.date,val:parseFloat((100*x.val/sb).toFixed(4))}));}
     }
-
-    setSeries([
-      {key:"port",data:port100,color:"var(--green)",bold:true},
-      ...(spy100?[{key:"spy",data:spy100,color:"#60A5FA",bold:false}]:[]),
-    ]);
+    setSeries([{key:"port",data:port100,color:"var(--green)",bold:true},...(spy100?[{key:"spy",data:spy100,color:"#60A5FA",bold:false}]:[])]);
     setRets({portRet:port100[port100.length-1].val-100,spyRet:spy100?spy100[spy100.length-1].val-100:null});
   },[historicos,fxRate]);
-
   if(!series)return <div style={{height:"100%",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--text-muted)",fontSize:12}}>Cargando históricos...</div>;
   return(
     <div style={{height:"100%",display:"flex",flexDirection:"column"}}>
@@ -730,46 +720,6 @@ function Modal({h,port=[],onSave,onClose}){
     </div>
   );
 }
-
-// ── AI Recommendations Tab — análisis inline con Claude API ──────────────────
-
-function Chart100({series}) {
-  if(!series?.length) return null;
-  const W=560,H=200,PL=44,PT=12,PR=12,PB=26;
-  const allV = series.flatMap(s=>s.data.map(d=>d.val));
-  const minV = Math.min(...allV)*0.997;
-  const maxV = Math.max(...allV)*1.003;
-  const n = series[0].data.length;
-  const xS = i => PL+(i/(n-1))*(W-PL-PR);
-  const yS = v => PT+(1-(v-minV)/(maxV-minV))*(H-PT-PB);
-  const path = data => data.map((d,i)=>`${i===0?"M":"L"}${xS(i).toFixed(1)},${yS(d.val).toFixed(1)}`).join(" ");
-  const yTicks = Array.from({length:5},(_,i)=>minV+(maxV-minV)*i/4);
-  const xLabels = [0, Math.floor(n/3), Math.floor(2*n/3), n-1].filter((v,i,a)=>a.indexOf(v)===i);
-  return(
-    <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:"100%"}}>
-      {/* Grid */}
-      {yTicks.map((v,i)=>(
-        <g key={i}>
-          <line x1={PL} x2={W-PR} y1={yS(v)} y2={yS(v)} stroke="var(--border)" strokeWidth="0.5"/>
-          <text x={PL-4} y={yS(v)+4} textAnchor="end" fontSize="9" fill="var(--text-muted)">{v.toFixed(0)}</text>
-        </g>
-      ))}
-      {/* Base 100 line */}
-      <line x1={PL} x2={W-PR} y1={yS(100)} y2={yS(100)} stroke="rgba(255,255,255,0.1)" strokeWidth="1" strokeDasharray="3,3"/>
-      {/* Series */}
-      {series.map(s=>(
-        <path key={s.key} d={path(s.data)} fill="none" stroke={s.color}
-          strokeWidth={s.bold?2:1.5} strokeLinejoin="round" opacity={s.bold?1:0.7}/>
-      ))}
-      {/* X labels */}
-      {xLabels.map(i=>(
-        <text key={i} x={xS(i)} y={H-4} textAnchor="middle" fontSize="9" fill="var(--text-muted)">
-          {series[0].data[i]?.date?.slice(5)}
-        </text>
-      ))}
-    </svg>
-  );
-};
 
 function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxRate,fx,historicos}){
   const PERIODS=[
@@ -1412,7 +1362,6 @@ export default function App(){
   const totPct=totCost>0?(totPnl/totCost)*100:0;
   const benchPct=(Math.pow(1+liveT10Y/100,90/365)-1)*100;
   const alpha=totPct-benchPct;
-
   const liveCount=en.filter(h=>h.isLive).length;
 
   const byType=Object.entries(ASSET_TYPES).map(([key,meta])=>{

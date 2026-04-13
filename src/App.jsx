@@ -297,7 +297,7 @@ function Chart100({series}){
   const yTicks=Array.from({length:5},(_,i)=>minV+(maxV-minV)*i/4);
   const xLabels=[0,Math.floor(n/3),Math.floor(2*n/3),n-1].filter((v,i,a)=>a.indexOf(v)===i);
   return(
-    <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:"100%"}}>
+    <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:"100%",display:"block"}}>
       {yTicks.map((v,i)=>(
         <g key={i}>
           <line x1={PL} x2={W-PR} y1={yS(v)} y2={yS(v)} stroke="var(--border)" strokeWidth="0.5"/>
@@ -361,7 +361,7 @@ function EvoMini({en,trades,fxRate,historicos}){
   if(!series)return <div style={{height:"100%",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--text-muted)",fontSize:12}}>Cargando históricos...</div>;
   return(
     <div style={{height:"100%",display:"flex",flexDirection:"column"}}>
-      <div style={{flex:1}}><Chart100 series={series}/></div>
+      <div style={{flex:1,overflow:"hidden",minHeight:0}}><Chart100 series={series}/></div>
       {rets&&(
         <div style={{display:"flex",gap:16,fontSize:11,paddingTop:6,borderTop:"1px solid var(--border)",marginTop:4}}>
           <span style={{color:"var(--text-muted)"}}>Portfolio: <b style={{color:rets.portRet>=0?"var(--green)":"var(--red)"}}>{rets.portRet>=0?"+":""}{rets.portRet.toFixed(2)}%</b></span>

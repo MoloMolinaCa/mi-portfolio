@@ -315,58 +315,179 @@ function Chart100({series}){
   );
 }
 
-function EvoMini({en,trades,fxRate,historicos}){
-  const [series,setSeries]=useState(null);
-  const [rets,setRets]=useState(null);
-  useEffect(()=>{
-    if(!historicos||!Object.keys(historicos).length)return;
-    const _h=historicos;
-    const findP=(bars,d)=>{if(!bars?.length)return null;const t=new Date(d).getTime();return bars.reduce((b,x)=>Math.abs(new Date(x.date)-t)<Math.abs(new Date(b.date)-t)?x:b,bars[0])?.close||null;};
-    const cclBars=_h.CCL||[],sp500Bars=_h.sp500||[];
+function EvoMini({en,trades,fxRate,liveT10Y,historicos}){
+  const PERIODS=[{key:"30d",label:"30d",days:30},{key:"90d",label:"90d",days:90},{key:"ytd",label:"YTD",days:null},{key:"1y",label:"1 año",days:365},{key:"3y",label:"3 años",days:1095}];
+  const [period,setPeriod]=useState("90d");
+  const [currency,setCurrency]=useState("USD_CCL");
+  const [chartData,setChartData]=useState(null);
+  const [loading,setLoading]=useState(false);
+  const fmtP=n=>`${n>=0?"+":""}${n.toFixed(2)}%`;
+  const pc=n=>n>=0?"var(--green)":"var(--red)";
+
+  const getDates=(p,n=16)=>{
+    const end=new Date();
+    let periodStart;
+    if(p.key==="ytd")periodStart=new Date(end.getFullYear()+"-01-01");
+    else{periodStart=new Date();periodStart.setDate(periodStart.getDate()-p.days);}
     const firstBuy=trades.filter(t=>t.tipo==="compra").sort((a,b)=>a.date.localeCompare(b.date))[0]?.date;
-    if(!firstBuy)return;
-    const start=new Date(firstBuy),end=new Date();
+    const firstBuyDate=firstBuy?new Date(firstBuy):end;
+    const start=firstBuyDate>periodStart?firstBuyDate:periodStart;
     const dates=[];
-    for(let i=0;i<=24;i++){const d=new Date(start.getTime()+(end-start)*(i/24));dates.push(d.toISOString().slice(0,10));}
-    const uniq=[...new Set(dates)];
-    const portPts=uniq.map(dateStr=>{
-      const dateT=new Date(dateStr).getTime();
-      let total=0;
-      for(const h of en){
-        const buys=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra"&&new Date(t.date).getTime()<=dateT);
-        const sells=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="venta"&&new Date(t.date).getTime()<=dateT);
-        const qty=Math.max(0,buys.reduce((a,t)=>a+t.qty,0)-sells.reduce((a,t)=>a+t.qty,0));
-        if(qty<=0)continue;
-        const isBond=h.type==="bono_usd"||h.type==="bono_ars";
-        const qtyFactor=isBond?qty/100:qty;
-        const bars=_h[h.ticker];
-        const price=(bars&&findP(bars,dateStr))||h.currentPrice;
-        const cclDay=cclBars.length?(findP(cclBars,dateStr)||fxRate):fxRate;
-        total+=price*qtyFactor/cclDay;
+    for(let i=0;i<=n;i++){const d=new Date(start.getTime()+(end-start)*(i/n));dates.push(d.toISOString().slice(0,10));}
+    return[...new Set(dates)];
+  };
+
+  const findPrice=(bars,dateStr)=>{
+    if(!bars||!bars.length)return null;
+    const t=new Date(dateStr).getTime();
+    return bars.reduce((b,x)=>Math.abs(new Date(x.date)-t)<Math.abs(new Date(b.date)-t)?x:b,bars[0])?.close||null;
+  };
+
+  const load=async(p,hist)=>{
+    setLoading(true);setChartData(null);
+    const _hist=hist||historicos||{};
+    const _getCCL=()=>_hist.CCL||[];
+    const _getMEP=()=>_hist.MEP||[];
+    const _getSPY=()=>_hist.sp500||[];
+    const _getTicker=t=>{const b=_hist[t];return b?.length?b:null;};
+    try{
+      const dates=getDates(p,16);
+      const cclBars=_getCCL(),mepBars=_getMEP(),sp500Bars=_getSPY(),spyByma=_getTicker("SPY")||[];
+
+      let spy100=null;
+      if(sp500Bars.length>=2&&currency!=="ARS"){
+        const pts=dates.map(d=>({date:d,val:findPrice(sp500Bars,d)||null})).filter(x=>x.val);
+        if(pts.length>=2){const base=pts[0].val;spy100=pts.map(x=>({date:x.date,val:base>0?100*x.val/base:100}));}
+      }else if(spyByma.length>=2){
+        const tcBars=currency==="USD_MEP"?mepBars:cclBars;
+        const pts=dates.map(d=>{const pARS=findPrice(spyByma,d);if(!pARS)return{date:d,val:null};if(currency==="ARS")return{date:d,val:pARS};const tc=tcBars.length?(findPrice(tcBars,d)||fxRate):fxRate;return{date:d,val:pARS/tc};}).filter(x=>x.val!=null);
+        if(pts.length>=2){const base=pts[0].val;spy100=pts.map(x=>({date:x.date,val:base>0?100*x.val/base:100}));}
       }
-      return{date:dateStr,val:total};
-    }).filter(x=>x.val>0);
-    if(portPts.length<2)return;
-    const pb=portPts[0].val;
-    const port100=portPts.map(x=>({date:x.date,val:parseFloat((100*x.val/pb).toFixed(4))}));
-    const spyPts=sp500Bars.length>=2?uniq.map(d=>({date:d,val:findP(sp500Bars,d)||null})).filter(x=>x.val):[];
-    let spy100=null;
-    if(spyPts.length>=2){
-      const spyFiltered=spyPts.filter(x=>x.date>=portPts[0].date);
-      if(spyFiltered.length>=2){const sb=spyFiltered[0].val;spy100=spyFiltered.map(x=>({date:x.date,val:parseFloat((100*x.val/sb).toFixed(4))}));}
-    }
-    setSeries([{key:"port",data:port100,color:"var(--green)",bold:true},...(spy100?[{key:"spy",data:spy100,color:"#60A5FA",bold:false}]:[])]);
-    setRets({portRet:port100[port100.length-1].val-100,spyRet:spy100?spy100[spy100.length-1].val-100:null});
-  },[historicos,fxRate]);
-  if(!series)return <div style={{height:"100%",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--text-muted)",fontSize:12}}>Cargando históricos...</div>;
+
+      let ccl100=null,mep100=null;
+      if(currency==="ARS"&&cclBars.length>=2){const pts=dates.map(d=>({date:d,val:findPrice(cclBars,d)||cclBars[0].close}));const base=pts[0].val;ccl100=pts.map(x=>({date:x.date,val:base>0?100*x.val/base:100}));}
+      if(currency==="ARS"&&mepBars.length>=2){const pts=dates.map(d=>({date:d,val:findPrice(mepBars,d)||mepBars[0].close}));const base=pts[0].val;mep100=pts.map(x=>({date:x.date,val:base>0?100*x.val/base:100}));}
+
+      const t10y100=dates.map(d=>{const days=Math.max(0,(new Date(d)-new Date(dates[0]))/(1000*60*60*24));return{date:d,val:100*Math.pow(1+liveT10Y/100,days/365)};});
+      const allTickers=[...new Set(en.map(h=>h.ticker))];
+      const tickerBars={};
+      for(const ticker of allTickers){const bars=_getTicker(ticker);if(bars)tickerBars[ticker]=bars;}
+
+      const portPts=dates.map(dateStr=>{
+        const dateT=new Date(dateStr).getTime();
+        let total=0;
+        for(const h of en){
+          const buys=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra"&&new Date(t.date).getTime()<=dateT);
+          const sells=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="venta"&&new Date(t.date).getTime()<=dateT);
+          const qty=Math.max(0,buys.reduce((a,t)=>a+t.qty,0)-sells.reduce((a,t)=>a+t.qty,0));
+          if(qty<=0)continue;
+          const isBond=h.type==="bono_usd"||h.type==="bono_ars";
+          const qtyFactor=isBond?qty/100:qty;
+          const priceByma=(tickerBars[h.ticker]&&findPrice(tickerBars[h.ticker],dateStr))||h.currentPrice;
+          const cclDay=cclBars.length?(findPrice(cclBars,dateStr)||fxRate):fxRate;
+          const mepDay=mepBars.length?(findPrice(mepBars,dateStr)||fxRate):fxRate;
+          if(currency==="ARS")total+=priceByma*qtyFactor;
+          else if(currency==="USD_CCL")total+=priceByma*qtyFactor/cclDay;
+          else total+=priceByma*qtyFactor/mepDay;
+        }
+        return{date:dateStr,val:Math.max(total,0.01)};
+      });
+
+      const today=new Date().toISOString().slice(0,10);
+      if(portPts.length>0&&portPts[portPts.length-1].date!==today){
+        const dateT=new Date().getTime();
+        let totalToday=0;
+        for(const h of en){
+          const buys=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra"&&new Date(t.date).getTime()<=dateT);
+          const sells=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="venta"&&new Date(t.date).getTime()<=dateT);
+          const qty=Math.max(0,buys.reduce((a,t)=>a+t.qty,0)-sells.reduce((a,t)=>a+t.qty,0));
+          if(qty<=0)continue;
+          const isBond=h.type==="bono_usd"||h.type==="bono_ars";
+          const qtyFactor=isBond?qty/100:qty;
+          const liveEntry=en.find(x=>x.ticker===h.ticker);
+          const livePrice=liveEntry?.isLive?liveEntry.currentPrice:null;
+          const histBars=_getTicker(h.ticker);
+          const histPrice=histBars?histBars[histBars.length-1].close:null;
+          const priceHoy=livePrice||histPrice||h.currentPrice;
+          const mepDay=_getMEP().length?(findPrice(_getMEP(),today)||fxRate):fxRate;
+          if(currency==="ARS")totalToday+=priceHoy*qtyFactor;
+          else if(currency==="USD_CCL")totalToday+=priceHoy*qtyFactor/fxRate;
+          else totalToday+=priceHoy*qtyFactor/mepDay;
+        }
+        if(totalToday>0)portPts.push({date:today,val:totalToday});
+      }
+
+      const portBase=portPts[0].val;
+      const port100=portPts.map(x=>({date:x.date,val:portBase>0?100*x.val/portBase:100}));
+      setChartData({
+        port100,t10y100,spy100,ccl100,mep100,currency,
+        startDate:dates[0],endDate:dates[dates.length-1],
+        portRet:(port100[port100.length-1].val-100).toFixed(2),
+        spyRet:spy100?(spy100[spy100.length-1].val-100).toFixed(2):null,
+        cclRet:ccl100?(ccl100[ccl100.length-1].val-100).toFixed(2):null,
+        mepRet:mep100?(mep100[mep100.length-1].val-100).toFixed(2):null,
+      });
+    }catch(e){console.error(e);}
+    setLoading(false);
+  };
+
+  useEffect(()=>{
+    if(!historicos||Object.keys(historicos).length===0)return;
+    const p=PERIODS.find(x=>x.key===period);
+    if(p)load(p,historicos);
+  },[period,currency,historicos]);
+
+  const cd=chartData;
+  const series=cd?[
+    {key:"port",data:cd.port100,color:"var(--green)",bold:true},
+    ...(cd.spy100?[{key:"spy",data:cd.spy100,color:"#60A5FA",bold:false}]:[]),
+    ...(cd.currency==="ARS"?[{key:"t10y",data:cd.t10y100,color:"var(--yellow)",bold:false}]:[]),
+    ...(cd.ccl100?[{key:"ccl",data:cd.ccl100,color:"#A78BFA",bold:false}]:[]),
+    ...(cd.mep100?[{key:"mep",data:cd.mep100,color:"#F472B6",bold:false}]:[]),
+  ]:[];
+
   return(
-    <div style={{height:"100%",display:"flex",flexDirection:"column"}}>
-      <div style={{flex:1,overflow:"hidden",minHeight:0}}><Chart100 series={series}/></div>
-      {rets&&(
-        <div style={{display:"flex",gap:16,fontSize:11,paddingTop:6,borderTop:"1px solid var(--border)",marginTop:4}}>
-          <span style={{color:"var(--text-muted)"}}>Portfolio: <b style={{color:rets.portRet>=0?"var(--green)":"var(--red)"}}>{rets.portRet>=0?"+":""}{rets.portRet.toFixed(2)}%</b></span>
-          {rets.spyRet!=null&&<span style={{color:"var(--text-muted)"}}>S&amp;P 500: <b style={{color:"#60A5FA"}}>{rets.spyRet>=0?"+":""}{rets.spyRet.toFixed(2)}%</b></span>}
-          <span style={{color:"var(--text-muted)",marginLeft:"auto",fontSize:10}}>desde {trades.filter(t=>t.tipo==="compra").sort((a,b)=>a.date.localeCompare(b.date))[0]?.date} · USD CCL</span>
+    <div style={{display:"flex",flexDirection:"column",height:"100%"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,flexWrap:"wrap",gap:8}}>
+        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+          {["ARS","USD_CCL","USD_MEP"].map(c=>(
+            <button key={c} onClick={()=>setCurrency(c)}
+              style={{padding:"2px 8px",borderRadius:5,border:"1px solid var(--border)",cursor:"pointer",fontSize:10,
+                background:currency===c?"var(--accent)":"transparent",color:currency===c?"#fff":"var(--text-muted)"}}>
+              {c==="ARS"?"ARS":c==="USD_CCL"?"USD CCL":"USD MEP"}
+            </button>
+          ))}
+          <span style={{color:"var(--text-muted)",fontSize:10}}>|</span>
+          <span style={{fontSize:10,color:"var(--green)"}}>— Portfolio</span>
+          {cd?.spy100&&<span style={{fontSize:10,color:"#60A5FA"}}>— S&amp;P 500</span>}
+          {cd?.currency==="ARS"&&<span style={{fontSize:10,color:"var(--yellow)"}}>— T10Y</span>}
+          {cd?.ccl100&&<span style={{fontSize:10,color:"#A78BFA"}}>— CCL</span>}
+          {cd?.mep100&&<span style={{fontSize:10,color:"#F472B6"}}>— MEP</span>}
+        </div>
+        <div style={{display:"flex",gap:4}}>
+          {PERIODS.map(p=>(
+            <button key={p.key} onClick={()=>setPeriod(p.key)}
+              style={{padding:"3px 8px",borderRadius:6,border:"1px solid var(--border)",cursor:"pointer",fontSize:11,
+                fontWeight:period===p.key?700:400,
+                background:period===p.key?"var(--accent)":"var(--bg-input)",
+                color:period===p.key?"#fff":"var(--text-secondary)"}}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div style={{flex:1,overflow:"hidden",minHeight:0,position:"relative"}}>
+        {loading&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--text-muted)",fontSize:12}}><span style={{animation:"spin 0.8s linear infinite",display:"inline-block",marginRight:6}}>⟳</span>Cargando...</div>}
+        {cd&&!loading&&series.length>0&&<Chart100 series={series}/>}
+      </div>
+      {cd&&!loading&&(
+        <div style={{display:"flex",gap:16,fontSize:11,paddingTop:6,borderTop:"1px solid var(--border)",marginTop:4,flexWrap:"wrap"}}>
+          <span style={{color:"var(--text-muted)"}}>Portfolio: <b style={{color:pc(+cd.portRet)}}>{cd.portRet>=0?"+":""}{cd.portRet}%</b></span>
+          {cd.spy100&&<span style={{color:"var(--text-muted)"}}>S&amp;P 500: <b style={{color:"#60A5FA"}}>{cd.spyRet>=0?"+":""}{cd.spyRet}%</b></span>}
+          {cd.currency==="ARS"&&<span style={{color:"var(--text-muted)"}}>T10Y: <b style={{color:"var(--yellow)"}}>{(cd.t10y100[cd.t10y100.length-1].val-100).toFixed(2)}%</b></span>}
+          {cd.ccl100&&<span style={{color:"var(--text-muted)"}}>CCL: <b style={{color:pc(+cd.cclRet)}}>{cd.cclRet>=0?"+":""}{cd.cclRet}%</b></span>}
+          {cd.mep100&&<span style={{color:"var(--text-muted)"}}>MEP: <b style={{color:"#F472B6"}}>{cd.mepRet>=0?"+":""}{cd.mepRet}%</b></span>}
+          <span style={{color:"var(--text-muted)",marginLeft:"auto",fontSize:10}}>{cd.startDate} → {cd.endDate}</span>
         </div>
       )}
     </div>
@@ -1564,8 +1685,8 @@ export default function App(){
                 </div>
                 <div style={{...card,padding:18}}>
                   <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Rendimiento base 100 · USD CCL</div>
-                  <div style={{height:190}}>
-                    <EvoMini en={en} trades={trades} fxRate={fxRate} historicos={historicos}/>
+                  <div style={{height:230}}>
+                    <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} historicos={historicos}/>
                   </div>
                 </div>
               </div>

@@ -1519,11 +1519,10 @@ export default function App(){
   // ── Live prices ───────────────────────────────────────────────────────────
   const fxRate = liveFX[fx] || FX_FALLBACK[fx];
 
-  const refreshPrices = async () => {
+  const refreshPrices = async (activeTickers_) => {
     setPriceStatus("loading");
     try {
-      // Pasar tickers activos del portfolio para fetch dinámico
-      const activeTickers = [...new Set(port.map(h=>h.ticker))];
+      const activeTickers = activeTickers_ || [...new Set(port.map(h=>h.ticker))];
       const {fx:newFX,prices:newPrices,t10y:newT10Y} = await fetchAllLivePrices(activeTickers);
       setLiveFX(newFX);
       setLivePrices(newPrices);
@@ -1533,7 +1532,8 @@ export default function App(){
     } catch { setPriceStatus("error"); }
   };
 
-  useEffect(()=>{ refreshPrices(); const iv=setInterval(refreshPrices,5*60*1000); return()=>clearInterval(iv); },[]);
+  // Refresh al cargar — esperar que localStorage esté listo
+  useEffect(()=>{ if(storageReady){ refreshPrices(); const iv=setInterval(refreshPrices,5*60*1000); return()=>clearInterval(iv); } },[storageReady]);
 
   // ── Portfolio calcs ───────────────────────────────────────────────────────
   const ppcByTicker = port.reduce((acc,t)=>{
@@ -1548,18 +1548,16 @@ export default function App(){
   const en=port.map(h=>{
     const live=livePrices[h.ticker];
     const currentPrice=live?live.price:h.currentPrice;
-    // changePct: precio en vivo vs último cierre del histórico (día anterior)
-    let liveChangePct = live?.changePct || null;
+    let liveChangePct = live?.changePct ?? null;
     if(live?.price && historicos){
       const bars = historicos[h.ticker];
       if(bars && bars.length>=1){
         const prevClose = bars[bars.length-1].close;
         if(prevClose>0){
-          const pct = parseFloat(((live.price-prevClose)/prevClose*100).toFixed(2));
-          if(pct !== 0) liveChangePct = pct; // solo pisar si es distinto de 0
-          else liveChangePct = pct; // igual mostrarlo aunque sea 0
+          liveChangePct = parseFloat(((live.price-prevClose)/prevClose*100).toFixed(2));
         }
       }
+      // Si no hay histórico pero hay precio en vivo, usar changePct de data912
     }
     const ppc=ppcByTicker[h.ticker]||h.buyPrice;
     // Bonos cotizan por cada 100 VN — dividir por 100 para obtener valor real
@@ -1623,8 +1621,15 @@ export default function App(){
     const ts=Date.now();
     const tradeBase={ticker:h.ticker.toUpperCase(),currency:h.buyCurrency,date:h.buyDate||new Date().toISOString().slice(0,10),ts,name:h.name};
     if(!existing){
+      const newTicker=h.ticker.toUpperCase();
       setTrades(t=>[...t,{id:ts,tipo:"compra",qty:+h.qty,price:+h.buyPrice,...tradeBase}]);
-      setPort(p=>[...p,{...h,id:ts,buyPrice:+h.buyPrice}]);
+      setPort(p=>{
+        const newPort=[...p,{...h,id:ts,buyPrice:+h.buyPrice}];
+        // Disparar refresh con los nuevos tickers incluyendo el recién agregado
+        const allTickers=[...new Set(newPort.map(x=>x.ticker))];
+        setTimeout(()=>refreshPrices(allTickers),100);
+        return newPort;
+      });
     } else if(h.operacion==="venta"){
       const sellQty=+h.qty; const sellPrice=+h.buyPrice;
       const buyLots=trades.filter(t=>t.ticker===h.ticker.toUpperCase()&&t.tipo==="compra").sort((a,b)=>a.ts-b.ts);

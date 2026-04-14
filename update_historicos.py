@@ -1,11 +1,13 @@
 """
 update_historicos.py
 Descarga histórico de precios para todos los tickers del portfolio.
+Los tickers se leen dinámicamente desde public/portfolio_tickers.json
+generado por la app React. Si no existe ese archivo, usa la lista hardcodeada.
+
 Fuentes:
   - BYMA open data: acciones AR, bonos, CEDEARs
   - yfinance: benchmarks (^GSPC, ^TNX)
   - ArgentinaDatos: CCL y MEP histórico
-Guarda public/historicos.json con los tickers activos del portfolio.
 """
 import json, os, time
 from datetime import datetime, timedelta
@@ -13,21 +15,48 @@ import requests
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-DAYS_HISTORY = 365 * 3
-OUTPUT_FILE  = "public/historicos.json"
+DAYS_HISTORY    = 365 * 3
+OUTPUT_FILE     = "public/historicos.json"
+TICKERS_FILE    = "public/portfolio_tickers.json"
 
-BYMA_TICKERS = {
-    "TZXD6": "TZXD6", "TZX27": "TZX27", "TLCUD": "TLCUD",
-    "AO27D": "AO27D", "GD38D": "GD38D", "TXAR":  "TXAR",
-    "YPFD":  "YPFD",  "GLD":   "GLD",   "NU":    "NU",
-    "SPY":   "SPY",   "META":  "META",  "MSFT":  "MSFT",
-    "VIST":  "VIST",
-}
-
+# Tickers fijos que siempre se descargan (benchmarks y FX no vienen del portfolio)
 YAHOO_TICKERS = {
     "^GSPC": "sp500",
     "^TNX":  "t10y",
 }
+
+# Fallback hardcodeado si no existe portfolio_tickers.json
+BYMA_TICKERS_FALLBACK = [
+    "TZXD6","TZX27","TLCUD","AO27D","GD38D",
+    "TXAR","YPFD","GLD","NU","SPY","META","MSFT","VIST",
+]
+
+def load_portfolio_tickers():
+    """Lee los tickers desde portfolio_tickers.json generado por la app."""
+    if os.path.exists(TICKERS_FILE):
+        try:
+            with open(TICKERS_FILE) as f:
+                data = json.load(f)
+            tickers = data.get("tickers", [])
+            if tickers:
+                print(f"  ✓ Leyendo {len(tickers)} tickers desde {TICKERS_FILE}")
+                return tickers
+        except Exception as e:
+            print(f"  ! Error leyendo {TICKERS_FILE}: {e}")
+    print(f"  ⚠ {TICKERS_FILE} no encontrado — usando lista hardcodeada")
+    return BYMA_TICKERS_FALLBACK
+
+def load_existing_historicos():
+    """Carga el historicos.json existente para preservar datos históricos."""
+    if os.path.exists(OUTPUT_FILE):
+        try:
+            with open(OUTPUT_FILE) as f:
+                data = json.load(f)
+            print(f"  ✓ Histórico existente: {len(data)} tickers, {sum(len(v) for v in data.values())} pts")
+            return data
+        except Exception as e:
+            print(f"  ! Error leyendo histórico existente: {e}")
+    return {}
 
 def byma_get_series(symbol, start, end):
     url = "https://open.bymadata.com.ar/vanoms-be-core/rest/api/bymadata/free/chart/historical-series/history"
@@ -69,9 +98,6 @@ def yahoo_get_series(symbol, start, end):
         return []
 
 def argentinadatos_get_fx(tipo, start, end):
-    """Descarga CCL o MEP histórico desde ArgentinaDatos.
-       tipo: 'contadoconliqui' | 'bolsa'
-    """
     try:
         r = requests.get(
             f"https://api.argentinadatos.com/v1/cotizaciones/dolares/{tipo}",
@@ -93,6 +119,18 @@ def argentinadatos_get_fx(tipo, start, end):
         print(f"  ✗ {tipo}: {e}")
         return []
 
+def merge_bars(existing, new_bars):
+    """Combina barras existentes con nuevas, sin duplicar fechas. Gana la nueva."""
+    if not existing:
+        return new_bars
+    existing_dates = {b["date"] for b in existing}
+    merged = list(existing)
+    for b in new_bars:
+        if b["date"] not in existing_dates:
+            merged.append(b)
+    merged.sort(key=lambda x: x["date"])
+    return merged
+
 def main():
     end   = datetime.now()
     start = end - timedelta(days=DAYS_HISTORY)
@@ -101,29 +139,44 @@ def main():
     print(f"Período: {start.date()} → {end.date()}")
     print(f"Output:  {OUTPUT_FILE}\n")
 
-    result = {}
+    # Cargar histórico existente (para preservar datos de tickers vendidos)
+    print("── Cargando histórico existente ──────")
+    result = load_existing_historicos()
 
-    print("── BYMA ──────────────────────────────")
-    for ticker, sym in BYMA_TICKERS.items():
-        bars = byma_get_series(sym, start, end)
-        if bars:
-            result[ticker] = bars
+    # Leer tickers del portfolio dinámicamente
+    print("\n── Leyendo tickers del portfolio ─────")
+    byma_tickers = load_portfolio_tickers()
+    # Filtrar FCIs (no están en BYMA open data) y tickers especiales
+    fci_prefixes = ("FIMA-", "BICE-", "SCHRO", "ICBC-")
+    byma_tickers = [t for t in byma_tickers if not any(t.startswith(p) for p in fci_prefixes)]
 
+    # BYMA tickers del portfolio
+    print("\n── BYMA ──────────────────────────────")
+    for ticker in byma_tickers:
+        new_bars = byma_get_series(ticker, start, end)
+        if new_bars:
+            result[ticker] = merge_bars(result.get(ticker, []), new_bars)
+        elif ticker not in result:
+            print(f"  ⚠ {ticker}: sin datos BYMA y sin histórico previo")
+
+    # Yahoo benchmarks
     print("\n── Yahoo Finance (benchmarks) ────────")
     for sym, key in YAHOO_TICKERS.items():
-        bars = yahoo_get_series(sym, start, end)
-        if bars:
-            result[key] = bars
+        new_bars = yahoo_get_series(sym, start, end)
+        if new_bars:
+            result[key] = merge_bars(result.get(key, []), new_bars)
 
+    # FX histórico
     print("\n── FX histórico (ArgentinaDatos) ─────")
     ccl = argentinadatos_get_fx("contadoconliqui", start, end)
     if ccl:
-        result["CCL"] = ccl
+        result["CCL"] = merge_bars(result.get("CCL", []), ccl)
 
     mep = argentinadatos_get_fx("bolsa", start, end)
     if mep:
-        result["MEP"] = mep
+        result["MEP"] = merge_bars(result.get("MEP", []), mep)
 
+    # Guardar
     os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
     with open(OUTPUT_FILE, "w") as f:
         json.dump(result, f, separators=(",", ":"))

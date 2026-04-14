@@ -1519,10 +1519,13 @@ export default function App(){
   // ── Live prices ───────────────────────────────────────────────────────────
   const fxRate = liveFX[fx] || FX_FALLBACK[fx];
 
+  const portRef = React.useRef(port);
+  useEffect(()=>{ portRef.current = port; },[port]);
+
   const refreshPrices = async (activeTickers_) => {
     setPriceStatus("loading");
     try {
-      const activeTickers = activeTickers_ || [...new Set(port.map(h=>h.ticker))];
+      const activeTickers = activeTickers_ || [...new Set(portRef.current.map(h=>h.ticker))];
       const {fx:newFX,prices:newPrices,t10y:newT10Y} = await fetchAllLivePrices(activeTickers);
       setLiveFX(newFX);
       setLivePrices(newPrices);

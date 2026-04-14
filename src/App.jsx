@@ -324,7 +324,8 @@ function EvoMini({en,trades,fxRate,liveT10Y,historicos}){
   const fmtP=n=>`${n>=0?"+":""}${n.toFixed(2)}%`;
   const pc=n=>n>=0?"var(--green)":"var(--red)";
 
-  const getDates=(p,n=16)=>{
+  const getDates=(p,hist)=>{
+    const today=new Date().toISOString().slice(0,10);
     const end=new Date();
     let periodStart;
     if(p.key==="ytd")periodStart=new Date(end.getFullYear()+"-01-01");
@@ -332,9 +333,14 @@ function EvoMini({en,trades,fxRate,liveT10Y,historicos}){
     const firstBuy=trades.filter(t=>t.tipo==="compra").sort((a,b)=>a.date.localeCompare(b.date))[0]?.date;
     const firstBuyDate=firstBuy?new Date(firstBuy):end;
     const start=firstBuyDate>periodStart?firstBuyDate:periodStart;
-    const dates=[];
-    for(let i=0;i<=n;i++){const d=new Date(start.getTime()+(end-start)*(i/n));dates.push(d.toISOString().slice(0,10));}
-    return[...new Set(dates)];
+    const startStr=start.toISOString().slice(0,10);
+    const dateSet=new Set();
+    for(const k of Object.keys(hist)){
+      const bars=hist[k]||[];
+      for(const b of bars){if(b.date>=startStr&&b.date<=today)dateSet.add(b.date);}
+    }
+    dateSet.add(today);
+    return[...dateSet].sort();
   };
 
   const findPrice=(bars,dateStr)=>{
@@ -351,7 +357,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,historicos}){
     const _getSPY=()=>_hist.sp500||[];
     const _getTicker=t=>{const b=_hist[t];return b?.length?b:null;};
     try{
-      const dates=getDates(p,16);
+      const dates=getDates(p,_hist);
       const cclBars=_getCCL(),mepBars=_getMEP(),sp500Bars=_getSPY(),spyByma=_getTicker("SPY")||[];
 
       let spy100=null;

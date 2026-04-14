@@ -315,7 +315,7 @@ function Chart100({series}){
   );
 }
 
-function EvoMini({en,trades,fxRate,liveT10Y,historicos}){
+function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos}){
   const PERIODS=[{key:"30d",label:"30d",days:30},{key:"90d",label:"90d",days:90},{key:"ytd",label:"YTD",days:null},{key:"1y",label:"1 año",days:365},{key:"3y",label:"3 años",days:1095}];
   const [period,setPeriod]=useState("90d");
   const [currency,setCurrency]=useState("USD_CCL");
@@ -423,7 +423,24 @@ function EvoMini({en,trades,fxRate,liveT10Y,historicos}){
         if(totalToday>0)portPts.push({date:today,val:totalToday});
       }
 
-      const portBase=portPts[0].val;
+      // Base = costo total del portfolio al PPC de compra (igual que el PnL)
+      // Así base 100 = precio de entrada y el gráfico coincide con el PnL
+      let costBase=0;
+      for(const h of en){
+        const buys=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra");
+        const sells=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="venta");
+        const qty=Math.max(0,buys.reduce((a,t)=>a+t.qty,0)-sells.reduce((a,t)=>a+t.qty,0));
+        if(qty<=0)continue;
+        const isBond=h.type==="bono_usd"||h.type==="bono_ars";
+        const qtyFactor=isBond?qty/100:qty;
+        const ppc=buys.length>0?buys.reduce((a,t)=>a+t.qty*t.price,0)/buys.reduce((a,t)=>a+t.qty,0):h.currentPrice;
+        const cclBuy=cclBars.length?(findPrice(cclBars,buys[0]?.date||dates[0])||fxRate):fxRate;
+        const mepBuy=mepBars.length?(findPrice(mepBars,buys[0]?.date||dates[0])||fxRate):fxRate;
+        if(currency==="ARS")costBase+=ppc*qtyFactor;
+        else if(currency==="USD_CCL")costBase+=ppc*qtyFactor/cclBuy;
+        else costBase+=ppc*qtyFactor/mepBuy;
+      }
+      const portBase=costBase>0?costBase:portPts[0]?.val||1;
       const port100=portPts.map(x=>({date:x.date,val:portBase>0?100*x.val/portBase:100}));
       setChartData({
         port100,t10y100,spy100,ccl100,mep100,currency,
@@ -444,7 +461,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,historicos}){
     if(p)load(p,historicos);
   },[period,currency,historicos]);
 
-  // Recalcular solo el punto de hoy cuando cambian precios en vivo
+  // Recalcular punto de hoy cuando cambian precios en vivo (portfolio + S&P + CCL + MEP)
   useEffect(()=>{
     if(!chartData||!en||!en.length)return;
     const today=new Date().toISOString().slice(0,10);
@@ -452,6 +469,11 @@ function EvoMini({en,trades,fxRate,liveT10Y,historicos}){
     const findP=(bars,d)=>{if(!bars?.length)return null;const t=new Date(d).getTime();return bars.reduce((b,x)=>Math.abs(new Date(x.date)-t)<Math.abs(new Date(b.date)-t)?x:b,bars[0])?.close||null;};
     const cclBars=_hist.CCL||[];
     const mepBars=_hist.MEP||[];
+
+    // CCL y MEP en vivo desde liveFX
+    const cclLive=liveFX?.CCL||fxRate;
+    const mepLive=liveFX?.MEP||fxRate;
+
     let totalToday=0;
     const dateT=new Date().getTime();
     for(const h of en){
@@ -462,24 +484,64 @@ function EvoMini({en,trades,fxRate,liveT10Y,historicos}){
       const isBond=h.type==="bono_usd"||h.type==="bono_ars";
       const qtyFactor=isBond?qty/100:qty;
       const priceHoy=h.isLive?h.currentPrice:((_hist[h.ticker]||[]).slice(-1)[0]?.close||h.currentPrice);
-      const cclDay=cclBars.length?(findP(cclBars,today)||fxRate):fxRate;
-      const mepDay=mepBars.length?(findP(mepBars,today)||fxRate):fxRate;
       if(currency==="ARS")totalToday+=priceHoy*qtyFactor;
-      else if(currency==="USD_CCL")totalToday+=priceHoy*qtyFactor/cclDay;
-      else totalToday+=priceHoy*qtyFactor/mepDay;
+      else if(currency==="USD_CCL")totalToday+=priceHoy*qtyFactor/cclLive;
+      else totalToday+=priceHoy*qtyFactor/mepLive;
     }
+
     if(totalToday<=0||!chartData.portBase)return;
-    const newVal=parseFloat((100*totalToday/chartData.portBase).toFixed(4));
+    const newPortVal=parseFloat((100*totalToday/chartData.portBase).toFixed(4));
+
     setChartData(prev=>{
       if(!prev)return prev;
+
+      // Actualizar portfolio
       const port100=[...prev.port100];
-      const lastIdx=port100.findIndex(x=>x.date===today);
-      if(lastIdx>=0)port100[lastIdx]={date:today,val:newVal};
-      else port100.push({date:today,val:newVal});
+      const portIdx=port100.findIndex(x=>x.date===today);
+      if(portIdx>=0)port100[portIdx]={date:today,val:newPortVal};
+      else port100.push({date:today,val:newPortVal});
+
+      // Actualizar CCL en vivo (solo en modo ARS)
+      let ccl100=prev.ccl100?[...prev.ccl100]:null;
+      if(ccl100&&prev.currency==="ARS"){
+        const cclBase=ccl100[0]?.val;
+        const cclHistBase=findP(cclBars,ccl100[0]?.date)||cclLive;
+        const newCclVal=cclHistBase>0?parseFloat((100*cclLive/cclHistBase).toFixed(4)):100;
+        const cclIdx=ccl100.findIndex(x=>x.date===today);
+        if(cclIdx>=0)ccl100[cclIdx]={date:today,val:newCclVal};
+        else ccl100.push({date:today,val:newCclVal});
+      }
+
+      // Actualizar MEP en vivo (solo en modo ARS)
+      let mep100=prev.mep100?[...prev.mep100]:null;
+      if(mep100&&prev.currency==="ARS"){
+        const mepHistBase=findP(mepBars,mep100[0]?.date)||mepLive;
+        const newMepVal=mepHistBase>0?parseFloat((100*mepLive/mepHistBase).toFixed(4)):100;
+        const mepIdx=mep100.findIndex(x=>x.date===today);
+        if(mepIdx>=0)mep100[mepIdx]={date:today,val:newMepVal};
+        else mep100.push({date:today,val:newMepVal});
+      }
+
+      // Actualizar S&P500 en vivo
+      let spy100=prev.spy100?[...prev.spy100]:null;
+      if(spy100&&liveSP500&&spy100.length>=1){
+        const sp500Bars=_hist.sp500||[];
+        const sp500Base=sp500Bars.length?sp500Bars.find(b=>b.date===spy100[0]?.date)?.close||sp500Bars[0]?.close:null;
+        if(sp500Base&&sp500Base>0){
+          const newSpyVal=parseFloat((100*liveSP500/sp500Base).toFixed(4));
+          const spyIdx=spy100.findIndex(x=>x.date===today);
+          if(spyIdx>=0)spy100[spyIdx]={date:today,val:newSpyVal};
+          else spy100.push({date:today,val:newSpyVal});
+        }
+      }
+
       const portRet=(port100[port100.length-1].val-100).toFixed(2);
-      return{...prev,port100,portRet};
+      const spyRet=spy100?(spy100[spy100.length-1].val-100).toFixed(2):prev.spyRet;
+      const cclRet=ccl100?(ccl100[ccl100.length-1].val-100).toFixed(2):prev.cclRet;
+      const mepRet=mep100?(mep100[mep100.length-1].val-100).toFixed(2):prev.mepRet;
+      return{...prev,port100,spy100,ccl100,mep100,portRet,spyRet,cclRet,mepRet};
     });
-  },[en]);
+  },[en,liveFX,liveSP500]);
 
   const cd=chartData;
   const series=cd?[
@@ -1246,7 +1308,23 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
         if(totalToday > 0) portPts.push({date:today, val:totalToday});
       }
 
-      const portBase = portPts[0].val;
+      // Base = costo total del portfolio al PPC de compra
+      let costBaseEvo=0;
+      for(const h of en){
+        const buys=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra");
+        const sells=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="venta");
+        const qty=Math.max(0,buys.reduce((a,t)=>a+t.qty,0)-sells.reduce((a,t)=>a+t.qty,0));
+        if(qty<=0)continue;
+        const isBond=h.type==="bono_usd"||h.type==="bono_ars";
+        const qtyFactor=isBond?qty/100:qty;
+        const ppc=buys.length>0?buys.reduce((a,t)=>a+t.qty*t.price,0)/buys.reduce((a,t)=>a+t.qty,0):h.currentPrice;
+        const cclBuy=cclBars.length?(findPrice(cclBars,buys[0]?.date||dates[0])||fxRate):fxRate;
+        const mepBuy=mepBars.length?(findPrice(mepBars,buys[0]?.date||dates[0])||fxRate):fxRate;
+        if(currency==="ARS")costBaseEvo+=ppc*qtyFactor;
+        else if(currency==="USD_CCL")costBaseEvo+=ppc*qtyFactor/cclBuy;
+        else costBaseEvo+=ppc*qtyFactor/mepBuy;
+      }
+      const portBase = costBaseEvo>0?costBaseEvo:portPts[0]?.val||1;
       const port100 = portPts.map(x=>({date:x.date, val:portBase>0?100*x.val/portBase:100}));
       const spyRet  = spy100 ? (spy100[spy100.length-1].val-100).toFixed(2) : null;
       const cclRet  = ccl100 ? (ccl100[ccl100.length-1].val-100).toFixed(2) : null;
@@ -1735,6 +1813,7 @@ export default function App(){
   const [liveFX,setLiveFX]     = useState(FX_FALLBACK);
   const [livePrices,setLivePrices] = useState({});
   const [liveT10Y,setLiveT10Y] = useState(T10Y_FALLBACK);
+  const [liveSP500,setLiveSP500] = useState(null);
   const [priceStatus,setPriceStatus] = useState("idle");
   const [lastRefresh,setLastRefresh] = useState(null);
   const [countdown,setCountdown]   = useState(300);
@@ -1781,6 +1860,11 @@ export default function App(){
       setLiveFX(newFX);
       setLivePrices(newPrices);
       setLiveT10Y(newT10Y);
+      // S&P500 en vivo via Yahoo proxy
+      try{
+        const r=await fetch(YAHOO_PROXY+"?symbol=%5EGSPC&range=5d&interval=1d",{signal:AbortSignal.timeout(6000)});
+        if(r.ok){const d=await r.json();const closes=(d?.chart?.result?.[0]?.indicators?.quote?.[0]?.close||[]).filter(Boolean);if(closes.length)setLiveSP500(closes[closes.length-1]);}
+      }catch{}
       setLastRefresh(new Date());
       setPriceStatus(Object.keys(newPrices).length>0?"live":"partial");
     } catch { setPriceStatus("error"); }
@@ -2077,7 +2161,7 @@ export default function App(){
                 <div style={{...card,padding:18}}>
                   <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Rendimiento base 100 · USD CCL</div>
                   <div style={{height:230}}>
-                    <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} historicos={historicos}/>
+                    <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos}/>
                   </div>
                 </div>
               </div>

@@ -594,11 +594,51 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos}){
           <span style={{color:"var(--text-muted)",marginLeft:"auto",fontSize:10}}>{cd.startDate} → {cd.endDate}</span>
         </div>
       )}
+      {cd&&!loading&&(()=>{
+        // Sharpe Ratio = (retorno_portfolio - tasa_libre_riesgo) / desvío_estándar_retornos_diarios
+        // Usamos T10Y como tasa libre de riesgo, anualizada
+        const port100=cd.port100;
+        if(port100.length<3)return null;
+        // Retornos diarios del portfolio
+        const dailyRets=[];
+        for(let i=1;i<port100.length;i++){
+          const prev=port100[i-1].val,curr=port100[i].val;
+          if(prev>0)dailyRets.push((curr-prev)/prev);
+        }
+        if(dailyRets.length<2)return null;
+        const avgRet=dailyRets.reduce((a,r)=>a+r,0)/dailyRets.length;
+        const variance=dailyRets.reduce((a,r)=>a+Math.pow(r-avgRet,2),0)/dailyRets.length;
+        const stdDev=Math.sqrt(variance);
+        if(stdDev===0)return null;
+        // T10Y diaria
+        const rfDaily=liveT10Y/100/252;
+        // Sharpe anualizado
+        const sharpe=((avgRet-rfDaily)/stdDev)*Math.sqrt(252);
+        // Sharpe del S&P500 para comparar
+        let spySharpe=null;
+        if(cd.spy100&&cd.spy100.length>2){
+          const spyRets=[];
+          for(let i=1;i<cd.spy100.length;i++){const p=cd.spy100[i-1].val,c=cd.spy100[i].val;if(p>0)spyRets.push((c-p)/p);}
+          if(spyRets.length>=2){
+            const spyAvg=spyRets.reduce((a,r)=>a+r,0)/spyRets.length;
+            const spyVar=spyRets.reduce((a,r)=>a+Math.pow(r-spyAvg,2),0)/spyRets.length;
+            const spyStd=Math.sqrt(spyVar);
+            if(spyStd>0)spySharpe=((spyAvg-rfDaily)/spyStd)*Math.sqrt(252);
+          }
+        }
+        const sharpeColor=sharpe>1?"var(--green)":sharpe>0?"var(--yellow)":"var(--red)";
+        return(
+          <div style={{display:"flex",gap:16,fontSize:11,paddingTop:5,flexWrap:"wrap",alignItems:"center"}}>
+            <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Sharpe:</span>
+            <span style={{color:"var(--text-muted)"}}>Portfolio: <b style={{color:sharpeColor}}>{sharpe.toFixed(2)}</b></span>
+            {spySharpe!==null&&<span style={{color:"var(--text-muted)"}}>S&amp;P 500: <b style={{color:"#60A5FA"}}>{spySharpe.toFixed(2)}</b></span>}
+            <span style={{fontSize:10,color:"var(--text-muted)"}}>· rf T10Y {liveT10Y}% · anualizado</span>
+          </div>
+        );
+      })()}
     </div>
   );
-}
-
-// ── Base de tickers conocidos del mercado argentino (fallback offline) ────────
+} del mercado argentino (fallback offline) ────────
 const AR_TICKERS = {
   // Acciones líderes BCBA
   GGAL:"Grupo Financiero Galicia",YPFD:"YPF Ordinarias D",TXAR:"Siderar (Ternium)",

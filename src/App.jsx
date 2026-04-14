@@ -374,7 +374,21 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos}){
       if(currency==="ARS"&&cclBars.length>=2){const pts=dates.map(d=>({date:d,val:findPrice(cclBars,d)||cclBars[0].close}));const base=pts[0].val;ccl100=pts.map(x=>({date:x.date,val:base>0?100*x.val/base:100}));}
       if(currency==="ARS"&&mepBars.length>=2){const pts=dates.map(d=>({date:d,val:findPrice(mepBars,d)||mepBars[0].close}));const base=pts[0].val;mep100=pts.map(x=>({date:x.date,val:base>0?100*x.val/base:100}));}
 
-      const t10y100=dates.map(d=>{const days=Math.max(0,(new Date(d)-new Date(dates[0]))/(1000*60*60*24));return{date:d,val:100*Math.pow(1+liveT10Y/100,days/365)};});
+      const t10yBars=_getTicker("t10y")||[];
+      let t10y100=null;
+      if(currency==="ARS"&&t10yBars.length>=2){
+        // T10Y en historicos es la tasa (ej: 4.35). Convertir a retorno acumulado base 100.
+        // Cada día: rendimiento = (1 + tasa_diaria/100)^días_acumulados
+        const pts=dates.map(d=>({date:d,val:findPrice(t10yBars,d)||liveT10Y}));
+        const startDate=dates[0];
+        t10y100=pts.map(x=>{
+          const days=Math.max(0,(new Date(x.date)-new Date(startDate))/(1000*60*60*24));
+          return{date:x.date,val:parseFloat((100*Math.pow(1+x.val/100,days/365)).toFixed(4))};
+        });
+      } else if(currency==="ARS"){
+        // Fallback sintético si no hay datos
+        t10y100=dates.map(d=>{const days=Math.max(0,(new Date(d)-new Date(dates[0]))/(1000*60*60*24));return{date:d,val:100*Math.pow(1+liveT10Y/100,days/365)};});
+      }
       const allTickers=[...new Set(en.map(h=>h.ticker))];
       const tickerBars={};
       for(const ticker of allTickers){const bars=_getTicker(ticker);if(bars)tickerBars[ticker]=bars;}
@@ -547,7 +561,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos}){
   const series=cd?[
     {key:"port",data:cd.port100,color:"var(--green)",bold:true},
     ...(cd.spy100?[{key:"spy",data:cd.spy100,color:"#60A5FA",bold:false}]:[]),
-    ...(cd.currency==="ARS"?[{key:"t10y",data:cd.t10y100,color:"var(--yellow)",bold:false}]:[]),
+    ...(cd.currency==="ARS"&&cd.t10y100?[{key:"t10y",data:cd.t10y100,color:"var(--yellow)",bold:false}]:[]),
     ...(cd.ccl100?[{key:"ccl",data:cd.ccl100,color:"#A78BFA",bold:false}]:[]),
     ...(cd.mep100?[{key:"mep",data:cd.mep100,color:"#F472B6",bold:false}]:[]),
   ]:[];
@@ -1212,11 +1226,22 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
         mep100 = pts.map(x=>({date:x.date, val:base>0?100*x.val/base:100}));
       }
 
-      // T10Y base-100
-      const t10y100 = dates.map(d=>{
-        const days = Math.max(0,(new Date(d)-new Date(dates[0]))/(1000*60*60*24));
-        return {date:d, val:100*Math.pow(1+liveT10Y/100, days/365)};
-      });
+      // T10Y base-100 — usar datos reales del histórico si existen
+      const t10yBarsEvo=_getTicker("t10y")||[];
+      let t10y100;
+      if(currency==="ARS"&&t10yBarsEvo.length>=2){
+        const startDate=dates[0];
+        t10y100=dates.map(d=>{
+          const rate=findPrice(t10yBarsEvo,d)||liveT10Y;
+          const days=Math.max(0,(new Date(d)-new Date(startDate))/(1000*60*60*24));
+          return{date:d,val:parseFloat((100*Math.pow(1+rate/100,days/365)).toFixed(4))};
+        });
+      } else {
+        t10y100=dates.map(d=>{
+          const days=Math.max(0,(new Date(d)-new Date(dates[0]))/(1000*60*60*24));
+          return{date:d,val:100*Math.pow(1+liveT10Y/100,days/365)};
+        });
+      }
 
       // Histórico por ticker desde JSON pre-generado
       const allTickers = [...new Set(en.map(h=>h.ticker))];

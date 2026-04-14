@@ -1393,6 +1393,14 @@ export default function App(){
   const [liveT10Y,setLiveT10Y] = useState(T10Y_FALLBACK);
   const [priceStatus,setPriceStatus] = useState("idle");
   const [lastRefresh,setLastRefresh] = useState(null);
+  const [countdown,setCountdown]   = useState(300);
+
+  useEffect(()=>{
+    if(!lastRefresh)return;
+    setCountdown(300);
+    const tick=setInterval(()=>setCountdown(c=>c<=1?300:c-1),1000);
+    return()=>clearInterval(tick);
+  },[lastRefresh]);
 
   // ── Storage ───────────────────────────────────────────────────────────────
   useEffect(()=>{
@@ -1432,7 +1440,7 @@ export default function App(){
     } catch { setPriceStatus("error"); }
   };
 
-  useEffect(()=>{ refreshPrices(); const iv=setInterval(refreshPrices,30*60*1000); return()=>clearInterval(iv); },[]);
+  useEffect(()=>{ refreshPrices(); const iv=setInterval(refreshPrices,5*60*1000); return()=>clearInterval(iv); },[]);
 
   // ── Portfolio calcs ───────────────────────────────────────────────────────
   const ppcByTicker = port.reduce((acc,t)=>{
@@ -1623,10 +1631,10 @@ export default function App(){
             <div>
               <div style={{fontWeight:700,fontSize:14}}>Mi Portfolio - Galicia</div>
               <div style={{fontSize:11,color:"var(--text-muted)"}}>
-                {priceStatus==="live"&&<span style={{color:"var(--green)"}}>● {liveCount}/{port.length} activos · {lastRefresh?.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})}</span>}
-                {priceStatus==="partial"&&<span style={{color:"var(--yellow)"}}>◐ Parcial · {lastRefresh?.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})}</span>}
-                {priceStatus==="loading"&&<span>Actualizando...</span>}
-                {priceStatus==="idle"&&<span>Cargando...</span>}
+                {priceStatus==="live"&&<span style={{color:"var(--green)"}}>● {liveCount}/{port.length} activos · actualizado {lastRefresh?.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})} · próx. {Math.floor(countdown/60)}:{String(countdown%60).padStart(2,"0")}</span>}
+                {priceStatus==="partial"&&<span style={{color:"var(--yellow)"}}>◐ Parcial · actualizado {lastRefresh?.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})} · próx. {Math.floor(countdown/60)}:{String(countdown%60).padStart(2,"0")}</span>}
+                {priceStatus==="loading"&&<span style={{color:"var(--text-muted)"}}>⟳ Actualizando precios...</span>}
+                {priceStatus==="idle"&&<span style={{color:"var(--text-muted)"}}>Cargando...</span>}
               </div>
             </div>
           </div>

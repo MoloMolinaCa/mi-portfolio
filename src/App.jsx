@@ -437,24 +437,8 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos}){
         if(totalToday>0)portPts.push({date:today,val:totalToday});
       }
 
-      // Base = costo total del portfolio al PPC de compra (igual que el PnL)
-      // Así base 100 = precio de entrada y el gráfico coincide con el PnL
-      let costBase=0;
-      for(const h of en){
-        const buys=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra");
-        const sells=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="venta");
-        const qty=Math.max(0,buys.reduce((a,t)=>a+t.qty,0)-sells.reduce((a,t)=>a+t.qty,0));
-        if(qty<=0)continue;
-        const isBond=h.type==="bono_usd"||h.type==="bono_ars";
-        const qtyFactor=isBond?qty/100:qty;
-        const ppc=buys.length>0?buys.reduce((a,t)=>a+t.qty*t.price,0)/buys.reduce((a,t)=>a+t.qty,0):h.currentPrice;
-        const cclBuy=cclBars.length?(findPrice(cclBars,buys[0]?.date||dates[0])||fxRate):fxRate;
-        const mepBuy=mepBars.length?(findPrice(mepBars,buys[0]?.date||dates[0])||fxRate):fxRate;
-        if(currency==="ARS")costBase+=ppc*qtyFactor;
-        else if(currency==="USD_CCL")costBase+=ppc*qtyFactor/cclBuy;
-        else costBase+=ppc*qtyFactor/mepBuy;
-      }
-      const portBase=costBase>0?costBase:portPts[0]?.val||1;
+      // Base = valor de mercado del primer punto (TC histórico día a día)
+      const portBase=portPts[0]?.val||1;
       const port100=portPts.map(x=>({date:x.date,val:portBase>0?100*x.val/portBase:100}));
       setChartData({
         port100,t10y100,spy100,ccl100,mep100,currency,
@@ -1333,23 +1317,8 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
         if(totalToday > 0) portPts.push({date:today, val:totalToday});
       }
 
-      // Base = costo total del portfolio al PPC de compra
-      let costBaseEvo=0;
-      for(const h of en){
-        const buys=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra");
-        const sells=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="venta");
-        const qty=Math.max(0,buys.reduce((a,t)=>a+t.qty,0)-sells.reduce((a,t)=>a+t.qty,0));
-        if(qty<=0)continue;
-        const isBond=h.type==="bono_usd"||h.type==="bono_ars";
-        const qtyFactor=isBond?qty/100:qty;
-        const ppc=buys.length>0?buys.reduce((a,t)=>a+t.qty*t.price,0)/buys.reduce((a,t)=>a+t.qty,0):h.currentPrice;
-        const cclBuy=cclBars.length?(findPrice(cclBars,buys[0]?.date||dates[0])||fxRate):fxRate;
-        const mepBuy=mepBars.length?(findPrice(mepBars,buys[0]?.date||dates[0])||fxRate):fxRate;
-        if(currency==="ARS")costBaseEvo+=ppc*qtyFactor;
-        else if(currency==="USD_CCL")costBaseEvo+=ppc*qtyFactor/cclBuy;
-        else costBaseEvo+=ppc*qtyFactor/mepBuy;
-      }
-      const portBase = costBaseEvo>0?costBaseEvo:portPts[0]?.val||1;
+      // Base = valor de mercado del primer punto (TC histórico día a día)
+      const portBase = portPts[0]?.val||1;
       const port100 = portPts.map(x=>({date:x.date, val:portBase>0?100*x.val/portBase:100}));
       const spyRet  = spy100 ? (spy100[spy100.length-1].val-100).toFixed(2) : null;
       const cclRet  = ccl100 ? (ccl100[ccl100.length-1].val-100).toFixed(2) : null;
@@ -1932,9 +1901,41 @@ export default function App(){
     // Bonos cotizan por cada 100 VN — dividir por 100 para obtener valor real
     const isBond = h.type==="bono_usd" || h.type==="bono_ars";
     const qtyFactor = isBond ? h.qty/100 : h.qty;
+
+    const cclBarsH = historicos?.CCL||[];
+    const findCCL = (d) => {
+      if(!cclBarsH.length) return fxRate;
+      const t=new Date(d).getTime();
+      return cclBarsH.reduce((b,x)=>Math.abs(new Date(x.date)-t)<Math.abs(new Date(b.date)-t)?x:b,cclBarsH[0])?.close||fxRate;
+    };
+
+    // costUSD: sumar cada lote de compra al TC de ese día
+    // Para activos en USD el TC no aplica
+    let costUSD;
+    if(h.buyCurrency==="USD"){
+      costUSD = ppc * qtyFactor;
+    } else {
+      const buyLots = trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra");
+      const sellQty = trades.filter(t=>t.ticker===h.ticker&&t.tipo==="venta").reduce((a,t)=>a+t.qty,0);
+      let remainingQty = h.qty; // qty actual después de ventas
+      // Aplicar FIFO para saber qué lotes quedan
+      const lotsDescending = [...buyLots].sort((a,b)=>a.date.localeCompare(b.date));
+      let costUSDTotal = 0;
+      let qtyToAccount = remainingQty;
+      for(const lot of lotsDescending){
+        if(qtyToAccount<=0)break;
+        const lotUsed = Math.min(lot.qty, qtyToAccount);
+        const isBondLot = h.type==="bono_usd"||h.type==="bono_ars";
+        const lotFactor = isBondLot ? lotUsed/100 : lotUsed;
+        const tcDia = findCCL(lot.date);
+        costUSDTotal += lot.price * lotFactor / tcDia;
+        qtyToAccount -= lotUsed;
+      }
+      costUSD = costUSDTotal;
+    }
+
     const valARS=h.buyCurrency==="USD"?currentPrice*qtyFactor*fxRate:currentPrice*qtyFactor;
-    const costARS=h.buyCurrency==="USD"?ppc*qtyFactor*fxRate:ppc*qtyFactor;
-    const valUSD=valARS/fxRate; const costUSD=costARS/fxRate;
+    const valUSD=valARS/fxRate;
     const pnlUSD=valUSD-costUSD;
     const pnlPct=costUSD>0?(pnlUSD/costUSD)*100:0;
     return{...h,currentPrice,liveChangePct,valUSD,costUSD,pnlUSD,pnlPct,isLive:!!live,ppc};

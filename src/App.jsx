@@ -593,19 +593,31 @@ function VentaTickerSearch({port, value, onSelect}){
   );
 }
 
-// ── Inferir tipo de activo desde fuente data912 y ticker ─────────────────────
+// ── Inferir tipo y moneda desde ticker y endpoint ────────────────────────────
+// Convención BYMA para bonos:
+//   Sin sufijo (GD30, AL30)  → bono_ars · ARS (cotiza en pesos)
+//   Sufijo C   (GD30C)       → bono_usd · ARS (cotiza en ARS al precio CCL)
+//   Sufijo D   (GD30D)       → bono_usd · USD (cotiza en USD, precio cable/MEP)
 function inferType(item, endpoint){
-  const ticker = item.ticker||item.symbol||item.s||"";
-  const currency = item.currency||item.moneda||"";
+  const ticker = (item.ticker||item.symbol||item.s||"").toUpperCase();
   if(endpoint==="arg_cedears") return "cedear";
   if(endpoint==="arg_stocks")  return "accion_ar";
   if(endpoint==="arg_bonds"||endpoint==="arg_corp"){
-    const isUSD = currency.toUpperCase()==="USD" || ticker.endsWith("D") || ticker.includes("USD") ||
-      (item.description||item.name||"").toUpperCase().includes("USD") ||
-      (item.description||item.name||"").toUpperCase().includes("U$S");
-    return isUSD ? "bono_usd" : "bono_ars";
+    const endsD = ticker.endsWith("D");
+    const endsC = ticker.endsWith("C");
+    const descUSD = (item.description||item.name||"").toUpperCase().match(/U\$S|USD/);
+    return (endsD||endsC||descUSD) ? "bono_usd" : "bono_ars";
   }
   return "accion_ar";
+}
+
+function inferCurrency(item, endpoint){
+  const ticker = (item.ticker||item.symbol||item.s||"").toUpperCase();
+  if(endpoint==="arg_bonds"||endpoint==="arg_corp"){
+    // D = cable/MEP en USD, C = CCL en USD — ambos se miden en USD
+    if(ticker.endsWith("D")||ticker.endsWith("C")) return "USD";
+  }
+  return "ARS";
 }
 
 function Modal({h,port=[],onSave,onClose}){
@@ -650,7 +662,7 @@ function Modal({h,port=[],onSave,onClose}){
           const price=parseFloat(item.price||item.last||item.c||item.close||0);
           if(price<=0)continue;
           const type=inferType(item,key);
-          const currency=(type==="bono_usd"||type==="fci_usd")?"USD":"ARS";
+          const currency=inferCurrency(item,key);
           results.push({
             ticker:sym,
             name:item.description||item.name||item.nombre||sym,
@@ -1548,9 +1560,11 @@ export default function App(){
     return acc;
   },{});
 
+  const today = new Date().toISOString().slice(0,10);
   const en=port.map(h=>{
     const live=livePrices[h.ticker];
     const currentPrice=live?live.price:h.currentPrice;
+    const ppc=ppcByTicker[h.ticker]||h.buyPrice;
     let liveChangePct = live?.changePct ?? null;
     if(live?.price && historicos){
       const bars = historicos[h.ticker];
@@ -1559,10 +1573,14 @@ export default function App(){
         if(prevClose>0){
           liveChangePct = parseFloat(((live.price-prevClose)/prevClose*100).toFixed(2));
         }
+      } else {
+        // Sin histórico: si fue dado de alta hoy, variación vs PPC de compra
+        const buyToday = trades.some(t=>t.ticker===h.ticker&&t.tipo==="compra"&&t.date===today);
+        if(buyToday && ppc>0){
+          liveChangePct = parseFloat(((live.price-ppc)/ppc*100).toFixed(2));
+        }
       }
-      // Si no hay histórico pero hay precio en vivo, usar changePct de data912
     }
-    const ppc=ppcByTicker[h.ticker]||h.buyPrice;
     // Bonos cotizan por cada 100 VN — dividir por 100 para obtener valor real
     const isBond = h.type==="bono_usd" || h.type==="bono_ars";
     const qtyFactor = isBond ? h.qty/100 : h.qty;

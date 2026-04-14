@@ -427,6 +427,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,historicos}){
       const port100=portPts.map(x=>({date:x.date,val:portBase>0?100*x.val/portBase:100}));
       setChartData({
         port100,t10y100,spy100,ccl100,mep100,currency,
+        portBase, // valor absoluto del primer punto para normalizar actualizaciones live
         startDate:dates[0],endDate:dates[dates.length-1],
         portRet:(port100[port100.length-1].val-100).toFixed(2),
         spyRet:spy100?(spy100[spy100.length-1].val-100).toFixed(2):null,
@@ -442,6 +443,43 @@ function EvoMini({en,trades,fxRate,liveT10Y,historicos}){
     const p=PERIODS.find(x=>x.key===period);
     if(p)load(p,historicos);
   },[period,currency,historicos]);
+
+  // Recalcular solo el punto de hoy cuando cambian precios en vivo
+  useEffect(()=>{
+    if(!chartData||!en||!en.length)return;
+    const today=new Date().toISOString().slice(0,10);
+    const _hist=historicos||{};
+    const findP=(bars,d)=>{if(!bars?.length)return null;const t=new Date(d).getTime();return bars.reduce((b,x)=>Math.abs(new Date(x.date)-t)<Math.abs(new Date(b.date)-t)?x:b,bars[0])?.close||null;};
+    const cclBars=_hist.CCL||[];
+    const mepBars=_hist.MEP||[];
+    let totalToday=0;
+    const dateT=new Date().getTime();
+    for(const h of en){
+      const buys=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra"&&new Date(t.date).getTime()<=dateT);
+      const sells=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="venta"&&new Date(t.date).getTime()<=dateT);
+      const qty=Math.max(0,buys.reduce((a,t)=>a+t.qty,0)-sells.reduce((a,t)=>a+t.qty,0));
+      if(qty<=0)continue;
+      const isBond=h.type==="bono_usd"||h.type==="bono_ars";
+      const qtyFactor=isBond?qty/100:qty;
+      const priceHoy=h.isLive?h.currentPrice:((_hist[h.ticker]||[]).slice(-1)[0]?.close||h.currentPrice);
+      const cclDay=cclBars.length?(findP(cclBars,today)||fxRate):fxRate;
+      const mepDay=mepBars.length?(findP(mepBars,today)||fxRate):fxRate;
+      if(currency==="ARS")totalToday+=priceHoy*qtyFactor;
+      else if(currency==="USD_CCL")totalToday+=priceHoy*qtyFactor/cclDay;
+      else totalToday+=priceHoy*qtyFactor/mepDay;
+    }
+    if(totalToday<=0||!chartData.portBase)return;
+    const newVal=parseFloat((100*totalToday/chartData.portBase).toFixed(4));
+    setChartData(prev=>{
+      if(!prev)return prev;
+      const port100=[...prev.port100];
+      const lastIdx=port100.findIndex(x=>x.date===today);
+      if(lastIdx>=0)port100[lastIdx]={date:today,val:newVal};
+      else port100.push({date:today,val:newVal});
+      const portRet=(port100[port100.length-1].val-100).toFixed(2);
+      return{...prev,port100,portRet};
+    });
+  },[en]);
 
   const cd=chartData;
   const series=cd?[
@@ -1475,6 +1513,165 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
   );
 }
 
+function OperacionesTab({trades,port,setTrades,setPort,card,livePrices}){
+  const [editId,setEditId]=useState(null);
+  const [editData,setEditData]=useState(null);
+  const [confirmDelete,setConfirmDelete]=useState(null);
+  const fmtA=(n)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:2}).format(n);
+  const fmtU=(n,d=2)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"USD",maximumFractionDigits:d}).format(n);
+  const inp={background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:6,padding:"6px 10px",color:"var(--text-primary)",fontSize:13,width:"100%"};
+
+  const sorted=[...trades].sort((a,b)=>b.date.localeCompare(a.date)||b.ts-a.ts);
+
+  const startEdit=(t)=>{
+    setEditId(t.id);
+    setEditData({...t});
+  };
+
+  const saveEdit=()=>{
+    if(!editData)return;
+    setTrades(prev=>prev.map(t=>t.id===editId?{...editData,qty:+editData.qty,price:+editData.price,tcCompra:editData.tcCompra?+editData.tcCompra:undefined}:t));
+    // Recalcular buyPrice del port si cambió
+    setPort(prev=>prev.map(p=>{
+      if(p.ticker!==editData.ticker)return p;
+      return{...p,buyPrice:+editData.price};
+    }));
+    setEditId(null);setEditData(null);
+  };
+
+  const deleteTrade=(trade)=>{
+    const newTrades=trades.filter(t=>t.id!==trade.id);
+    setTrades(newTrades);
+    // Si no quedan trades de ese ticker, eliminar del portfolio
+    const remaining=newTrades.filter(t=>t.ticker===trade.ticker&&t.tipo==="compra");
+    const sold=newTrades.filter(t=>t.ticker===trade.ticker&&t.tipo==="venta");
+    const netQty=remaining.reduce((a,t)=>a+t.qty,0)-sold.reduce((a,t)=>a+t.qty,0);
+    if(netQty<=0){
+      setPort(prev=>prev.filter(p=>p.ticker!==trade.ticker));
+    } else {
+      // Actualizar qty y buyPrice del portfolio
+      const totalCost=remaining.reduce((a,t)=>a+t.qty*t.price,0);
+      const totalQty=remaining.reduce((a,t)=>a+t.qty,0);
+      const newPpc=totalQty>0?totalCost/totalQty:0;
+      setPort(prev=>prev.map(p=>p.ticker===trade.ticker?{...p,qty:netQty,buyPrice:newPpc}:p));
+    }
+    setConfirmDelete(null);
+  };
+
+  const thS={padding:"8px 12px",textAlign:"left",fontSize:10,color:"var(--text-muted)",fontWeight:500,textTransform:"uppercase",letterSpacing:0.8,borderBottom:"1px solid var(--border)",whiteSpace:"nowrap"};
+  const thR={...thS,textAlign:"right"};
+  const tdL={padding:"10px 12px",fontSize:13,color:"var(--text-secondary)"};
+  const tdR={...tdL,textAlign:"right"};
+
+  return(
+    <div className="fi" style={{display:"grid",gap:14}}>
+      <div style={{...card,overflow:"hidden"}}>
+        <div style={{padding:"12px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{fontSize:13,fontWeight:600}}>Historial de operaciones</div>
+          <div style={{fontSize:11,color:"var(--text-muted)"}}>{trades.length} operación{trades.length!==1?"es":""}</div>
+        </div>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:13,minWidth:700}}>
+            <thead>
+              <tr>
+                <th style={thS}>Fecha</th>
+                <th style={thS}>Ticker</th>
+                <th style={thS}>Nombre</th>
+                <th style={thS}>Tipo</th>
+                <th style={thR}>Cantidad</th>
+                <th style={thR}>Precio</th>
+                <th style={thR}>TC</th>
+                <th style={thR}>Monto</th>
+                <th style={{...thS,width:80}}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map(t=>{
+                const isEditing=editId===t.id;
+                const monto=+t.qty*+t.price;
+                return(
+                  <tr key={t.id} style={{borderTop:"1px solid var(--border)",background:isEditing?"rgba(37,99,235,0.06)":undefined}}>
+                    <td style={tdL}>
+                      {isEditing
+                        ?<input type="date" value={editData.date} onChange={e=>setEditData(p=>({...p,date:e.target.value}))} style={{...inp,width:130}}/>
+                        :<span>{t.date}</span>}
+                    </td>
+                    <td style={{...tdL,fontWeight:700,fontFamily:"monospace",color:"var(--accent)"}}>{t.ticker}</td>
+                    <td style={{...tdL,maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"var(--text-secondary)"}}>{t.name}</td>
+                    <td style={tdL}>
+                      <span style={{padding:"2px 8px",borderRadius:4,fontSize:11,fontWeight:600,
+                        background:t.tipo==="compra"?"rgba(52,211,153,0.1)":"rgba(248,113,113,0.1)",
+                        color:t.tipo==="compra"?"var(--green)":"var(--red)"}}>
+                        {t.tipo==="compra"?"↑ Compra":"↓ Venta"}
+                      </span>
+                    </td>
+                    <td style={tdR}>
+                      {isEditing
+                        ?<input type="number" value={editData.qty} onChange={e=>setEditData(p=>({...p,qty:e.target.value}))} style={{...inp,width:90,textAlign:"right"}}/>
+                        :Number(t.qty).toLocaleString("es-AR",{maximumFractionDigits:4})}
+                    </td>
+                    <td style={tdR}>
+                      {isEditing
+                        ?<input type="number" value={editData.price} onChange={e=>setEditData(p=>({...p,price:e.target.value}))} style={{...inp,width:110,textAlign:"right"}}/>
+                        :<span>{t.currency==="USD"?fmtU(t.price,4):fmtA(t.price)}<span style={{display:"block",fontSize:9,color:"var(--text-muted)"}}>{t.currency||"ARS"}</span></span>}
+                    </td>
+                    <td style={tdR}>
+                      {isEditing&&(t.currency==="ARS")
+                        ?<input type="number" value={editData.tcCompra||""} onChange={e=>setEditData(p=>({...p,tcCompra:e.target.value}))} placeholder="TC" style={{...inp,width:90,textAlign:"right"}}/>
+                        :<span style={{color:"var(--text-muted)",fontSize:11}}>{t.tcCompra?fmtA(t.tcCompra):"—"}</span>}
+                    </td>
+                    <td style={{...tdR,fontWeight:600}}>
+                      {t.currency==="USD"?fmtU(monto,2):fmtA(monto)}
+                    </td>
+                    <td style={{padding:"8px",textAlign:"right"}}>
+                      {isEditing?(
+                        <div style={{display:"flex",gap:4,justifyContent:"flex-end"}}>
+                          <button onClick={saveEdit} style={{padding:"4px 10px",background:"var(--green)",border:"none",borderRadius:5,color:"#fff",cursor:"pointer",fontSize:11,fontWeight:600}}>✓</button>
+                          <button onClick={()=>{setEditId(null);setEditData(null);}} style={{padding:"4px 8px",background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:5,color:"var(--text-muted)",cursor:"pointer",fontSize:11}}>✕</button>
+                        </div>
+                      ):(
+                        <div style={{display:"flex",gap:4,justifyContent:"flex-end"}}>
+                          <button onClick={()=>startEdit(t)} style={{padding:"4px 8px",background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:5,color:"var(--text-muted)",cursor:"pointer",fontSize:11}}>✏️</button>
+                          <button onClick={()=>setConfirmDelete(t)} style={{padding:"4px 8px",background:"rgba(248,113,113,0.1)",border:"1px solid rgba(248,113,113,0.3)",borderRadius:5,color:"var(--red)",cursor:"pointer",fontSize:11}}>🗑</button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Modal confirmación eliminar */}
+      {confirmDelete&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300}}>
+          <div style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:16,padding:28,width:420,maxWidth:"95vw"}}>
+            <div style={{fontFamily:"Georgia,serif",fontSize:16,fontWeight:700,marginBottom:12}}>¿Eliminar operación?</div>
+            <div style={{background:"var(--bg-input)",borderRadius:8,padding:"12px 14px",marginBottom:16,fontSize:13}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                <span style={{fontWeight:700,fontFamily:"monospace",color:"var(--accent)"}}>{confirmDelete.ticker}</span>
+                <span style={{padding:"2px 8px",borderRadius:4,fontSize:11,fontWeight:600,
+                  background:confirmDelete.tipo==="compra"?"rgba(52,211,153,0.1)":"rgba(248,113,113,0.1)",
+                  color:confirmDelete.tipo==="compra"?"var(--green)":"var(--red)"}}>
+                  {confirmDelete.tipo==="compra"?"↑ Compra":"↓ Venta"}
+                </span>
+              </div>
+              <div style={{fontSize:12,color:"var(--text-muted)"}}>{confirmDelete.date} · {Number(confirmDelete.qty).toLocaleString("es-AR")} uds · {confirmDelete.currency==="USD"?fmtU(confirmDelete.price,4):fmtA(confirmDelete.price)}</div>
+            </div>
+            <div style={{fontSize:12,color:"var(--yellow)",marginBottom:20}}>⚠ Esta acción elimina la operación del historial. Si era la única compra del activo, se elimina del portfolio.</div>
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+              <button onClick={()=>setConfirmDelete(null)} style={{padding:"8px 18px",background:"transparent",border:"1px solid var(--border)",borderRadius:8,color:"var(--text-muted)",cursor:"pointer"}}>Cancelar</button>
+              <button onClick={()=>deleteTrade(confirmDelete)} style={{padding:"8px 18px",background:"var(--red)",border:"none",borderRadius:8,color:"#fff",cursor:"pointer",fontWeight:600}}>Eliminar definitivo</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function App(){
   // ── State ────────────────────────────────────────────────────────────────
   const SEED_TRADES = GALICIA_PORTFOLIO.map(h=>({
@@ -1797,7 +1994,7 @@ export default function App(){
 
         {/* Nav */}
         <div style={{background:"var(--bg-card)",borderBottom:"1px solid var(--border)",padding:"0 20px",display:"flex",gap:0}}>
-          {[["dashboard","📊 Dashboard"],["portfolio","💼 Portfolio"],["evolutivo","📈 Evolutivo"]].map(([id,lbl])=>(
+          {[["dashboard","📊 Dashboard"],["portfolio","💼 Portfolio"],["evolutivo","📈 Evolutivo"],["operaciones","📋 Operaciones"]].map(([id,lbl])=>(
             <button key={id} onClick={()=>setTab(id)} style={{padding:"12px 16px",background:"transparent",border:"none",borderBottom:tab===id?"2px solid var(--accent)":"2px solid transparent",color:tab===id?"var(--text-primary)":"var(--text-muted)",cursor:"pointer",fontSize:13,fontWeight:tab===id?600:400}}>
               {lbl}
             </button>
@@ -1879,6 +2076,11 @@ export default function App(){
               benchPct={benchPct} alpha={alpha} liveT10Y={liveT10Y}
               byType={byType} fxRate={fxRate} fx={fx}
               fxMode={fx} card={card} historicos={historicos}/>
+          )}
+
+          {/* OPERACIONES */}
+          {tab==="operaciones"&&(
+            <OperacionesTab trades={trades} port={port} setTrades={setTrades} setPort={setPort} card={card} livePrices={livePrices}/>
           )}
 
         </div>

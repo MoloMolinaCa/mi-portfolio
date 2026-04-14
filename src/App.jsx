@@ -1435,9 +1435,6 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
         {(view==="dual"||view==="usd")&&<td style={{...tdR,fontWeight:700}}>{fmtU(h.valUSD)}</td>}
         {(view==="dual"||view==="usd")&&<td style={{...tdR,color:pc(h.pnlUSD),fontSize:11}}>{fmtU(h.pnlUSD)}</td>}
         <td style={{...tdR,fontWeight:600,color:pc(h.pnlPct)}}>{fmtP(h.pnlPct)}</td>
-        <td style={{padding:"10px 8px",textAlign:"right"}}>
-          <button onClick={()=>setModal(h)} style={{background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:5,padding:"3px 8px",color:"var(--text-muted)",cursor:"pointer",fontSize:11}}>✏️</button>
-        </td>
       </tr>
     );
   };
@@ -1491,7 +1488,6 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
                     {(view==="dual"||view==="native")&&<><th style={thR}>Val. nativo</th><th style={thR}>PnL nativo</th></>}
                     {(view==="dual"||view==="usd")&&<><th style={thR}>Val. USD</th><th style={thR}>PnL USD</th></>}
                     <th style={thR}>Rend %</th>
-                    <th style={{...thS,width:60}}></th>
                   </tr>
                 </thead>
                 <tbody>{items.map(renderRow)}</tbody>
@@ -1517,11 +1513,23 @@ function OperacionesTab({trades,port,setTrades,setPort,card,livePrices}){
   const [editId,setEditId]=useState(null);
   const [editData,setEditData]=useState(null);
   const [confirmDelete,setConfirmDelete]=useState(null);
+  const [filterTicker,setFilterTicker]=useState("");
+  const [filterDesde,setFilterDesde]=useState("");
+  const [filterHasta,setFilterHasta]=useState("");
   const fmtA=(n)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:2}).format(n);
   const fmtU=(n,d=2)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"USD",maximumFractionDigits:d}).format(n);
   const inp={background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:6,padding:"6px 10px",color:"var(--text-primary)",fontSize:13,width:"100%"};
 
-  const sorted=[...trades].sort((a,b)=>b.date.localeCompare(a.date)||b.ts-a.ts);
+  const allTickers=[...new Set(trades.map(t=>t.ticker))].sort();
+
+  const sorted=[...trades]
+    .filter(t=>{
+      if(filterTicker&&t.ticker!==filterTicker)return false;
+      if(filterDesde&&t.date<filterDesde)return false;
+      if(filterHasta&&t.date>filterHasta)return false;
+      return true;
+    })
+    .sort((a,b)=>b.date.localeCompare(a.date)||b.ts-a.ts);
 
   const startEdit=(t)=>{
     setEditId(t.id);
@@ -1565,10 +1573,38 @@ function OperacionesTab({trades,port,setTrades,setPort,card,livePrices}){
 
   return(
     <div className="fi" style={{display:"grid",gap:14}}>
+      {/* Filtros */}
+      <div style={{...card,padding:"14px 16px",display:"flex",gap:12,flexWrap:"wrap",alignItems:"flex-end"}}>
+        <div style={{display:"flex",flexDirection:"column",gap:4,minWidth:160}}>
+          <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Ticker</span>
+          <select value={filterTicker} onChange={e=>setFilterTicker(e.target.value)} style={{...inp,width:"auto"}}>
+            <option value="">Todos</option>
+            {allTickers.map(t=><option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:4}}>
+          <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Desde</span>
+          <input type="date" value={filterDesde} onChange={e=>setFilterDesde(e.target.value)} style={inp}/>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:4}}>
+          <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Hasta</span>
+          <input type="date" value={filterHasta} onChange={e=>setFilterHasta(e.target.value)} style={inp}/>
+        </div>
+        {(filterTicker||filterDesde||filterHasta)&&(
+          <button onClick={()=>{setFilterTicker("");setFilterDesde("");setFilterHasta("");}}
+            style={{padding:"6px 14px",background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:6,color:"var(--text-muted)",cursor:"pointer",fontSize:12,alignSelf:"flex-end"}}>
+            ✕ Limpiar
+          </button>
+        )}
+        <span style={{fontSize:11,color:"var(--text-muted)",marginLeft:"auto",alignSelf:"flex-end"}}>
+          {sorted.length} de {trades.length} operación{trades.length!==1?"es":""}
+        </span>
+      </div>
+
       <div style={{...card,overflow:"hidden"}}>
         <div style={{padding:"12px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{fontSize:13,fontWeight:600}}>Historial de operaciones</div>
-          <div style={{fontSize:11,color:"var(--text-muted)"}}>{trades.length} operación{trades.length!==1?"es":""}</div>
+          <div style={{fontSize:11,color:"var(--text-muted)"}}>{sorted.length} resultado{sorted.length!==1?"s":""}</div>
         </div>
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:13,minWidth:700}}>

@@ -1602,6 +1602,22 @@ export default function App(){
   // ── Handlers ──────────────────────────────────────────────────────────────
   const del=(id)=>setModal(port.find(x=>x.id===id)||null);
 
+  // ── Exporta portfolio_tickers.json — lo lee update_historicos.py ─────────────
+  // Todos los tickers que alguna vez estuvieron en cartera (activos + vendidos)
+  // para que el script descargue histórico completo sin perder datos de posiciones cerradas
+  const downloadPortfolioTickers = (currentTrades) => {
+    try {
+      const allTickers = [...new Set(currentTrades.map(t=>t.ticker))];
+      const data = { tickers: allTickers, updatedAt: new Date().toISOString() };
+      const blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "portfolio_tickers.json";
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a); URL.revokeObjectURL(url);
+    } catch(e) { console.warn("downloadPortfolioTickers error", e); }
+  };
+
   const saveOrDelete=(h)=>{
     if(!h){
       const id=modal?.id;
@@ -1622,14 +1638,16 @@ export default function App(){
     const tradeBase={ticker:h.ticker.toUpperCase(),currency:h.buyCurrency,date:h.buyDate||new Date().toISOString().slice(0,10),ts,name:h.name};
     if(!existing){
       const newTicker=h.ticker.toUpperCase();
-      setTrades(t=>[...t,{id:ts,tipo:"compra",qty:+h.qty,price:+h.buyPrice,...tradeBase}]);
+      const newTrades=[...trades,{id:ts,tipo:"compra",qty:+h.qty,price:+h.buyPrice,...tradeBase}];
+      setTrades(newTrades);
       setPort(p=>{
         const newPort=[...p,{...h,id:ts,buyPrice:+h.buyPrice}];
-        // Disparar refresh con los nuevos tickers incluyendo el recién agregado
         const allTickers=[...new Set(newPort.map(x=>x.ticker))];
         setTimeout(()=>refreshPrices(allTickers),100);
         return newPort;
       });
+      // Auto-descarga portfolio_tickers.json para subir al repo
+      setTimeout(()=>downloadPortfolioTickers(newTrades),300);
     } else if(h.operacion==="venta"){
       const sellQty=+h.qty; const sellPrice=+h.buyPrice;
       const buyLots=trades.filter(t=>t.ticker===h.ticker.toUpperCase()&&t.tipo==="compra").sort((a,b)=>a.ts-b.ts);
@@ -1745,6 +1763,7 @@ export default function App(){
             {liveFX.sourceNote&&<div style={{fontSize:10,color:"var(--text-muted)"}}>{liveFX.source}</div>}
             <button onClick={refreshPrices} disabled={priceStatus==="loading"} style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"5px 10px",color:"var(--text-secondary)",cursor:"pointer",fontSize:12}}>↻</button>
             <button onClick={downloadTrades} style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"6px 10px",color:"var(--text-secondary)",cursor:"pointer",fontSize:13}}>⬇ CSV</button>
+            <button onClick={()=>downloadPortfolioTickers(trades)} title="Exportar lista de tickers para el script de históricos" style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"6px 10px",color:"var(--text-secondary)",cursor:"pointer",fontSize:13}}>⬇ Tickers</button>
             <button onClick={()=>setModal("add")} style={{background:"var(--accent)",border:"none",borderRadius:6,padding:"6px 14px",color:"#fff",cursor:"pointer",fontSize:13,fontWeight:600}}>+ Posición</button>
           </div>
         </div>

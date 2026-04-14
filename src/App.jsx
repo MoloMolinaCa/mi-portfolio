@@ -638,7 +638,9 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos}){
       })()}
     </div>
   );
-} del mercado argentino (fallback offline) ────────
+} 
+
+// ── Base de tickers conocidos del mercado argentino (fallback offline) ────────
 const AR_TICKERS = {
   // Acciones líderes BCBA
   GGAL:"Grupo Financiero Galicia",YPFD:"YPF Ordinarias D",TXAR:"Siderar (Ternium)",

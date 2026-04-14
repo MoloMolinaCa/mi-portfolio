@@ -593,131 +593,168 @@ function VentaTickerSearch({port, value, onSelect}){
   );
 }
 
+// ── Inferir tipo de activo desde fuente data912 y ticker ─────────────────────
+function inferType(item, endpoint){
+  const ticker = item.ticker||item.symbol||item.s||"";
+  const currency = item.currency||item.moneda||"";
+  if(endpoint==="arg_cedears") return "cedear";
+  if(endpoint==="arg_stocks")  return "accion_ar";
+  if(endpoint==="arg_bonds"||endpoint==="arg_corp"){
+    const isUSD = currency.toUpperCase()==="USD" || ticker.endsWith("D") || ticker.includes("USD") ||
+      (item.description||item.name||"").toUpperCase().includes("USD") ||
+      (item.description||item.name||"").toUpperCase().includes("U$S");
+    return isUSD ? "bono_usd" : "bono_ars";
+  }
+  return "accion_ar";
+}
+
 function Modal({h,port=[],onSave,onClose}){
   const blank={ticker:"",name:"",type:"accion_ar",qty:"",buyPrice:"",buyCurrency:"ARS",buyDate:new Date().toISOString().slice(0,10),operacion:"compra"};
-  // Editing existing: operacion starts as "compra", qty=existing qty, buyPrice empty
-  const [f,setF]=useState(h ? {...h, operacion:"compra", buyPrice:""} : blank);
+  const [f,setF]=useState(h?{...h,operacion:"compra",buyPrice:""}:blank);
   const [tickerStatus,setTickerStatus]=useState(h?"confirmed":"idle");
-  const [tickerInfo,setTickerInfo]=useState(null);
+  const [searchResults,setSearchResults]=useState([]); // lista de instrumentos encontrados
+  const [selectedResult,setSelectedResult]=useState(null); // instrumento seleccionado
   const [tickerTimer,setTickerTimer]=useState(null);
   const set=(k,v)=>setF(p=>({...p,[k]:v}));
-
   const inp={background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:8,padding:"8px 12px",color:"var(--text-primary)",fontSize:14,width:"100%"};
 
-  const validateTicker = async (ticker) => {
-    if(!ticker||ticker.length<2){setTickerStatus("idle");setTickerInfo(null);return;}
+  // Busca en data912 + Yahoo y devuelve lista de instrumentos que matchean el query
+  const searchInstruments = async (query) => {
+    if(!query||query.length<2){setSearchResults([]);setTickerStatus("idle");return;}
     setTickerStatus("checking");
-    setTickerInfo(null);
+    setSearchResults([]);
+    const results=[];
+    const q=query.toUpperCase();
 
-    // 1. Check local known-tickers list first (instant, no CORS)
-    if(AR_TICKERS[ticker]){
-      // Also try to get live price from the already-loaded livePrices
-      const yahooSym = ticker+".BA";
-      // We know the name at minimum
-      const knownName = AR_TICKERS[ticker];
-      // Try Yahoo to get price (same call that works for prices tab)
-      try {
-        const sym = yahooSym || `${ticker}.BA`;
-        const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${sym}&fields=shortName,regularMarketPrice,regularMarketPreviousClose,currency`;
-        const res = await fetch(url,{signal:AbortSignal.timeout(5000)});
-        if(res.ok){
-          const data = await res.json();
-          const q = data?.quoteResponse?.result?.[0];
-          const price = q?.regularMarketPrice || q?.regularMarketPreviousClose;
-          if(price){
-            setTickerStatus("found");
-            setTickerInfo({name:q?.shortName||knownName,price,currency:q?.currency||"ARS",source:"Yahoo Finance"});
-            setF(p=>({...p,name:q?.shortName||knownName}));
-            return;
-          }
-        }
-      } catch{}
-      // Yahoo failed but we know the ticker — mark as found with name only
-      setTickerStatus("found");
-      setTickerInfo({name:knownName,price:null,currency:ticker.endsWith("D")||ticker.includes("USD")?"USD":"ARS",source:"Lista local AR"});
-      setF(p=>({...p,name:knownName}));
-      return;
-    }
-
-    // 2. Try Yahoo Finance .BA (covers most BCBA instruments)
-    try {
-      const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${ticker}.BA&fields=shortName,regularMarketPrice,regularMarketPreviousClose,currency`;
-      const res = await fetch(url,{signal:AbortSignal.timeout(6000)});
-      if(res.ok){
-        const data = await res.json();
-        const q = data?.quoteResponse?.result?.[0];
-        const price = q?.regularMarketPrice || q?.regularMarketPreviousClose;
-        if(price){
-          setTickerStatus("found");
-          setTickerInfo({name:q?.shortName||ticker,price,currency:q?.currency||"ARS",source:"Yahoo Finance BCBA"});
-          setF(p=>({...p,name:q?.shortName||p.name}));
-          return;
+    // 1. data912 — busca en los 4 endpoints en paralelo
+    try{
+      const base="https://data912.com/live";
+      const [rBonds,rCedears,rStocks,rCorp]=await Promise.allSettled([
+        fetch(`${base}/arg_bonds`,  {signal:AbortSignal.timeout(8000)}).then(r=>r.json()),
+        fetch(`${base}/arg_cedears`,{signal:AbortSignal.timeout(8000)}).then(r=>r.json()),
+        fetch(`${base}/arg_stocks`, {signal:AbortSignal.timeout(8000)}).then(r=>r.json()),
+        fetch(`${base}/arg_corp`,   {signal:AbortSignal.timeout(8000)}).then(r=>r.json()),
+      ]);
+      const endpoints=[
+        {key:"arg_bonds",  data:rBonds},
+        {key:"arg_cedears",data:rCedears},
+        {key:"arg_stocks", data:rStocks},
+        {key:"arg_corp",   data:rCorp},
+      ];
+      for(const {key,data} of endpoints){
+        if(data.status!=="fulfilled"||!Array.isArray(data.value))continue;
+        for(const item of data.value){
+          const sym=(item.ticker||item.symbol||item.s||"").toUpperCase();
+          const desc=(item.description||item.name||item.nombre||"").toUpperCase();
+          if(!sym.includes(q)&&!desc.includes(q))continue;
+          const price=parseFloat(item.price||item.last||item.c||item.close||0);
+          if(price<=0)continue;
+          const type=inferType(item,key);
+          const currency=(type==="bono_usd"||type==="fci_usd")?"USD":"ARS";
+          results.push({
+            ticker:sym,
+            name:item.description||item.name||item.nombre||sym,
+            type,
+            buyCurrency:currency,
+            price,
+            source:"data912/"+key.replace("arg_",""),
+          });
         }
       }
-    } catch{}
+    }catch(e){console.warn("data912 error",e);}
 
-    // 3. Mark as unknown — still saveable
-    setTickerStatus("notfound");
-    setTickerInfo(null);
+    // 2. Yahoo Finance — busca el ticker directo y con .BA
+    try{
+      const syms=[q,q+".BA"].join(",");
+      const url=`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(syms)}&fields=shortName,regularMarketPrice,currency,quoteType`;
+      const res=await fetch(url,{signal:AbortSignal.timeout(6000)});
+      if(res.ok){
+        const data=await res.json();
+        for(const item of data?.quoteResponse?.result||[]){
+          const sym=(item.symbol||"").replace(".BA","").toUpperCase();
+          if(!sym.includes(q))continue;
+          const price=item.regularMarketPrice||0;
+          if(price<=0)continue;
+          const alreadyFound=results.find(r=>r.ticker===sym&&r.source.startsWith("data912"));
+          if(alreadyFound)continue; // data912 tiene prioridad
+          const cur=(item.currency||"ARS").toUpperCase()==="USD"?"USD":"ARS";
+          const qt=item.quoteType||"";
+          let type="accion_ar";
+          if(qt==="ETF"||qt==="MUTUALFUND")type="cedear";
+          else if(cur==="USD")type="accion_ar";
+          results.push({
+            ticker:sym,
+            name:item.shortName||sym,
+            type,
+            buyCurrency:cur,
+            price,
+            source:"Yahoo Finance",
+          });
+        }
+      }
+    }catch{}
+
+    if(results.length>0){
+      setSearchResults(results.slice(0,12));
+      setTickerStatus("found");
+    } else {
+      setSearchResults([]);
+      setTickerStatus("notfound");
+    }
   };
 
   const onTickerChange=(val)=>{
     const upper=val.toUpperCase();
     set("ticker",upper);
-    if(tickerTimer) clearTimeout(tickerTimer);
+    setSelectedResult(null);
+    if(tickerTimer)clearTimeout(tickerTimer);
     if(upper.length>=2){
       setTickerStatus("checking");
-      const t=setTimeout(()=>validateTicker(upper),600);
+      const t=setTimeout(()=>searchInstruments(upper),500);
       setTickerTimer(t);
-    } else {
+    }else{
       setTickerStatus("idle");
-      setTickerInfo(null);
+      setSearchResults([]);
     }
   };
 
+  const selectResult=(r)=>{
+    setSelectedResult(r);
+    setSearchResults([]);
+    setTickerStatus("confirmed");
+    setF(p=>({...p,ticker:r.ticker,name:r.name,type:r.type,buyCurrency:r.buyCurrency}));
+  };
+
+  const typeLabel=(t)=>ASSET_TYPES[t]?.label||t;
   const statusColor={idle:"var(--border)",checking:"var(--yellow)",found:"var(--green)",notfound:"rgba(251,191,36,0.6)",confirmed:"var(--green)"};
-  const availableQty = f.operacion==="venta" ? (port.find(x=>x.ticker===f.ticker)?.qty||0) : Infinity;
-  const overSelling = f.operacion==="venta" && +f.qty > availableQty;
-  const canSave = f.ticker&&f.qty&&f.buyPrice&&!overSelling&&(f.operacion==="venta"||tickerStatus!=="idle"&&tickerStatus!=="checking");
+  const availableQty=f.operacion==="venta"?(port.find(x=>x.ticker===f.ticker)?.qty||0):Infinity;
+  const overSelling=f.operacion==="venta"&&+f.qty>availableQty;
+  const canSave=f.ticker&&f.qty&&f.buyPrice&&!overSelling&&(f.operacion==="venta"||tickerStatus==="confirmed"||tickerStatus==="found"||tickerStatus==="notfound");
 
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200}}>
-      <div style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:16,padding:28,width:460,maxWidth:"95vw",maxHeight:"90vh",overflowY:"auto"}}>
+      <div style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:16,padding:28,width:520,maxWidth:"95vw",maxHeight:"90vh",overflowY:"auto"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
           <h3 style={{fontFamily:"Georgia,serif",fontSize:16}}>{h?"Editar posición":"Nueva posición"}</h3>
-          <button onClick={onClose} style={{background:"transparent",border:"none",color:"var(--text-muted)",cursor:"pointer",fontSize:18,lineHeight:1}}>×</button>
+          <button onClick={onClose} style={{background:"transparent",border:"none",color:"var(--text-muted)",cursor:"pointer",fontSize:18}}>×</button>
         </div>
 
-        {/* How-to note */}
-        {!h&&<div style={{background:"rgba(37,99,235,0.08)",border:"1px solid rgba(37,99,235,0.2)",borderRadius:8,padding:"10px 14px",marginBottom:16,fontSize:12,color:"var(--text-secondary)",lineHeight:1.6}}>
-          <b style={{color:"var(--accent)"}}>¿Cómo agregar un papel?</b><br/>
-          Ingresá el ticker (ej: <code style={{background:"var(--bg-input)",padding:"1px 5px",borderRadius:4}}>GGAL</code>, <code style={{background:"var(--bg-input)",padding:"1px 5px",borderRadius:4}}>GD30D</code>, <code style={{background:"var(--bg-input)",padding:"1px 5px",borderRadius:4}}>MSFT</code>) — la app lo busca automáticamente en BYMA y Yahoo Finance. Si aparece el precio, el ticker es válido.
-        </div>}
-
         <div style={{display:"grid",gap:14}}>
-
-          {/* 1. TOGGLE COMPRA/VENTA — primero */}
+          {/* TOGGLE COMPRA/VENTA */}
           <div>
             <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,display:"block",marginBottom:6}}>Operación</span>
-            <div style={{display:"flex",gap:0,background:"var(--bg-input)",borderRadius:8,padding:3,border:"1px solid var(--border)"}}>
+            <div style={{display:"flex",background:"var(--bg-input)",borderRadius:8,padding:3,border:"1px solid var(--border)"}}>
               {["compra","venta"].map(op=>{
                 const disabled=op==="venta"&&port.length===0;
                 return(
                   <button key={op} disabled={disabled}
                     onClick={()=>{
-                      if(op==="venta"&&port.length>0){
-                        const first=port[0];
-                        setF(p=>({...p,operacion:"venta",ticker:first.ticker,name:first.name,type:first.type,buyCurrency:first.buyCurrency,qty:"",buyPrice:""}));
-                        setTickerStatus("confirmed");
-                      } else {
-                        setF(p=>({...p,operacion:op,qty:"",buyPrice:""}));
-                        if(op==="compra") setTickerStatus("idle");
-                      }
+                      if(op==="venta"&&port.length>0){const first=port[0];setF(p=>({...p,operacion:"venta",ticker:first.ticker,name:first.name,type:first.type,buyCurrency:first.buyCurrency,qty:"",buyPrice:""}));setTickerStatus("confirmed");}
+                      else{setF(p=>({...p,operacion:op,qty:"",buyPrice:""}));if(op==="compra"){setTickerStatus("idle");setSearchResults([]);setSelectedResult(null);}}
                     }}
-                    style={{flex:1,padding:"9px 0",border:"none",borderRadius:6,fontSize:14,fontWeight:700,transition:"all 0.15s",
+                    style={{flex:1,padding:"9px 0",border:"none",borderRadius:6,fontSize:14,fontWeight:700,
                       background:f.operacion===op?(op==="compra"?"var(--green)":"var(--red)"):"transparent",
-                      color:f.operacion===op?"#fff":"var(--text-muted)",
-                      opacity:disabled?0.3:1,cursor:disabled?"not-allowed":"pointer"}}>
+                      color:f.operacion===op?"#fff":"var(--text-muted)",opacity:disabled?0.3:1,cursor:disabled?"not-allowed":"pointer"}}>
                     {op==="compra"?"↑ Compra":"↓ Venta"}
                   </button>
                 );
@@ -726,57 +763,91 @@ function Modal({h,port=[],onSave,onClose}){
             {f.operacion==="venta"&&<div style={{fontSize:11,color:"var(--yellow)",marginTop:5}}>⚠ FIFO — salen los lotes más antiguos primero</div>}
           </div>
 
-          {/* 2. ACTIVO — searchable combobox en venta, texto libre en compra */}
-          {f.operacion==="venta" ? (
-            <VentaTickerSearch port={port} value={f.ticker} onSelect={pos=>{
-              setF(p=>({...p,ticker:pos.ticker,name:pos.name,type:pos.type,buyCurrency:pos.buyCurrency,qty:"",buyPrice:""}));
-            }}/>
-          ) : (
+          {/* ACTIVO */}
+          {f.operacion==="venta"?(
+            <VentaTickerSearch port={port} value={f.ticker} onSelect={pos=>{setF(p=>({...p,ticker:pos.ticker,name:pos.name,type:pos.type,buyCurrency:pos.buyCurrency,qty:"",buyPrice:""}));}}/>
+          ):(
             <div>
-              <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Ticker</span>
+              <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Buscar instrumento</span>
               <div style={{position:"relative",marginTop:4}}>
                 <input value={f.ticker} onChange={e=>onTickerChange(e.target.value)}
-                  placeholder="ej: GGAL, GD30D, MSFT, SPY..."
+                  placeholder="ej: GGAL, AAPL, GD30D, SPY..."
                   style={{...inp,border:`1px solid ${statusColor[tickerStatus]}`,paddingRight:36}}/>
                 <span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:14}}>
                   {tickerStatus==="checking"&&<span style={{animation:"spin 0.8s linear infinite",display:"inline-block"}}>⟳</span>}
-                  {(tickerStatus==="found"||tickerStatus==="confirmed")&&"✅"}
+                  {tickerStatus==="confirmed"&&"✅"}
                   {tickerStatus==="notfound"&&"❓"}
                 </span>
+
+                {/* Dropdown de resultados */}
+                {searchResults.length>0&&(
+                  <div style={{position:"absolute",top:"100%",left:0,right:0,background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:8,zIndex:50,maxHeight:280,overflowY:"auto",marginTop:4,boxShadow:"0 8px 24px rgba(0,0,0,0.5)"}}>
+                    <div style={{padding:"6px 12px",fontSize:10,color:"var(--text-muted)",borderBottom:"1px solid var(--border)",textTransform:"uppercase",letterSpacing:1}}>
+                      {searchResults.length} instrumento{searchResults.length!==1?"s":""} encontrado{searchResults.length!==1?"s":""} — seleccioná el que querés dar de alta
+                    </div>
+                    {searchResults.map((r,i)=>(
+                      <div key={i} onClick={()=>selectResult(r)}
+                        style={{padding:"10px 14px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:"1px solid var(--border)"}}
+                        onMouseEnter={e=>e.currentTarget.style.background="var(--bg-input)"}
+                        onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{display:"flex",alignItems:"center",gap:8}}>
+                            <span style={{fontWeight:700,fontFamily:"monospace",color:"var(--accent)",fontSize:13}}>{r.ticker}</span>
+                            <span style={{fontSize:10,padding:"1px 6px",borderRadius:4,background:`${ASSET_TYPES[r.type]?.color}22`,color:ASSET_TYPES[r.type]?.color,border:`1px solid ${ASSET_TYPES[r.type]?.color}44`}}>
+                              {typeLabel(r.type)}
+                            </span>
+                            <span style={{fontSize:10,color:"var(--text-muted)"}}>{r.buyCurrency}</span>
+                          </div>
+                          <div style={{fontSize:11,color:"var(--text-secondary)",marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.name}</div>
+                          <div style={{fontSize:10,color:"var(--text-muted)",marginTop:1}}>📡 {r.source}</div>
+                        </div>
+                        <div style={{textAlign:"right",marginLeft:12,flexShrink:0}}>
+                          <div style={{fontSize:14,fontWeight:700,color:"var(--green)"}}>
+                            {r.buyCurrency==="USD"?fmtU(r.price,4):fmtA(r.price)}
+                          </div>
+                          <div style={{fontSize:10,color:"var(--text-muted)"}}>precio actual</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              {tickerStatus==="found"&&tickerInfo&&(
-                <div style={{marginTop:8,background:"rgba(52,211,153,0.07)",border:"1px solid rgba(52,211,153,0.2)",borderRadius:8,padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <div><div style={{fontSize:13,fontWeight:600}}>{tickerInfo.name}</div><div style={{fontSize:11,color:"var(--text-muted)"}}>📡 {tickerInfo.source}</div></div>
+
+              {/* Instrumento seleccionado */}
+              {selectedResult&&(
+                <div style={{marginTop:8,background:"rgba(52,211,153,0.07)",border:"1px solid rgba(52,211,153,0.3)",borderRadius:8,padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
+                      <span style={{fontWeight:700,fontSize:13}}>{selectedResult.ticker}</span>
+                      <span style={{fontSize:10,padding:"1px 6px",borderRadius:4,background:`${ASSET_TYPES[selectedResult.type]?.color}22`,color:ASSET_TYPES[selectedResult.type]?.color}}>
+                        {typeLabel(selectedResult.type)}
+                      </span>
+                    </div>
+                    <div style={{fontSize:12,color:"var(--text-secondary)"}}>{selectedResult.name}</div>
+                    <div style={{fontSize:10,color:"var(--text-muted)",marginTop:2}}>📡 {selectedResult.source} · {selectedResult.buyCurrency}</div>
+                  </div>
                   <div style={{textAlign:"right"}}>
-                    {tickerInfo.price
-                      ?<><div style={{fontSize:14,fontWeight:700,color:"var(--green)"}}>{tickerInfo.currency==="USD"?fmtU(tickerInfo.price,3):fmtA(tickerInfo.price)}</div><div style={{fontSize:10,color:"var(--text-muted)"}}>precio actual</div></>
-                      :<><div style={{fontSize:12,color:"var(--yellow)"}}>precio al abrir</div><div style={{fontSize:10,color:"var(--text-muted)"}}>se carga con refresh ↻</div></>
-                    }
+                    <div style={{fontSize:16,fontWeight:700,color:"var(--green)"}}>
+                      {selectedResult.buyCurrency==="USD"?fmtU(selectedResult.price,4):fmtA(selectedResult.price)}
+                    </div>
+                    <button onClick={()=>{setSelectedResult(null);setTickerStatus("idle");set("ticker","");setSearchResults([]);}}
+                      style={{fontSize:10,color:"var(--text-muted)",background:"transparent",border:"none",cursor:"pointer",marginTop:2}}>
+                      ✕ cambiar
+                    </button>
                   </div>
                 </div>
               )}
-              {tickerStatus==="notfound"&&<div style={{marginTop:8,background:"rgba(251,191,36,0.07)",border:"1px solid rgba(251,191,36,0.2)",borderRadius:8,padding:"10px 12px",fontSize:12,color:"var(--yellow)"}}>⚠️ Ticker no encontrado — podés guardarlo igual.</div>}
-              {tickerStatus==="checking"&&(
-                <div style={{marginTop:6,fontSize:11,color:"var(--text-muted)"}}>
-                  Buscando...{Object.keys(AR_TICKERS).filter(t=>t.startsWith(f.ticker)&&t!==f.ticker).slice(0,4).map(t=>(
-                    <button key={t} onClick={()=>onTickerChange(t)} style={{background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:4,padding:"1px 8px",cursor:"pointer",fontSize:11,color:"var(--accent)",marginLeft:4}}>{t}</button>
-                  ))}
-                </div>
-              )}
-
+              {tickerStatus==="notfound"&&<div style={{marginTop:8,background:"rgba(251,191,36,0.07)",border:"1px solid rgba(251,191,36,0.2)",borderRadius:8,padding:"10px 12px",fontSize:12,color:"var(--yellow)"}}>⚠️ Sin resultados en data912 ni Yahoo — podés guardar igual ingresando los datos manualmente.</div>}
             </div>
           )}
 
-          {/* Nombre — siempre visible, autocompleta desde ticker, editable */}
+          {/* NOMBRE */}
           <label style={{display:"flex",flexDirection:"column",gap:4}}>
             <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Nombre del instrumento</span>
-            <input value={f.name} onChange={e=>set("name",e.target.value)}
-              placeholder="Se completa automático con el ticker"
-              style={{...inp,borderColor:f.name?"var(--border)":undefined}}/>
-            {!f.name&&f.ticker&&tickerStatus==="checking"&&<div style={{fontSize:10,color:"var(--text-muted)",marginTop:3}}>Buscando nombre...</div>}
+            <input value={f.name} onChange={e=>set("name",e.target.value)} placeholder="Se completa automático al seleccionar" style={inp}/>
           </label>
 
-          {/* 3. TIPO DE ACTIVO — readonly en venta, editable en compra */}
+          {/* TIPO */}
           <label style={{display:"flex",flexDirection:"column",gap:4}}>
             <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Tipo de activo</span>
             {f.operacion==="venta"
@@ -788,12 +859,11 @@ function Modal({h,port=[],onSave,onClose}){
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
             <label style={{display:"flex",flexDirection:"column",gap:4}}>
               <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>{f.operacion==="venta"?"Cantidad a vender":"Cantidad"}</span>
-              <input type="number" min="0" max={f.operacion==="venta"?availableQty:undefined}
-                value={f.qty}
-                onChange={e=>{const v=+e.target.value; set("qty",f.operacion==="venta"?Math.min(v,availableQty):v||e.target.value);}}
+              <input type="number" min="0" max={f.operacion==="venta"?availableQty:undefined} value={f.qty}
+                onChange={e=>{const v=+e.target.value;set("qty",f.operacion==="venta"?Math.min(v,availableQty):v||e.target.value);}}
                 style={{...inp,borderColor:overSelling?"var(--red)":undefined}}/>
               {f.operacion==="venta"&&f.ticker&&<div style={{fontSize:10,color:overSelling?"var(--red)":"var(--text-muted)",marginTop:3}}>
-                {overSelling?`⚠ Solo tenés ${availableQty.toLocaleString("es-AR")} disponibles`:`Disponible: ${availableQty.toLocaleString("es-AR")}`}
+                {overSelling?`⚠ Solo tenés ${availableQty.toLocaleString("es-AR")}`:`Disponible: ${availableQty.toLocaleString("es-AR")}`}
               </div>}
             </label>
             <label style={{display:"flex",flexDirection:"column",gap:4}}>
@@ -806,20 +876,36 @@ function Modal({h,port=[],onSave,onClose}){
                 <option value="ARS">🇦🇷 ARS</option>
                 <option value="USD">🇺🇸 USD</option>
               </select>
-
             </label>
           </div>
 
-          {/* Monto total */}
-          {f.qty>0 && f.buyPrice>0 && (
+          {/* TC PARA BONOS DUALES — cuando se compra en ARS un bono que tiene versión D */}
+          {f.operacion==="compra" && f.buyCurrency==="ARS" && (f.type==="bono_usd"||f.type==="bono_ars") && (
+            <div style={{background:"rgba(249,115,22,0.07)",border:"1px solid rgba(249,115,22,0.25)",borderRadius:8,padding:"12px 14px"}}>
+              <div style={{fontSize:11,color:"#F97316",fontWeight:600,marginBottom:8}}>💱 Bono con cotización en USD — ingresá el TC para registrar el equivalente en dólares</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                <label style={{display:"flex",flexDirection:"column",gap:4}}>
+                  <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>TC al momento de compra</span>
+                  <input type="number" min="0" value={f.tcCompra||""} onChange={e=>set("tcCompra",e.target.value)}
+                    placeholder="ej: 1460" style={inp}/>
+                </label>
+                <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                  <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Equivalente en USD</span>
+                  <div style={{...inp,background:"var(--bg-card)",color:"var(--green)",fontWeight:700,display:"flex",alignItems:"center"}}>
+                    {f.qty>0&&f.buyPrice>0&&f.tcCompra>0
+                      ? fmtU((+f.qty*+f.buyPrice)/(+f.tcCompra),2)
+                      : <span style={{color:"var(--text-muted)"}}>—</span>}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {f.qty>0&&f.buyPrice>0&&(
             <div style={{background:"var(--bg-input)",borderRadius:8,padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <span style={{fontSize:11,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Monto total</span>
               <span style={{fontSize:16,fontWeight:700,color:f.operacion==="venta"?"var(--red)":"var(--green)"}}>
-
-                {f.buyCurrency==="USD"
-                  ? `USD ${(+f.qty * +f.buyPrice).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}`
-                  : `$ ${(+f.qty * +f.buyPrice).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}`
-                }
+                {f.buyCurrency==="USD"?`USD ${(+f.qty*+f.buyPrice).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}`:`$ ${(+f.qty*+f.buyPrice).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}`}
               </span>
             </div>
           )}
@@ -836,10 +922,16 @@ function Modal({h,port=[],onSave,onClose}){
           <div style={{display:"flex",gap:10}}>
             <button onClick={onClose} style={{padding:"8px 18px",background:"transparent",border:"1px solid var(--border)",borderRadius:8,color:"var(--text-muted)",cursor:"pointer"}}>Cancelar</button>
             <button
-              onClick={()=>onSave({...f,ticker:f.ticker.toUpperCase(),qty:+f.qty,buyPrice:+f.buyPrice,id:f.id||Date.now(),currentPrice:tickerInfo?.price||f.buyPrice,operacion:f.operacion||"compra"})}
+              onClick={()=>{
+                const tcC=+f.tcCompra||0;
+                const priceUSD=(f.buyCurrency==="ARS"&&tcC>0&&(f.type==="bono_usd"||f.type==="bono_ars"))
+                  ? parseFloat(((+f.qty*+f.buyPrice)/tcC).toFixed(4))
+                  : null;
+                onSave({...f,ticker:f.ticker.toUpperCase(),qty:+f.qty,buyPrice:+f.buyPrice,id:f.id||Date.now(),currentPrice:selectedResult?.price||f.buyPrice,operacion:f.operacion||"compra",tcCompra:tcC||undefined,priceUSD:priceUSD||undefined});
+              }}
               disabled={!canSave}
-              style={{padding:"8px 18px",background:canSave?"var(--accent)":"var(--bg-input)",border:"none",borderRadius:8,color:canSave?"#fff":"var(--text-muted)",cursor:canSave?"pointer":"not-allowed",fontWeight:600}} title={overSelling?`Solo tenés ${availableQty} disponibles`:undefined}>
-              {"Guardar"}
+              style={{padding:"8px 18px",background:canSave?"var(--accent)":"var(--bg-input)",border:"none",borderRadius:8,color:canSave?"#fff":"var(--text-muted)",cursor:canSave?"pointer":"not-allowed",fontWeight:600}}>
+              Guardar
             </button>
           </div>
         </div>
@@ -1247,7 +1339,7 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
 }
 
 function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setModal,del,card}){
-  const [view,setView]=useState("dual"); // "dual"|"native"|"usd"
+  const [view,setView]=useState("dual");
   const fmtU=(n,d=0)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"USD",maximumFractionDigits:d}).format(n);
   const fmtA=(n)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:0}).format(n);
   const fmtP=(n)=>`${n>=0?"+":""}${n.toFixed(2)}%`;
@@ -1258,107 +1350,108 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
   const tdL={padding:"10px 12px",color:"var(--text-secondary)",fontSize:13};
   const tdR={...tdL,textAlign:"right"};
 
+  const renderRow=(h)=>{
+    const isBond=h.type==="bono_usd"||h.type==="bono_ars";
+    const qtyFactor=isBond?h.qty/100:h.qty;
+    const nativeVal=h.currentPrice*h.qty;
+    const nativeCost=(h.ppc||h.buyPrice)*h.qty;
+    const nativePnl=nativeVal-nativeCost;
+    const nativeFmt=h.buyCurrency==="USD"?(v=>fmtU(v,2)):(v=>fmtA(v));
+    return(
+      <tr key={h.id||h.ticker} style={{borderTop:"1px solid var(--border)"}}>
+        <td style={{...tdL,fontWeight:700,fontFamily:"monospace",color:"var(--accent)"}}>
+          {h.ticker}
+          {h.isLive&&<span style={{display:"block",fontSize:9,color:"var(--green)",fontFamily:"sans-serif",fontWeight:400}}>● live</span>}
+        </td>
+        <td style={{...tdL,color:"var(--text-secondary)",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.name}</td>
+        <td style={tdR}>{Number(h.qty).toLocaleString("es-AR",{maximumFractionDigits:4})}</td>
+        <td style={{...tdR,color:"var(--text-muted)",fontSize:11}}>
+          {h.buyCurrency==="USD"?fmtU(h.ppc||h.buyPrice,4):fmtA(h.ppc||h.buyPrice)}
+          <span style={{display:"block",fontSize:9,color:"var(--text-muted)"}}>{h.buyCurrency} · PPC</span>
+        </td>
+        <td style={{...tdR,fontSize:11}}>
+          {h.buyCurrency==="USD"?fmtU(h.currentPrice,4):fmtA(h.currentPrice)}
+          {h.liveChangePct!=null&&h.isLive&&<span style={{display:"block",fontSize:9,color:pc(h.liveChangePct)}}>{fmtP(h.liveChangePct)} hoy</span>}
+          {!h.isLive&&<span style={{display:"block",fontSize:8,color:"var(--text-muted)"}}>guardado</span>}
+        </td>
+        {(view==="dual"||view==="native")&&<td style={{...tdR,fontWeight:600}}>{nativeFmt(nativeVal)}</td>}
+        {(view==="dual"||view==="native")&&<td style={{...tdR,color:pc(nativePnl),fontSize:11}}>{nativeFmt(nativePnl)}</td>}
+        {(view==="dual"||view==="usd")&&<td style={{...tdR,fontWeight:700}}>{fmtU(h.valUSD)}</td>}
+        {(view==="dual"||view==="usd")&&<td style={{...tdR,color:pc(h.pnlUSD),fontSize:11}}>{fmtU(h.pnlUSD)}</td>}
+        <td style={{...tdR,fontWeight:600,color:pc(h.pnlPct)}}>{fmtP(h.pnlPct)}</td>
+        <td style={{padding:"10px 8px",textAlign:"right"}}>
+          <button onClick={()=>setModal(h)} style={{background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:5,padding:"3px 8px",color:"var(--text-muted)",cursor:"pointer",fontSize:11}}>✏️</button>
+        </td>
+      </tr>
+    );
+  };
+
+  const colSpan=(view==="dual"?9:view==="native"?7:7);
+
   return(
     <div className="fi" style={{display:"grid",gap:14}}>
-
-      {/* ── Resumen por tipo ── */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:10}}>
-        {byType.map(t=>(
-          <div key={t.key} style={{...card,padding:"14px 16px"}}>
-            <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:8}}>
-              <div style={{width:8,height:8,borderRadius:"50%",background:t.color}}/>
-              <span style={{fontSize:11,color:"var(--text-secondary)"}}>{t.icon} {t.label}</span>
-            </div>
-            <div style={{fontSize:18,fontWeight:700,marginBottom:2}}>{fmtU(t.val)}</div>
-            <div style={{fontSize:11,color:pc(t.pnlP),fontWeight:600}}>{fmtP(t.pnlP)}</div>
-            <div style={{fontSize:10,color:"var(--text-muted)",marginTop:2}}>{t.pct.toFixed(1)}% del total</div>
-          </div>
+      {/* Header view toggle */}
+      <div style={{display:"flex",justifyContent:"flex-end",gap:4}}>
+        {[["dual","⇄ Dual"],["native","Moneda orig."],["usd","USD"]].map(([k,l])=>(
+          <button key={k} onClick={()=>setView(k)}
+            style={{padding:"4px 12px",borderRadius:6,border:"1px solid var(--border)",cursor:"pointer",fontSize:11,
+              background:view===k?"var(--accent)":"var(--bg-input)",color:view===k?"#fff":"var(--text-secondary)"}}>
+            {l}
+          </button>
         ))}
       </div>
 
-      {/* ── Tabla de posiciones ── */}
-      <div style={{...card,overflow:"hidden"}}>
-        {/* Header */}
-        <div style={{padding:"12px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
-          <div style={{fontSize:13,fontWeight:600}}>Posiciones</div>
-          <div style={{display:"flex",gap:4}}>
-            {[["dual","⇄ Dual"],["native","Moneda orig."],["usd","USD"]].map(([k,l])=>(
-              <button key={k} onClick={()=>setView(k)}
-                style={{padding:"3px 10px",borderRadius:6,border:"1px solid var(--border)",cursor:"pointer",fontSize:11,
-                  background:view===k?"var(--accent)":"var(--bg-input)",
-                  color:view===k?"#fff":"var(--text-secondary)"}}>
-                {l}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div style={{overflowX:"auto"}}>
-          <table style={{width:"100%",borderCollapse:"collapse",fontSize:13,minWidth:600}}>
-            <thead>
-              <tr>
-                <th style={thS}>Ticker</th>
-                <th style={thS}>Nombre</th>
-                <th style={thR}>Nominales</th>
-                <th style={thR}>PPC</th>
-                <th style={thR}>Precio actual</th>
-                {(view==="dual"||view==="native")&&<th style={thR}>Val. nativo</th>}
-                {(view==="dual"||view==="native")&&<th style={thR}>PnL nativo</th>}
-                {(view==="dual"||view==="usd")&&<th style={thR}>Val. USD</th>}
-                {(view==="dual"||view==="usd")&&<th style={thR}>PnL USD</th>}
-                <th style={thR}>Rend %</th>
-                <th style={{...thS,width:60}}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {[...en].sort((a,b)=>b.valUSD-a.valUSD).map(h=>{
-                const nativeVal  = h.buyCurrency==="USD" ? h.currentPrice*h.qty : h.currentPrice*h.qty;
-                const nativeCost = h.buyCurrency==="USD" ? (h.ppc||h.buyPrice)*h.qty : (h.ppc||h.buyPrice)*h.qty;
-                const nativePnl  = nativeVal - nativeCost;
-                const nativeFmt  = h.buyCurrency==="USD" ? (v=>fmtU(v,2)) : (v=>fmtA(v));
-                return(
-                  <tr key={h.id||h.ticker} style={{borderTop:"1px solid var(--border)"}}>
-                    <td style={{...tdL,fontWeight:700,fontFamily:"monospace",color:"var(--accent)"}}>
-                      {h.ticker}
-                      {h.isLive&&<span style={{display:"block",fontSize:9,color:"var(--green)",fontFamily:"sans-serif",fontWeight:400}}>● live</span>}
-                    </td>
-                    <td style={{...tdL,color:"var(--text-secondary)",maxWidth:180,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.name}</td>
-                    <td style={tdR}>{Number(h.qty).toLocaleString("es-AR",{maximumFractionDigits:4})}</td>
-                    <td style={{...tdR,color:"var(--text-muted)",fontSize:11}}>
-                      {h.buyCurrency==="USD"?fmtU(h.ppc||h.buyPrice,4):fmtA(h.ppc||h.buyPrice)}
-                      <span style={{display:"block",fontSize:9,color:"var(--text-muted)"}}>{h.buyCurrency} · PPC</span>
-                    </td>
-                    <td style={{...tdR,fontSize:11}}>
-                      {h.buyCurrency==="USD"?fmtU(h.currentPrice,4):fmtA(h.currentPrice)}
-                      {h.liveChangePct!=null&&h.isLive&&<span style={{display:"block",fontSize:9,color:pc(h.liveChangePct)}}>{fmtP(h.liveChangePct)} hoy</span>}
-                      {!h.isLive&&<span style={{display:"block",fontSize:8,color:"var(--text-muted)"}}>guardado</span>}
-                    </td>
-                    {(view==="dual"||view==="native")&&<td style={{...tdR,fontWeight:600}}>{nativeFmt(nativeVal)}</td>}
-                    {(view==="dual"||view==="native")&&<td style={{...tdR,color:pc(nativePnl),fontSize:11}}>{nativeFmt(nativePnl)}</td>}
-                    {(view==="dual"||view==="usd")&&<td style={{...tdR,fontWeight:700}}>{fmtU(h.valUSD)}</td>}
-                    {(view==="dual"||view==="usd")&&<td style={{...tdR,color:pc(h.pnlUSD),fontSize:11}}>{fmtU(h.pnlUSD)}</td>}
-                    <td style={{...tdR,fontWeight:600,color:pc(h.pnlPct)}}>{fmtP(h.pnlPct)}</td>
-                    <td style={{padding:"10px 8px",textAlign:"right"}}>
-                      <button onClick={()=>setModal(h)}
-                        style={{background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:5,padding:"3px 8px",color:"var(--text-muted)",cursor:"pointer",fontSize:11}}>
-                        ✏️
-                      </button>
-                    </td>
+      {/* Sección por tipo de activo */}
+      {byType.map(t=>{
+        const items=[...t.items].sort((a,b)=>b.valUSD-a.valUSD);
+        const secVal=items.reduce((a,h)=>a+h.valUSD,0);
+        const secCost=items.reduce((a,h)=>a+h.costUSD,0);
+        const secPnl=secVal-secCost;
+        const secPct=secCost>0?(secPnl/secCost)*100:0;
+        return(
+          <div key={t.key} style={{...card,overflow:"hidden"}}>
+            {/* Encabezado de sección */}
+            <div style={{padding:"12px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center",background:`${t.color}0d`}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <div style={{width:10,height:10,borderRadius:"50%",background:t.color}}/>
+                <span style={{fontWeight:700,fontSize:13,color:"var(--text-primary)"}}>{t.icon} {t.label}</span>
+                <span style={{fontSize:11,color:"var(--text-muted)"}}>· {items.length} posición{items.length!==1?"es":""}</span>
+              </div>
+              <div style={{display:"flex",gap:20,alignItems:"center",fontSize:12}}>
+                <span style={{color:"var(--text-muted)"}}>Saldo: <b style={{color:"var(--text-primary)"}}>{fmtU(secVal)}</b></span>
+                <span style={{color:"var(--text-muted)"}}>PnL: <b style={{color:pc(secPnl)}}>{fmtU(secPnl,0)}</b></span>
+                <span style={{fontWeight:700,color:pc(secPct),fontSize:13}}>{fmtP(secPct)}</span>
+              </div>
+            </div>
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13,minWidth:600}}>
+                <thead>
+                  <tr>
+                    <th style={thS}>Ticker</th>
+                    <th style={thS}>Nombre</th>
+                    <th style={thR}>Nominales</th>
+                    <th style={thR}>PPC</th>
+                    <th style={thR}>Precio actual</th>
+                    {(view==="dual"||view==="native")&&<><th style={thR}>Val. nativo</th><th style={thR}>PnL nativo</th></>}
+                    {(view==="dual"||view==="usd")&&<><th style={thR}>Val. USD</th><th style={thR}>PnL USD</th></>}
+                    <th style={thR}>Rend %</th>
+                    <th style={{...thS,width:60}}></th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody>{items.map(renderRow)}</tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })}
 
-        {/* Totales */}
-        <div style={{padding:"12px 16px",borderTop:"1px solid var(--border)",display:"flex",gap:24,flexWrap:"wrap",fontSize:12}}>
-          <span style={{color:"var(--text-muted)"}}>Total: <b style={{color:"var(--text-primary)"}}>{fmtU(totUSD)}</b></span>
-          <span style={{color:"var(--text-muted)"}}>Costo: <b>{fmtU(totCost)}</b></span>
-          <span style={{color:"var(--text-muted)"}}>PnL: <b style={{color:pc(totPnl)}}>{fmtU(totPnl)}</b></span>
-          <span style={{color:"var(--text-muted)"}}>Rend: <b style={{color:pc(totPct)}}>{fmtP(totPct)}</b></span>
-          <span style={{color:"var(--text-muted)",fontSize:10,marginLeft:"auto"}}>TC {fxMode}: {new Intl.NumberFormat("es-AR").format(Math.round(fxRate))}</span>
-        </div>
+      {/* Totales globales */}
+      <div style={{...card,padding:"12px 16px",display:"flex",gap:24,flexWrap:"wrap",fontSize:12}}>
+        <span style={{color:"var(--text-muted)"}}>Total: <b style={{color:"var(--text-primary)"}}>{fmtU(totUSD)}</b></span>
+        <span style={{color:"var(--text-muted)"}}>Costo: <b>{fmtU(totCost)}</b></span>
+        <span style={{color:"var(--text-muted)"}}>PnL: <b style={{color:pc(totPnl)}}>{fmtU(totPnl)}</b></span>
+        <span style={{color:"var(--text-muted)"}}>Rend: <b style={{color:pc(totPct)}}>{fmtP(totPct)}</b></span>
+        <span style={{color:"var(--text-muted)",fontSize:10,marginLeft:"auto"}}>TC {fxMode}: {new Intl.NumberFormat("es-AR").format(Math.round(fxRate))}</span>
       </div>
     </div>
   );

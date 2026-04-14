@@ -663,9 +663,11 @@ function Modal({h,port=[],onSave,onClose}){
           if(price<=0)continue;
           const type=inferType(item,key);
           const currency=inferCurrency(item,key);
+          const rawName=item.description||item.name||item.nombre||"";
+          const name=rawName||AR_TICKERS[sym]||sym;
           results.push({
             ticker:sym,
-            name:item.description||item.name||item.nombre||sym,
+            name,
             type,
             buyCurrency:currency,
             price,
@@ -688,7 +690,11 @@ function Modal({h,port=[],onSave,onClose}){
           const price=item.regularMarketPrice||0;
           if(price<=0)continue;
           const alreadyFound=results.find(r=>r.ticker===sym&&r.source.startsWith("data912"));
-          if(alreadyFound)continue; // data912 tiene prioridad
+          if(alreadyFound){
+            // Enriquecer nombre si data912 no lo tenía
+            if(alreadyFound.name===sym||alreadyFound.name==="")alreadyFound.name=item.shortName||alreadyFound.name;
+            continue;
+          }
           const cur=(item.currency||"ARS").toUpperCase()==="USD"?"USD":"ARS";
           const qt=item.quoteType||"";
           let type="accion_ar";

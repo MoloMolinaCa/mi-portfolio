@@ -426,17 +426,24 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos}){
     const firstBuyDate=firstBuy?new Date(firstBuy):end;
     const start=firstBuyDate>periodStart?firstBuyDate:periodStart;
     const startStr=start.toISOString().slice(0,10);
-    const dateSet=new Set();
-    // Solo incluir fechas que tengan datos de tickers del portfolio (excluir CCL/MEP/sp500/t10y)
+
+    // Obtener todas las fechas con datos de tickers del portfolio
     const portfolioTickers=[...new Set(trades.map(t=>t.ticker))];
     const excludeKeys=new Set(['CCL','MEP','sp500','t10y']);
+    const dateSet=new Set();
     for(const k of Object.keys(hist)){
       if(excludeKeys.has(k)&&!portfolioTickers.includes(k))continue;
       const bars=hist[k]||[];
-      for(const b of bars){if(b.date>=startStr&&b.date<=today)dateSet.add(b.date);}
+      for(const b of bars){if(b.date<=today)dateSet.add(b.date);}
     }
-    dateSet.add(today);
-    return[...dateSet].sort();
+    const allDates=[...dateSet].sort();
+
+    // Buscar el último día hábil <= startStr (no el siguiente)
+    const firstValid=allDates.filter(d=>d<=startStr).slice(-1)[0] || allDates.find(d=>d>=startStr) || allDates[0];
+
+    const filtered=allDates.filter(d=>d>=firstValid&&d<=today);
+    filtered.push(today);
+    return[...new Set(filtered)].sort();
   };
 
   const findPrice=(bars,dateStr)=>{

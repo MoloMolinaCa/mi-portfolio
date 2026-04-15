@@ -1769,24 +1769,19 @@ function OperacionesTab({trades,port,setTrades,setPort,card,livePrices}){
   );
 }
 
-function RankingWidget({en, trades, historicos, fxRate, currency}){
+function RankingWidget({en, historicos, fxRate, currency}){
   const PERIODS=[
-    {key:"compra", label:"Desde compra"},
-    {key:"30d",    label:"30 días"},
-    {key:"90d",    label:"90 días"},
-    {key:"ytd",    label:"YTD"},
-    {key:"1y",     label:"1 año"},
+    {key:"30d", label:"30d"},
+    {key:"90d", label:"90d"},
+    {key:"ytd", label:"YTD"},
+    {key:"1y",  label:"1 año"},
   ];
-  const SORTS=[
-    {key:"pct", label:"% Rend."},
-    {key:"usd", label:"$ PnL"},
-  ];
-  const [period, setPeriod] = useState("compra");
-  const [sortBy, setSortBy] = useState("pct");
+  const [period, setPeriod] = useState("30d");
 
   const fmtP=n=>`${n>=0?"+":""}${n.toFixed(2)}%`;
   const fmtU=(n)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"USD",maximumFractionDigits:0}).format(n);
   const pc=n=>n>=0?"var(--green)":"var(--red)";
+  const dolarLabel=currency==="MEP"?"MEP":currency==="oficial"?"Oficial":"CCL";
 
   const findPrice=(bars,dateStr)=>{
     if(!bars?.length)return null;
@@ -1794,112 +1789,86 @@ function RankingWidget({en, trades, historicos, fxRate, currency}){
     return bars.reduce((b,x)=>Math.abs(new Date(x.date)-t)<Math.abs(new Date(b.date)-t)?x:b,bars[0])?.close||null;
   };
 
-  const ranked = useMemo(()=>{
-    const today=new Date().toISOString().slice(0,10);
-    let startDate=null;
-    if(period!=="compra"){
-      const d=new Date();
-      if(period==="ytd") d.setMonth(0,1);
-      else if(period==="30d") d.setDate(d.getDate()-30);
-      else if(period==="90d") d.setDate(d.getDate()-90);
-      else if(period==="1y") d.setFullYear(d.getFullYear()-1);
-      startDate=d.toISOString().slice(0,10);
-    }
+  const ranked=useMemo(()=>{
+    const d=new Date();
+    if(period==="ytd") d.setMonth(0,1);
+    else if(period==="30d") d.setDate(d.getDate()-30);
+    else if(period==="90d") d.setDate(d.getDate()-90);
+    else if(period==="1y") d.setFullYear(d.getFullYear()-1);
+    const startDate=d.toISOString().slice(0,10);
+    const cclStart=historicos?.CCL?findPrice(historicos.CCL,startDate)||fxRate:fxRate;
 
     return en.map(h=>{
       const isBond=h.type==="bono_usd"||h.type==="bono_ars";
       const qtyFactor=isBond?h.qty/100:h.qty;
       const bars=historicos?.[h.ticker]||[];
-
-      let priceThen, pctReturn, pnlUSD;
-
-      if(period==="compra"){
-        // Desde precio de compra (PPC)
-        priceThen=h.ppc;
-        pctReturn=h.pnlPct;
-        pnlUSD=h.pnlUSD;
+      const priceNow=h.currentPrice;
+      const priceThen=bars.length?findPrice(bars,startDate)||priceNow:priceNow;
+      let pnlUSD,pctReturn;
+      if(h.buyCurrency==="USD"){
+        const vNow=priceNow*qtyFactor, vThen=priceThen*qtyFactor;
+        pnlUSD=vNow-vThen; pctReturn=vThen>0?(pnlUSD/vThen)*100:0;
       } else {
-        // Usar precio histórico del inicio del período
-        const priceNow=h.currentPrice;
-        priceThen=bars.length?findPrice(bars,startDate):null;
-        if(!priceThen){priceThen=priceNow;} // sin histórico, rendimiento 0
-        const cclStart=historicos?.CCL?findPrice(historicos.CCL,startDate)||fxRate:fxRate;
-        const cclNow=fxRate;
-        if(h.buyCurrency==="USD"){
-          const valNow=priceNow*qtyFactor;
-          const valThen=priceThen*qtyFactor;
-          pnlUSD=valNow-valThen;
-          pctReturn=valThen>0?(pnlUSD/valThen)*100:0;
-        } else {
-          const valNowUSD=priceNow*qtyFactor/cclNow;
-          const valThenUSD=priceThen*qtyFactor/cclStart;
-          pnlUSD=valNowUSD-valThenUSD;
-          pctReturn=valThenUSD>0?(pnlUSD/valThenUSD)*100:0;
-        }
+        const vNow=priceNow*qtyFactor/fxRate, vThen=priceThen*qtyFactor/cclStart;
+        pnlUSD=vNow-vThen; pctReturn=vThen>0?(pnlUSD/vThen)*100:0;
       }
+      return{...h,periodPct:pctReturn,periodPnl:pnlUSD};
+    }).sort((a,b)=>b.periodPct-a.periodPct);
+  },[en,period,historicos,fxRate]);
 
-      return{...h, periodPct:pctReturn, periodPnl:pnlUSD};
-    }).sort((a,b)=>sortBy==="pct"?b.periodPct-a.periodPct:b.periodPnl-a.periodPnl);
-  },[en,period,sortBy,historicos,fxRate]);
+  const [showAll, setShowAll] = useState(false);
+  const visible = showAll ? ranked : ranked.slice(0,5);
+  const maxPct=Math.max(...ranked.map(x=>Math.abs(x.periodPct)),1);
 
   return(
     <div>
-      {/* Header con controles */}
-      <div style={{padding:"10px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-        <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Ranking de rendimiento</span>
-        <div style={{display:"flex",gap:6,alignItems:"center"}}>
-          {/* Selector período */}
-          <div style={{display:"flex",gap:3}}>
-            {PERIODS.map(p=>(
-              <button key={p.key} onClick={()=>setPeriod(p.key)}
-                style={{padding:"3px 8px",borderRadius:5,border:"1px solid var(--border)",cursor:"pointer",fontSize:10,
-                  background:period===p.key?"var(--accent)":"var(--bg-input)",
-                  color:period===p.key?"#fff":"var(--text-secondary)"}}>
-                {p.label}
-              </button>
-            ))}
-          </div>
-          {/* Separador */}
-          <span style={{color:"var(--border)"}}>|</span>
-          {/* Selector ordenamiento */}
-          <div style={{display:"flex",gap:3}}>
-            {SORTS.map(s=>(
-              <button key={s.key} onClick={()=>setSortBy(s.key)}
-                style={{padding:"3px 8px",borderRadius:5,border:"1px solid var(--border)",cursor:"pointer",fontSize:10,
-                  background:sortBy===s.key?"var(--text-muted)":"var(--bg-input)",
-                  color:sortBy===s.key?"#fff":"var(--text-secondary)"}}>
-                {s.label}
-              </button>
-            ))}
-          </div>
+      <div style={{padding:"10px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Ranking · rendimiento del instrumento</span>
+        <div style={{display:"flex",gap:3}}>
+          {PERIODS.map(p=>(
+            <button key={p.key} onClick={()=>setPeriod(p.key)}
+              style={{padding:"3px 8px",borderRadius:5,border:"1px solid var(--border)",cursor:"pointer",fontSize:10,
+                background:period===p.key?"var(--accent)":"var(--bg-input)",
+                color:period===p.key?"#fff":"var(--text-secondary)"}}>
+              {p.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Nota aclaratoria */}
-      <div style={{padding:"4px 16px 6px",fontSize:10,color:"var(--text-muted)"}}>
-        {period==="compra"
-          ? "PnL desde precio promedio de compra (PPC ponderado)"
-          : `Rendimiento del instrumento en el período · PnL calculado sobre posición actual`}
+      {/* Cabecera columnas */}
+      <div style={{display:"flex",alignItems:"center",gap:10,padding:"5px 16px",borderBottom:"1px solid var(--border)"}}>
+        <span style={{width:20}}/>
+        <span style={{width:50,fontSize:9,color:"var(--text-muted)"}}>TICKER</span>
+        <span style={{flex:1,fontSize:9,color:"var(--text-muted)"}}>INSTRUMENTO</span>
+        <span style={{fontSize:9,color:"var(--text-muted)",minWidth:75,textAlign:"right"}}>PnL USD {dolarLabel}</span>
+        <span style={{fontSize:9,color:"var(--text-muted)",minWidth:60,textAlign:"right"}}>REND %</span>
       </div>
-      <div style={{display:"grid",gap:0}}>
-        {ranked.slice(0,8).map((h,i)=>{
-          const barWidth=Math.min(Math.abs(h.periodPct)/Math.max(...ranked.map(x=>Math.abs(x.periodPct)),1)*100,100);
-          return(
-            <div key={h.ticker} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 16px",borderTop:"1px solid var(--border)",position:"relative",overflow:"hidden"}}>
-              {/* Barra de fondo */}
-              <div style={{position:"absolute",left:0,top:0,bottom:0,width:`${barWidth}%`,
-                background:h.periodPct>=0?"rgba(52,211,153,0.06)":"rgba(248,113,113,0.06)",
-                transition:"width 0.4s ease"}}/>
-              <div style={{position:"relative",display:"flex",alignItems:"center",gap:10,width:"100%"}}>
-                <span style={{fontSize:10,color:"var(--text-muted)",width:14,textAlign:"right"}}>{i+1}</span>
-                <div style={{width:44,fontWeight:700,fontFamily:"monospace",fontSize:12,color:"var(--accent)"}}>{h.ticker}</div>
-                <div style={{flex:1,fontSize:11,color:"var(--text-secondary)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.name}</div>
-                <div style={{fontSize:12,color:"var(--text-muted)",minWidth:70,textAlign:"right"}}>{fmtU(h.periodPnl)}</div>
-                <div style={{fontSize:13,fontWeight:700,color:pc(h.periodPct),minWidth:62,textAlign:"right"}}>{fmtP(h.periodPct)}</div>
-              </div>
-            </div>
-          );
-        })}
+
+      {visible.map((h,i)=>(
+        <div key={h.ticker} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 16px",borderTop:"1px solid var(--border)",position:"relative",overflow:"hidden"}}>
+          <div style={{position:"absolute",left:0,top:0,bottom:0,width:`${Math.min(Math.abs(h.periodPct)/maxPct*100,100)}%`,
+            background:h.periodPct>=0?"rgba(52,211,153,0.07)":"rgba(248,113,113,0.07)"}}/>
+          <span style={{fontSize:10,color:"var(--text-muted)",width:20,textAlign:"right",position:"relative"}}>{i+1}</span>
+          <span style={{width:50,fontWeight:700,fontFamily:"monospace",fontSize:12,color:"var(--accent)",position:"relative"}}>{h.ticker}</span>
+          <span style={{flex:1,fontSize:11,color:"var(--text-secondary)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",position:"relative"}}>{h.name}</span>
+          <span style={{fontSize:12,color:pc(h.periodPnl),minWidth:75,textAlign:"right",position:"relative"}}>{fmtU(h.periodPnl)}</span>
+          <span style={{fontSize:13,fontWeight:700,color:pc(h.periodPct),minWidth:60,textAlign:"right",position:"relative"}}>{fmtP(h.periodPct)}</span>
+        </div>
+      ))}
+
+      {ranked.length>5&&(
+        <div onClick={()=>setShowAll(x=>!x)}
+          style={{padding:"8px 16px",borderTop:"1px solid var(--border)",cursor:"pointer",fontSize:11,color:"var(--text-muted)",textAlign:"center",
+            background:"var(--bg-input)",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}
+          onMouseEnter={e=>e.currentTarget.style.color="var(--text-primary)"}
+          onMouseLeave={e=>e.currentTarget.style.color="var(--text-muted)"}>
+          {showAll?`▲ Ver menos`:`▼ Ver todos (${ranked.length})`}
+        </div>
+      )}
+
+      <div style={{padding:"5px 16px",fontSize:9,color:"var(--text-muted)",borderTop:"1px solid var(--border)"}}>
+        Ordenado por % · PnL calculado sobre posición actual · USD {dolarLabel}
       </div>
     </div>
   );
@@ -2335,7 +2304,7 @@ export default function App(){
               </div>
 
               <div style={{...card,overflow:"hidden"}}>
-                <RankingWidget en={enGrouped} trades={trades} historicos={historicos} fxRate={fxRate} currency={fx}/>
+                <RankingWidget en={enGrouped} historicos={historicos} fxRate={fxRate} currency={fx}/>
               </div>
             </div>
           )}

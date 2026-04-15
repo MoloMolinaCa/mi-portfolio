@@ -320,8 +320,23 @@ function Chart100({series}){
 // Para cada día calcula el valor del portfolio, luego encadena los retornos diarios.
 // Cuando hay un evento de flujo (compra/venta), el retorno de ese día se calcula
 // antes del flujo (valor cierre día anterior con qty nueva vs qty anterior * mismo precio).
-function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRate, liveEntry){
+function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRate){
   if(!dates||dates.length<2) return [];
+
+  // Detectar la última fecha con datos reales en el histórico
+  // Para evitar saltos artificiales entre cierre histórico y precio live
+  const allBars=Object.values(tickerBars).filter(b=>b?.length>0);
+  const lastHistDate=allBars.length>0
+    ? allBars.map(b=>b[b.length-1].date).sort().reverse()[0]
+    : null;
+
+  // Filtrar fechas: solo incluir hasta la última con datos históricos reales
+  // El punto de hoy lo agrega el useEffect live por separado
+  const validDates = lastHistDate
+    ? dates.filter(d=>d<=lastHistDate)
+    : dates;
+
+  if(validDates.length<2) return [];
 
   // Pre-calcular el valor del portfolio para cada fecha
   const getPortVal=(dateStr, dateT)=>{
@@ -354,8 +369,8 @@ function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRa
     return bars.reduce((b,x)=>Math.abs(new Date(x.date)-t)<Math.abs(new Date(b.date)-t)?x:b,bars[0])?.close||null;
   }
 
-  // Calcular valor absoluto por día
-  const vals=dates.map(d=>({date:d,val:getPortVal(d,new Date(d).getTime())}));
+  // Calcular valor absoluto por día — solo fechas con datos reales
+  const vals=validDates.map(d=>({date:d,val:getPortVal(d,new Date(d).getTime())}));
 
   // Encadenar retornos diarios → TWR
   // TWR[i] = TWR[i-1] * (val[i] / val_antes_flujo[i])

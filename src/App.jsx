@@ -1006,9 +1006,9 @@ function Modal({h,port=[],onSave,onClose}){
             }
           </label>
 
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 2fr",gap:12}}>
             <label style={{display:"flex",flexDirection:"column",gap:4}}>
-              <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>{f.operacion==="venta"?"Cantidad a vender":"Cantidad"}</span>
+              <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>{f.operacion==="venta"?"Cantidad a vender":"Nominales"}</span>
               <input type="number" min="0" max={f.operacion==="venta"?availableQty:undefined} value={f.qty}
                 onChange={e=>{const v=+e.target.value;set("qty",f.operacion==="venta"?Math.min(v,availableQty):v||e.target.value);}}
                 style={{...inp,borderColor:overSelling?"var(--red)":undefined}}/>
@@ -1016,17 +1016,16 @@ function Modal({h,port=[],onSave,onClose}){
                 {overSelling?`⚠ Solo tenés ${availableQty.toLocaleString("es-AR")}`:`Disponible: ${availableQty.toLocaleString("es-AR")}`}
               </div>}
             </label>
-            <label style={{display:"flex",flexDirection:"column",gap:4}}>
+            <div style={{display:"flex",flexDirection:"column",gap:4}}>
               <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>{f.operacion==="venta"?"Precio de venta":"Precio de compra (PPC)"}</span>
-              <input type="number" min="0" value={f.buyPrice} onChange={e=>set("buyPrice",e.target.value)} style={inp}/>
-            </label>
-            <label style={{display:"flex",flexDirection:"column",gap:4}}>
-              <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Moneda</span>
-              <select value={f.buyCurrency} onChange={e=>set("buyCurrency",e.target.value)} style={inp}>
-                <option value="ARS">🇦🇷 ARS</option>
-                <option value="USD">🇺🇸 USD</option>
-              </select>
-            </label>
+              <div style={{display:"flex",gap:8}}>
+                <input type="number" min="0" value={f.buyPrice} onChange={e=>set("buyPrice",e.target.value)} style={{...inp,flex:1}}/>
+                <select value={f.buyCurrency} onChange={e=>set("buyCurrency",e.target.value)} style={{...inp,width:90}}>
+                  <option value="ARS">🇦🇷 ARS</option>
+                  <option value="USD">🇺🇸 USD</option>
+                </select>
+              </div>
+            </div>
           </div>
 
           {/* TC PARA BONOS DUALES — cuando se compra en ARS un bono que tiene versión D */}

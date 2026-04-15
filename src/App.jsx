@@ -349,7 +349,26 @@ function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRa
       const isBond=h.type==="bono_usd"||h.type==="bono_ars";
       const qtyFactor=isBond?qty/100:qty;
       const bars=tickerBars[h.ticker];
-      const price=bars?findPrice2(bars,dateStr):h.currentPrice;
+      // Si no hay histórico para este ticker, NO incluirlo en fechas pasadas
+      // Solo incluirlo desde la primera fecha de compra usando el precio de compra
+      if(!bars||!bars.length){
+        const firstBuy=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra").sort((a,b)=>a.date.localeCompare(b.date))[0];
+        if(!firstBuy||dateStr<firstBuy.date)continue;
+        // Usar PPC como precio constante para días sin histórico
+        const totalCost=buys.reduce((a,t)=>a+t.qty*t.price,0);
+        const totalQty=buys.reduce((a,t)=>a+t.qty,0);
+        const ppc=totalQty>0?totalCost/totalQty:h.currentPrice;
+        const cclDay=cclBars.length?findPrice2(cclBars,dateStr)||fxRate:fxRate;
+        const mepDay=mepBars.length?findPrice2(mepBars,dateStr)||fxRate:fxRate;
+        if(currency==="ARS")total+=ppc*qtyFactor;
+        else if(currency==="USD_CCL")total+=ppc*qtyFactor/cclDay;
+        else total+=ppc*qtyFactor/mepDay;
+        continue;
+      }
+      // Verificar que la fecha pedida no sea anterior al primer dato del histórico
+      if(dateStr<bars[0].date)continue;
+      const price=findPrice2(bars,dateStr);
+      if(!price)continue;
       const cclDay=cclBars.length?findPrice2(cclBars,dateStr)||fxRate:fxRate;
       const mepDay=mepBars.length?findPrice2(mepBars,dateStr)||fxRate:fxRate;
       if(currency==="ARS")total+=price*qtyFactor;

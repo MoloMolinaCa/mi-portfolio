@@ -427,7 +427,11 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos}){
     const start=firstBuyDate>periodStart?firstBuyDate:periodStart;
     const startStr=start.toISOString().slice(0,10);
     const dateSet=new Set();
+    // Solo incluir fechas que tengan datos de tickers del portfolio (excluir CCL/MEP/sp500/t10y)
+    const portfolioTickers=[...new Set(trades.map(t=>t.ticker))];
+    const excludeKeys=new Set(['CCL','MEP','sp500','t10y']);
     for(const k of Object.keys(hist)){
+      if(excludeKeys.has(k)&&!portfolioTickers.includes(k))continue;
       const bars=hist[k]||[];
       for(const b of bars){if(b.date>=startStr&&b.date<=today)dateSet.add(b.date);}
     }

@@ -1399,6 +1399,8 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
       if(datesWithToday[datesWithToday.length-1]!==today)datesWithToday.push(today);
 
       const port100 = calcTWR(datesWithToday,trades,en,tickerBars,cclBars,mepBars,currency,fxRate);
+      console.log('[TWR DEBUG] últimos 4 puntos:', JSON.stringify(port100.slice(-4)));
+      console.log('[TWR DEBUG] portRet:', port100.length>0?(port100[port100.length-1].val-100).toFixed(2):'n/a');
       const spyRet  = spy100 ? (spy100[spy100.length-1].val-100).toFixed(2) : null;
       const cclRet  = ccl100 ? (ccl100[ccl100.length-1].val-100).toFixed(2) : null;
       const t10yRet = (t10y100[t10y100.length-1].val-100).toFixed(2);

@@ -315,6 +315,78 @@ function Chart100({series}){
   );
 }
 
+// ── Time-Weighted Return (TWR) ────────────────────────────────────────────────
+// Calcula el rendimiento encadenado del portfolio sin distorsión por compras/ventas.
+// Para cada día calcula el valor del portfolio, luego encadena los retornos diarios.
+// Cuando hay un evento de flujo (compra/venta), el retorno de ese día se calcula
+// antes del flujo (valor cierre día anterior con qty nueva vs qty anterior * mismo precio).
+function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRate, liveEntry){
+  if(!dates||dates.length<2) return [];
+
+  // Pre-calcular el valor del portfolio para cada fecha
+  const getPortVal=(dateStr, dateT)=>{
+    let total=0;
+    for(const h of en){
+      const buys=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra"&&new Date(t.date).getTime()<=dateT);
+      const sells=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="venta"&&new Date(t.date).getTime()<=dateT);
+      const qty=Math.max(0,buys.reduce((a,t)=>a+t.qty,0)-sells.reduce((a,t)=>a+t.qty,0));
+      if(qty<=0)continue;
+      const isBond=h.type==="bono_usd"||h.type==="bono_ars";
+      const qtyFactor=isBond?qty/100:qty;
+      const bars=tickerBars[h.ticker];
+      const price=bars?findPrice2(bars,dateStr):h.currentPrice;
+      const cclDay=cclBars.length?findPrice2(cclBars,dateStr)||fxRate:fxRate;
+      const mepDay=mepBars.length?findPrice2(mepBars,dateStr)||fxRate:fxRate;
+      if(currency==="ARS")total+=price*qtyFactor;
+      else if(currency==="USD_CCL")total+=price*qtyFactor/cclDay;
+      else total+=price*qtyFactor/mepDay;
+    }
+    return Math.max(total,0.001);
+  };
+
+  // Detectar fechas con eventos de flujo
+  const flowDates=new Set(trades.map(t=>t.date));
+
+  // Helper findPrice local
+  function findPrice2(bars,d){
+    if(!bars?.length)return null;
+    const t=new Date(d).getTime();
+    return bars.reduce((b,x)=>Math.abs(new Date(x.date)-t)<Math.abs(new Date(b.date)-t)?x:b,bars[0])?.close||null;
+  }
+
+  // Calcular valor absoluto por día
+  const vals=dates.map(d=>({date:d,val:getPortVal(d,new Date(d).getTime())}));
+
+  // Encadenar retornos diarios → TWR
+  // TWR[i] = TWR[i-1] * (val[i] / val_antes_flujo[i])
+  // Para días sin flujo: val_antes_flujo = val[i-1] (misma posición)
+  // Para días con flujo: el flujo ocurre al cierre, el retorno del día es val_fin/val_ini con la posición ANTERIOR
+  const twr=[{date:vals[0].date,val:100}];
+  let cumulative=1;
+
+  for(let i=1;i<vals.length;i++){
+    const today=vals[i];
+    const yesterday=vals[i-1];
+    let dayReturn;
+
+    if(flowDates.has(today.date)){
+      // Hay un flujo hoy — calcular valor del portfolio con la posición de AYER al precio de HOY
+      const dateT_before=new Date(today.date).getTime()-1; // justo antes del flujo
+      const valBeforeFlow=getPortVal(today.date, dateT_before);
+      const valYesterdayPrice=getPortVal(yesterday.date, new Date(yesterday.date).getTime());
+      // Retorno del día = valor con posición anterior al precio de hoy / valor ayer
+      dayReturn = valYesterdayPrice > 0 ? valBeforeFlow / valYesterdayPrice : 1;
+    } else {
+      dayReturn = yesterday.val > 0 ? today.val / yesterday.val : 1;
+    }
+
+    cumulative *= dayReturn;
+    twr.push({date:today.date, val:parseFloat((100*cumulative).toFixed(4))});
+  }
+
+  return twr;
+}
+
 function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos}){
   const PERIODS=[{key:"30d",label:"30d",days:30},{key:"90d",label:"90d",days:90},{key:"ytd",label:"YTD",days:null},{key:"1y",label:"1 año",days:365},{key:"3y",label:"3 años",days:1095}];
   const [period,setPeriod]=useState("90d");
@@ -393,30 +465,15 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos}){
       const tickerBars={};
       for(const ticker of allTickers){const bars=_getTicker(ticker);if(bars)tickerBars[ticker]=bars;}
 
-      const portPts=dates.map(dateStr=>{
-        const dateT=new Date(dateStr).getTime();
-        let total=0;
-        for(const h of en){
-          const buys=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra"&&new Date(t.date).getTime()<=dateT);
-          const sells=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="venta"&&new Date(t.date).getTime()<=dateT);
-          const qty=Math.max(0,buys.reduce((a,t)=>a+t.qty,0)-sells.reduce((a,t)=>a+t.qty,0));
-          if(qty<=0)continue;
-          const isBond=h.type==="bono_usd"||h.type==="bono_ars";
-          const qtyFactor=isBond?qty/100:qty;
-          const priceByma=(tickerBars[h.ticker]&&findPrice(tickerBars[h.ticker],dateStr))||h.currentPrice;
-          const cclDay=cclBars.length?(findPrice(cclBars,dateStr)||fxRate):fxRate;
-          const mepDay=mepBars.length?(findPrice(mepBars,dateStr)||fxRate):fxRate;
-          if(currency==="ARS")total+=priceByma*qtyFactor;
-          else if(currency==="USD_CCL")total+=priceByma*qtyFactor/cclDay;
-          else total+=priceByma*qtyFactor/mepDay;
-        }
-        return{date:dateStr,val:Math.max(total,0.01)};
-      });
-
+      // TWR — Time Weighted Return: encadena retornos diarios sin distorsión por compras/ventas
       const today=new Date().toISOString().slice(0,10);
-      if(portPts.length>0&&portPts[portPts.length-1].date!==today){
+      const datesWithToday=[...dates];
+      if(datesWithToday[datesWithToday.length-1]!==today)datesWithToday.push(today);
+
+      // Para el punto de hoy usar precios en vivo
+      const getPortValToday=()=>{
+        let total=0;
         const dateT=new Date().getTime();
-        let totalToday=0;
         for(const h of en){
           const buys=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra"&&new Date(t.date).getTime()<=dateT);
           const sells=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="venta"&&new Date(t.date).getTime()<=dateT);
@@ -424,27 +481,24 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos}){
           if(qty<=0)continue;
           const isBond=h.type==="bono_usd"||h.type==="bono_ars";
           const qtyFactor=isBond?qty/100:qty;
-          const liveEntry=en.find(x=>x.ticker===h.ticker);
-          const livePrice=liveEntry?.isLive?liveEntry.currentPrice:null;
-          const histBars=_getTicker(h.ticker);
-          const histPrice=histBars?histBars[histBars.length-1].close:null;
-          const priceHoy=livePrice||histPrice||h.currentPrice;
-          const mepDay=_getMEP().length?(findPrice(_getMEP(),today)||fxRate):fxRate;
-          if(currency==="ARS")totalToday+=priceHoy*qtyFactor;
-          else if(currency==="USD_CCL")totalToday+=priceHoy*qtyFactor/fxRate;
-          else totalToday+=priceHoy*qtyFactor/mepDay;
+          const liveE=en.find(x=>x.ticker===h.ticker);
+          const price=liveE?.isLive?liveE.currentPrice:((_getTicker(h.ticker)||[]).slice(-1)[0]?.close||h.currentPrice);
+          const cclDay=cclBars.length?(findPrice(cclBars,today)||fxRate):fxRate;
+          const mepDay=mepBars.length?(findPrice(mepBars,today)||fxRate):fxRate;
+          if(currency==="ARS")total+=price*qtyFactor;
+          else if(currency==="USD_CCL")total+=price*qtyFactor/cclDay;
+          else total+=price*qtyFactor/mepDay;
         }
-        if(totalToday>0)portPts.push({date:today,val:totalToday});
-      }
+        return Math.max(total,0.001);
+      };
 
-      // Base = valor de mercado del primer punto (TC histórico día a día)
-      const portBase=portPts[0]?.val||1;
-      const port100=portPts.map(x=>({date:x.date,val:portBase>0?100*x.val/portBase:100}));
+      const port100=calcTWR(datesWithToday,trades,en,tickerBars,cclBars,mepBars,currency,fxRate);
+
       setChartData({
         port100,t10y100,spy100,ccl100,mep100,currency,
-        portBase, // valor absoluto del primer punto para normalizar actualizaciones live
-        startDate:dates[0],endDate:dates[dates.length-1],
-        portRet:(port100[port100.length-1].val-100).toFixed(2),
+        portBase:null, // TWR no necesita portBase para normalizar
+        startDate:dates[0],endDate:datesWithToday[datesWithToday.length-1],
+        portRet:port100.length>0?(port100[port100.length-1].val-100).toFixed(2):"0.00",
         spyRet:spy100?(spy100[spy100.length-1].val-100).toFixed(2):null,
         cclRet:ccl100?(ccl100[ccl100.length-1].val-100).toFixed(2):null,
         mepRet:mep100?(mep100[mep100.length-1].val-100).toFixed(2):null,
@@ -457,7 +511,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos}){
     if(!historicos||Object.keys(historicos).length===0)return;
     const p=PERIODS.find(x=>x.key===period);
     if(p)load(p,historicos);
-  },[period,currency,historicos]);
+  },[period,currency,historicos,trades]);
 
   // Recalcular punto de hoy cuando cambian precios en vivo (portfolio + S&P + CCL + MEP)
   useEffect(()=>{
@@ -487,15 +541,42 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos}){
       else totalToday+=priceHoy*qtyFactor/mepLive;
     }
 
-    if(totalToday<=0||!chartData.portBase)return;
-    const newPortVal=parseFloat((100*totalToday/chartData.portBase).toFixed(4));
+    if(totalToday<=0)return;
 
     setChartData(prev=>{
-      if(!prev)return prev;
+      if(!prev||!prev.port100.length)return prev;
 
-      // Actualizar portfolio
+      // TWR: encadenar el retorno de hoy al último punto conocido
+      // Retorno hoy = totalToday / valorAyer (donde valorAyer es el valor absoluto del día anterior)
+      // Como port100 es base-100 encadenado, el nuevo punto de hoy es:
+      // port100_hoy = port100_ayer * (totalToday / totalAyer)
+      // Para approximar totalAyer usamos el penúltimo punto del port100
       const port100=[...prev.port100];
       const portIdx=port100.findIndex(x=>x.date===today);
+      const lastKnown=portIdx>=0?port100[portIdx-1]||port100[port100.length-2]:port100[port100.length-1];
+      if(!lastKnown)return prev;
+
+      // El punto anterior al de hoy tiene un valor relativo lastKnown.val
+      // Necesitamos el valor absoluto de ayer — lo recalculamos
+      const yesterdayDateT=new Date(lastKnown.date).getTime();
+      let totalYesterday=0;
+      for(const h of en){
+        const buys2=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra"&&new Date(t.date).getTime()<=yesterdayDateT);
+        const sells2=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="venta"&&new Date(t.date).getTime()<=yesterdayDateT);
+        const qty2=Math.max(0,buys2.reduce((a,t)=>a+t.qty,0)-sells2.reduce((a,t)=>a+t.qty,0));
+        if(qty2<=0)continue;
+        const isBond=h.type==="bono_usd"||h.type==="bono_ars";
+        const qf=isBond?qty2/100:qty2;
+        const bars=_hist[h.ticker]||[];
+        const price=bars.length?findP(bars,lastKnown.date)||h.currentPrice:h.currentPrice;
+        if(currency==="ARS")totalYesterday+=price*qf;
+        else if(currency==="USD_CCL")totalYesterday+=price*qf/(cclBars.length?findP(cclBars,lastKnown.date)||fxRate:fxRate);
+        else totalYesterday+=price*qf/(mepBars.length?findP(mepBars,lastKnown.date)||fxRate:fxRate);
+      }
+      if(totalYesterday<=0)return prev;
+      const dayReturn=totalToday/totalYesterday;
+      const newPortVal=parseFloat((lastKnown.val*dayReturn).toFixed(4));
+
       if(portIdx>=0)port100[portIdx]={date:today,val:newPortVal};
       else port100.push({date:today,val:newPortVal});
 
@@ -1281,87 +1362,12 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
       // MEP bars para conversión
       const mepBars = _getMEP();
 
-      // Para cada fecha calcular valor total según moneda seleccionada
-      const portPts = dates.map(dateStr => {
-        const dateT = new Date(dateStr).getTime();
-        let total = 0;
-        for(const h of en){
-          const buys = trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra"&&new Date(t.date).getTime()<=dateT);
-          const sells = trades.filter(t=>t.ticker===h.ticker&&t.tipo==="venta"&&new Date(t.date).getTime()<=dateT);
-          const qty = Math.max(0, buys.reduce((a,t)=>a+t.qty,0) - sells.reduce((a,t)=>a+t.qty,0));
-          if(qty<=0) continue;
-
-          const isBond = h.type==="bono_usd"||h.type==="bono_ars";
-          const isUSDAsset = h.type==="bono_usd"||h.type==="fci_usd";
-          const qtyFactor = isBond ? qty/100 : qty;
-          const bars = tickerBars[h.ticker];
-          const priceByma = (bars && findPrice(bars,dateStr)) || h.currentPrice;
-
-          const cclDay = cclBars.length ? (findPrice(cclBars,dateStr)||fxRate) : fxRate;
-          const mepDay = mepBars.length ? (findPrice(mepBars,dateStr)||fxRate) : fxRate;
-
-          if(currency==="ARS"){
-            // Todo en pesos
-            if(isUSDAsset){
-              // Bonos USD: precio BYMA en ARS (ya está en ARS via BYMA)
-              total += priceByma * qtyFactor;
-            } else {
-              total += priceByma * qtyFactor;
-            }
-          } else if(currency==="USD_CCL"){
-            if(isUSDAsset){
-              // Activos en USD: ya están en USD, no convertir
-              total += priceByma * qtyFactor / cclDay; // precio BYMA en ARS / CCL = USD
-            } else {
-              total += priceByma * qtyFactor / cclDay;
-            }
-          } else { // USD_MEP
-            if(isUSDAsset){
-              total += priceByma * qtyFactor / mepDay;
-            } else {
-              total += priceByma * qtyFactor / mepDay;
-            }
-          }
-        }
-        return {date:dateStr, val:Math.max(total,0.01)};
-      });
-
-      // Agregar punto de hoy con precio en vivo (o último cierre si es feriado/fin de semana)
+      // TWR — Time Weighted Return
       const today = new Date().toISOString().slice(0,10);
-      if(portPts.length>0 && portPts[portPts.length-1].date !== today){
-        const dateT = new Date().getTime();
-        let totalToday = 0;
-        for(const h of en){
-          const buys = trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra"&&new Date(t.date).getTime()<=dateT);
-          const sells = trades.filter(t=>t.ticker===h.ticker&&t.tipo==="venta"&&new Date(t.date).getTime()<=dateT);
-          const qty = Math.max(0, buys.reduce((a,t)=>a+t.qty,0) - sells.reduce((a,t)=>a+t.qty,0));
-          if(qty<=0) continue;
-          const isBond = h.type==="bono_usd"||h.type==="bono_ars";
-          const qtyFactor = isBond ? qty/100 : qty;
+      const datesWithToday=[...dates];
+      if(datesWithToday[datesWithToday.length-1]!==today)datesWithToday.push(today);
 
-          // Precio: usar en vivo si está disponible, sino último histórico
-          const liveEntry = en.find(x=>x.ticker===h.ticker);
-          const livePrice = liveEntry?.isLive ? liveEntry.currentPrice : null;
-          const histBars = _getTicker(h.ticker);
-          const histPrice = histBars ? histBars[histBars.length-1].close : null;
-          const priceHoy = livePrice || histPrice || h.currentPrice;
-
-          const cclDay = fxRate;
-          const mepDay = _getMEP().length ? (findPrice(_getMEP(),today)||fxRate) : fxRate;
-          if(currency==="ARS"){
-            totalToday += priceHoy * qtyFactor;
-          } else if(currency==="USD_CCL"){
-            totalToday += priceHoy * qtyFactor / cclDay;
-          } else {
-            totalToday += priceHoy * qtyFactor / mepDay;
-          }
-        }
-        if(totalToday > 0) portPts.push({date:today, val:totalToday});
-      }
-
-      // Base = valor de mercado del primer punto (TC histórico día a día)
-      const portBase = portPts[0]?.val||1;
-      const port100 = portPts.map(x=>({date:x.date, val:portBase>0?100*x.val/portBase:100}));
+      const port100 = calcTWR(datesWithToday,trades,en,tickerBars,cclBars,mepBars,currency,fxRate);
       const spyRet  = spy100 ? (spy100[spy100.length-1].val-100).toFixed(2) : null;
       const cclRet  = ccl100 ? (ccl100[ccl100.length-1].val-100).toFixed(2) : null;
       const t10yRet = (t10y100[t10y100.length-1].val-100).toFixed(2);
@@ -1385,7 +1391,7 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
     if(!historicos || Object.keys(historicos).length === 0) return;
     const p=PERIODS.find(x=>x.key===period);
     if(p) load(p, historicos);
-  },[period, currency, historicos]);
+  },[period, currency, historicos, trades]);
 
   // ── SVG line chart ─────────────────────────────────────────────────────────
 

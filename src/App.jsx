@@ -547,9 +547,12 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos}){
     if(p)load(p,historicos);
   },[period,currency,historicos,trades]);
 
+  const enRef = React.useRef(en);
+  useEffect(()=>{ enRef.current = en; },[en]);
+
   // Recalcular punto de hoy cuando cambian precios en vivo
   useEffect(()=>{
-    if(!chartData||!en||!en.length||!chartData.port100?.length)return;
+    if(!chartData||!enRef.current?.length||!chartData.port100?.length)return;
     const today=new Date().toISOString().slice(0,10);
     const _hist=historicos||{};
     const findP=(bars,d)=>{if(!bars?.length)return null;const t=new Date(d).getTime();return bars.reduce((b,x)=>Math.abs(new Date(x.date)-t)<Math.abs(new Date(b.date)-t)?x:b,bars[0])?.close||null;};
@@ -557,11 +560,12 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos}){
     const mepBars=_hist.MEP||[];
     const cclLive=liveFX?.CCL||fxRate;
     const mepLive=liveFX?.MEP||fxRate;
+    const enNow=enRef.current;
 
     // Calcular valor de hoy con precios en vivo
     let totalToday=0;
     const dateT=new Date().getTime();
-    for(const h of en){
+    for(const h of enNow){
       const buys=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra"&&new Date(t.date).getTime()<=dateT);
       const sells=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="venta"&&new Date(t.date).getTime()<=dateT);
       const qty=Math.max(0,buys.reduce((a,t)=>a+t.qty,0)-sells.reduce((a,t)=>a+t.qty,0));
@@ -576,8 +580,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos}){
     }
     if(totalToday<=0)return;
 
-    // Calcular valor de ayer (último punto del histórico) con el MISMO TC que hoy
-    // para no distorsionar por movimiento cambiario
+    // Calcular valor del último punto histórico con el MISMO TC que hoy
     const port100prev=chartData.port100;
     const lastHistPoint=port100prev[port100prev.length-1];
     if(!lastHistPoint)return;
@@ -585,7 +588,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos}){
 
     let totalYesterday=0;
     const yesterdayDateT=new Date(lastHistDate).getTime();
-    for(const h of en){
+    for(const h of enNow){
       const buys=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra"&&new Date(t.date).getTime()<=yesterdayDateT);
       const sells=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="venta"&&new Date(t.date).getTime()<=yesterdayDateT);
       const qty=Math.max(0,buys.reduce((a,t)=>a+t.qty,0)-sells.reduce((a,t)=>a+t.qty,0));
@@ -595,7 +598,6 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos}){
       const bars=_hist[h.ticker]||[];
       const priceYesterday=findP(bars,lastHistDate);
       if(!priceYesterday)continue;
-      // Usar mismo TC que hoy para aislar solo movimiento de precios
       if(currency==="ARS")totalYesterday+=priceYesterday*qtyFactor;
       else if(currency==="USD_CCL")totalYesterday+=priceYesterday*qtyFactor/cclLive;
       else totalYesterday+=priceYesterday*qtyFactor/mepLive;
@@ -651,7 +653,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos}){
       const mepRet=mep100?(mep100[mep100.length-1].val-100).toFixed(2):prev.mepRet;
       return{...prev,port100,spy100,ccl100,mep100,portRet,spyRet,cclRet,mepRet};
     });
-  },[en,liveFX,liveSP500]);
+  },[liveFX,liveSP500]);
 
   const cd=chartData;
   const series=cd?[
@@ -1399,8 +1401,6 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
       if(datesWithToday[datesWithToday.length-1]!==today)datesWithToday.push(today);
 
       const port100 = calcTWR(datesWithToday,trades,en,tickerBars,cclBars,mepBars,currency,fxRate);
-      console.log('[TWR DEBUG] últimos 4 puntos:', JSON.stringify(port100.slice(-4)));
-      console.log('[TWR DEBUG] portRet:', port100.length>0?(port100[port100.length-1].val-100).toFixed(2):'n/a');
       const spyRet  = spy100 ? (spy100[spy100.length-1].val-100).toFixed(2) : null;
       const cclRet  = ccl100 ? (ccl100[ccl100.length-1].val-100).toFixed(2) : null;
       const t10yRet = (t10y100[t10y100.length-1].val-100).toFixed(2);

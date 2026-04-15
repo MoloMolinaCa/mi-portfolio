@@ -753,7 +753,7 @@ function inferCurrency(item, endpoint){
 }
 
 function Modal({h,port=[],onSave,onClose}){
-  const blank={ticker:"",name:"",type:"accion_ar",qty:"",buyPrice:"",buyCurrency:"ARS",buyDate:new Date().toISOString().slice(0,10),operacion:"compra"};
+  const blank={ticker:"",name:"",type:"accion_ar",qty:"",buyPrice:"",buyCurrency:"ARS",buyDate:new Date().toISOString().slice(0,10),operacion:"compra",comision:""};
   const [f,setF]=useState(h?{...h,operacion:"compra",buyPrice:""}:blank);
   const [tickerStatus,setTickerStatus]=useState(h?"confirmed":"idle");
   const [searchResults,setSearchResults]=useState([]); // lista de instrumentos encontrados
@@ -1052,11 +1052,32 @@ function Modal({h,port=[],onSave,onClose}){
           )}
 
           {f.qty>0&&f.buyPrice>0&&(
-            <div style={{background:"var(--bg-input)",borderRadius:8,padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span style={{fontSize:11,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Monto total</span>
-              <span style={{fontSize:16,fontWeight:700,color:f.operacion==="venta"?"var(--red)":"var(--green)"}}>
-                {f.buyCurrency==="USD"?`USD ${(+f.qty*+f.buyPrice).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}`:`$ ${(+f.qty*+f.buyPrice).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}`}
-              </span>
+            <div style={{background:"var(--bg-input)",borderRadius:8,padding:"10px 14px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                <span style={{fontSize:11,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Monto bruto</span>
+                <span style={{fontSize:15,fontWeight:700,color:"var(--text-secondary)"}}>
+                  {f.buyCurrency==="USD"?`USD ${(+f.qty*+f.buyPrice).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}`:`$ ${(+f.qty*+f.buyPrice).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}`}
+                </span>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                <label style={{display:"flex",alignItems:"center",gap:8,fontSize:11,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>
+                  Comisión ({f.buyCurrency})
+                  <input type="number" min="0" value={f.comision||""} onChange={e=>set("comision",e.target.value)}
+                    placeholder="0.00"
+                    style={{...inp,width:120,padding:"4px 8px",fontSize:13,textAlign:"right"}}/>
+                </label>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",borderTop:"1px solid var(--border)",paddingTop:8}}>
+                <span style={{fontSize:11,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Monto neto</span>
+                <span style={{fontSize:16,fontWeight:700,color:f.operacion==="venta"?"var(--red)":"var(--green)"}}>
+                  {(()=>{
+                    const bruto=+f.qty*+f.buyPrice;
+                    const com=+f.comision||0;
+                    const neto=f.operacion==="venta"?bruto-com:bruto+com;
+                    return f.buyCurrency==="USD"?`USD ${neto.toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}`:`$ ${neto.toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+                  })()}
+                </span>
+              </div>
             </div>
           )}
 
@@ -1648,14 +1669,18 @@ function OperacionesTab({trades,port,setTrades,setPort,card,livePrices}){
                 <th style={thR}>Cantidad</th>
                 <th style={thR}>Precio</th>
                 <th style={thR}>TC</th>
-                <th style={thR}>Monto</th>
+                <th style={thR}>Bruto</th>
+                <th style={thR}>Comisión</th>
+                <th style={thR}>Neto</th>
                 <th style={{...thS,width:80}}></th>
               </tr>
             </thead>
             <tbody>
               {sorted.map(t=>{
                 const isEditing=editId===t.id;
-                const monto=+t.qty*+t.price;
+                const bruto=+t.qty*+t.price;
+                const com=t.comision?+t.comision:0;
+                const neto=t.tipo==="compra"?bruto+com:bruto-com;
                 return(
                   <tr key={t.id} style={{borderTop:"1px solid var(--border)",background:isEditing?"rgba(37,99,235,0.06)":undefined}}>
                     <td style={tdL}>
@@ -1687,8 +1712,14 @@ function OperacionesTab({trades,port,setTrades,setPort,card,livePrices}){
                         ?<input type="number" value={editData.tcCompra||""} onChange={e=>setEditData(p=>({...p,tcCompra:e.target.value}))} placeholder="TC" style={{...inp,width:90,textAlign:"right"}}/>
                         :<span style={{color:"var(--text-muted)",fontSize:11}}>{t.tcCompra?fmtA(t.tcCompra):"—"}</span>}
                     </td>
+                    <td style={tdR}>{t.currency==="USD"?fmtU(bruto,2):fmtA(bruto)}</td>
+                    <td style={tdR}>
+                      {isEditing
+                        ?<input type="number" value={editData.comision||""} onChange={e=>setEditData(p=>({...p,comision:e.target.value}))} placeholder="0" style={{...inp,width:90,textAlign:"right"}}/>
+                        :<span style={{color:com>0?"var(--yellow)":"var(--text-muted)",fontSize:11}}>{com>0?(t.currency==="USD"?fmtU(com,2):fmtA(com)):"—"}</span>}
+                    </td>
                     <td style={{...tdR,fontWeight:600}}>
-                      {t.currency==="USD"?fmtU(monto,2):fmtA(monto)}
+                      {t.currency==="USD"?fmtU(neto,2):fmtA(neto)}
                     </td>
                     <td style={{padding:"8px",textAlign:"right"}}>
                       {isEditing?(
@@ -1868,26 +1899,38 @@ export default function App(){
       return cclBarsH.reduce((b,x)=>Math.abs(new Date(x.date)-t)<Math.abs(new Date(b.date)-t)?x:b,cclBarsH[0])?.close||fxRate;
     };
 
-    // costUSD: sumar cada lote de compra al TC de ese día
-    // Para activos en USD el TC no aplica
+    // costUSD: sumar cada lote de compra al TC de ese día + comisiones
     let costUSD;
     if(h.buyCurrency==="USD"){
-      costUSD = ppc * qtyFactor;
-    } else {
       const buyLots = trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra");
-      const sellQty = trades.filter(t=>t.ticker===h.ticker&&t.tipo==="venta").reduce((a,t)=>a+t.qty,0);
-      let remainingQty = h.qty; // qty actual después de ventas
-      // Aplicar FIFO para saber qué lotes quedan
       const lotsDescending = [...buyLots].sort((a,b)=>a.date.localeCompare(b.date));
       let costUSDTotal = 0;
-      let qtyToAccount = remainingQty;
+      let qtyToAccount = h.qty;
+      for(const lot of lotsDescending){
+        if(qtyToAccount<=0)break;
+        const lotUsed = Math.min(lot.qty, qtyToAccount);
+        const isBondLot = h.type==="bono_usd"||h.type==="bono_ars";
+        const lotFactor = isBondLot ? lotUsed/100 : lotUsed;
+        const lotTotal = lot.price * lotFactor;
+        // Comisión prorrateada por lote
+        const lotComision = lot.comision ? (+lot.comision * lotUsed / lot.qty) : 0;
+        costUSDTotal += lotTotal + lotComision;
+        qtyToAccount -= lotUsed;
+      }
+      costUSD = costUSDTotal;
+    } else {
+      const buyLots = trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra");
+      const lotsDescending = [...buyLots].sort((a,b)=>a.date.localeCompare(b.date));
+      let costUSDTotal = 0;
+      let qtyToAccount = h.qty;
       for(const lot of lotsDescending){
         if(qtyToAccount<=0)break;
         const lotUsed = Math.min(lot.qty, qtyToAccount);
         const isBondLot = h.type==="bono_usd"||h.type==="bono_ars";
         const lotFactor = isBondLot ? lotUsed/100 : lotUsed;
         const tcDia = findCCL(lot.date);
-        costUSDTotal += lot.price * lotFactor / tcDia;
+        const lotComision = lot.comision ? (+lot.comision * lotUsed / lot.qty) : 0;
+        costUSDTotal += (lot.price * lotFactor + lotComision) / tcDia;
         qtyToAccount -= lotUsed;
       }
       costUSD = costUSDTotal;
@@ -1964,7 +2007,8 @@ export default function App(){
     }
     const existing=port.find(x=>x.id===h.id)||port.find(x=>x.ticker===h.ticker.toUpperCase());
     const ts=Date.now();
-    const tradeBase={ticker:h.ticker.toUpperCase(),currency:h.buyCurrency,date:h.buyDate||new Date().toISOString().slice(0,10),ts,name:h.name};
+    const comision=h.comision?+h.comision:undefined;
+    const tradeBase={ticker:h.ticker.toUpperCase(),currency:h.buyCurrency,date:h.buyDate||new Date().toISOString().slice(0,10),ts,name:h.name,...(comision?{comision}:{})};
     if(!existing){
       const newTicker=h.ticker.toUpperCase();
       const newTrades=[...trades,{id:ts,tipo:"compra",qty:+h.qty,price:+h.buyPrice,...tradeBase}];
@@ -1981,15 +2025,17 @@ export default function App(){
       const sellQty=+h.qty; const sellPrice=+h.buyPrice;
       const buyLots=trades.filter(t=>t.ticker===h.ticker.toUpperCase()&&t.tipo==="compra").sort((a,b)=>a.ts-b.ts);
       let remaining=sellQty,costFIFO=0;
-      for(const lot of buyLots){ if(remaining<=0)break; const used=Math.min(lot.qty,remaining); costFIFO+=used*lot.price; remaining-=used; }
+      for(const lot of buyLots){ if(remaining<=0)break; const used=Math.min(lot.qty,remaining); costFIFO+=used*lot.price+(lot.comision?(+lot.comision*used/lot.qty):0); remaining-=used; }
       const proceeds=sellQty*sellPrice;
-      const pnlAmt=proceeds-costFIFO;
+      const comisionVenta=comision||0;
+      const proceedsNeto=proceeds-comisionVenta;
+      const pnlAmt=proceedsNeto-costFIFO;
       const pnlPct=costFIFO>0?(pnlAmt/costFIFO)*100:0;
       setTrades(t=>[...t,{id:ts,tipo:"venta",qty:sellQty,price:sellPrice,pnlAmt:parseFloat(pnlAmt.toFixed(2)),pnlPct:parseFloat(pnlPct.toFixed(2)),...tradeBase}]);
       const newQty=existing.qty-sellQty;
       if(newQty<=0) setPort(p=>p.filter(x=>x.id!==existing.id));
       else setPort(p=>p.map(x=>x.id===existing.id?{...x,qty:newQty}:x));
-      setVentaResult({ticker:h.ticker.toUpperCase(),name:h.name,currency:h.buyCurrency,sellQty,sellPrice,proceeds,costFIFO,pnlAmt:parseFloat(pnlAmt.toFixed(2)),pnlPct:parseFloat(pnlPct.toFixed(2)),buyDate:buyLots[0]?.date||"2026-04-01",sellDate:tradeBase.date});
+      setVentaResult({ticker:h.ticker.toUpperCase(),name:h.name,currency:h.buyCurrency,sellQty,sellPrice,proceeds,proceedsNeto,comisionVenta,costFIFO,pnlAmt:parseFloat(pnlAmt.toFixed(2)),pnlPct:parseFloat(pnlPct.toFixed(2)),buyDate:buyLots[0]?.date||"2026-04-01",sellDate:tradeBase.date});
     } else {
       setTrades(t=>[...t,{id:ts,tipo:"compra",qty:+h.qty,price:+h.buyPrice,...tradeBase}]);
       const matchId=existing.id;
@@ -2002,13 +2048,15 @@ export default function App(){
     if(!trades||!trades.length){alert("No hay movimientos.");return;}
     const sep=";";
     const fmtNum=(n,d=2)=>Number(n).toFixed(d).replace(".",",");
-    const header=["Fecha","Ticker","Nombre","Tipo","Nominales","Precio","Moneda","Monto Total","PnL Monto","PnL %"].join(sep);
+    const header=["Fecha","Ticker","Nombre","Tipo","Nominales","Precio","Moneda","Monto Bruto","Comisión","Monto Neto","PnL Monto","PnL %"].join(sep);
     const rows=[...trades].sort((a,b)=>a.date.localeCompare(b.date)).map(t=>{
       const qty=fmtNum(t.qty,Number(t.qty)%1===0?0:4);
-      const monto=fmtNum(Number(t.qty)*Number(t.price),2);
+      const bruto=Number(t.qty)*Number(t.price);
+      const com=t.comision?Number(t.comision):0;
+      const neto=t.tipo==="compra"?bruto+com:bruto-com;
       const pnlA=t.tipo==="venta"&&t.pnlAmt!=null?fmtNum(t.pnlAmt,2):"";
       const pnlP=t.tipo==="venta"&&t.pnlPct!=null?fmtNum(t.pnlPct,2)+"%":"";
-      return[t.date,t.ticker,`"${(t.name||"").replace(/"/g,'""')}"`,t.tipo,qty,fmtNum(t.price,4),t.currency||"ARS",monto,pnlA,pnlP].join(sep);
+      return[t.date,t.ticker,`"${(t.name||"").replace(/"/g,'""')}"`,t.tipo,qty,fmtNum(t.price,4),t.currency||"ARS",fmtNum(bruto,2),com?fmtNum(com,2):"",fmtNum(neto,2),pnlA,pnlP].join(sep);
     });
     const csv="\uFEFF"+header+"\n"+rows.join("\n");
     const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});

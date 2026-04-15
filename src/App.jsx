@@ -1841,7 +1841,6 @@ function RankingWidget({en, historicos, fxRate, currency}){
         <span style={{width:20}}/>
         <span style={{width:50,fontSize:9,color:"var(--text-muted)"}}>TICKER</span>
         <span style={{flex:1,fontSize:9,color:"var(--text-muted)"}}>INSTRUMENTO</span>
-        <span style={{fontSize:9,color:"var(--text-muted)",minWidth:75,textAlign:"right"}}>PnL USD {dolarLabel}</span>
         <span style={{fontSize:9,color:"var(--text-muted)",minWidth:60,textAlign:"right"}}>REND %</span>
       </div>
 
@@ -1852,7 +1851,6 @@ function RankingWidget({en, historicos, fxRate, currency}){
           <span style={{fontSize:10,color:"var(--text-muted)",width:20,textAlign:"right",position:"relative"}}>{i+1}</span>
           <span style={{width:50,fontWeight:700,fontFamily:"monospace",fontSize:12,color:"var(--accent)",position:"relative"}}>{h.ticker}</span>
           <span style={{flex:1,fontSize:11,color:"var(--text-secondary)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",position:"relative"}}>{h.name}</span>
-          <span style={{fontSize:12,color:pc(h.periodPnl),minWidth:75,textAlign:"right",position:"relative"}}>{fmtU(h.periodPnl)}</span>
           <span style={{fontSize:13,fontWeight:700,color:pc(h.periodPct),minWidth:60,textAlign:"right",position:"relative"}}>{fmtP(h.periodPct)}</span>
         </div>
       ))}
@@ -1868,7 +1866,7 @@ function RankingWidget({en, historicos, fxRate, currency}){
       )}
 
       <div style={{padding:"5px 16px",fontSize:9,color:"var(--text-muted)",borderTop:"1px solid var(--border)"}}>
-        Ordenado por % · PnL calculado sobre posición actual · USD {dolarLabel}
+        Rendimiento del instrumento en el período · dolarizado a {dolarLabel}
       </div>
     </div>
   );
@@ -2202,16 +2200,22 @@ export default function App(){
   },[ventaResult?.ticker,ventaResult?.buyDate,ventaResult?.sellDate]);
 
   const card={background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:12};
+  const [darkMode, setDarkMode] = useState(true);
 
   return(
     <>
       <style>{`
         *{box-sizing:border-box;margin:0;padding:0;}
         body{background:var(--bg);color:var(--text-primary);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
-        :root{
+        .theme-dark{
           --bg:#07101f;--bg-card:#0d1a2e;--bg-input:#152030;--border:#1c2e44;
           --accent:#2563EB;--text-primary:#E8F0FE;--text-secondary:#7A9EC4;
           --text-muted:#364F6B;--red:#F87171;--green:#34D399;--yellow:#FBBF24;
+        }
+        .theme-light{
+          --bg:#F0F4F8;--bg-card:#FFFFFF;--bg-input:#E8EEF4;--border:#CBD5E1;
+          --accent:#2563EB;--text-primary:#0F172A;--text-secondary:#475569;
+          --text-muted:#94A3B8;--red:#EF4444;--green:#16A34A;--yellow:#D97706;
         }
         @keyframes spin{to{transform:rotate(360deg)}}
         .fi *{box-sizing:border-box;}
@@ -2220,7 +2224,7 @@ export default function App(){
         ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
       `}</style>
 
-      <div style={{minHeight:"100vh",background:"var(--bg)"}}>
+      <div style={{minHeight:"100vh",background:"var(--bg)"}} className={darkMode?"theme-dark":"theme-light"}>
         {/* Header */}
         <div style={{background:"var(--bg-card)",borderBottom:"1px solid var(--border)",padding:"10px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -2236,15 +2240,20 @@ export default function App(){
             </div>
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <select value={fx} onChange={e=>setFx(e.target.value)} style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"5px 10px",color:"var(--text-secondary)",fontSize:12,cursor:"pointer"}}>
-              <option value="CCL">CCL {fmtA(liveFX.CCL)}</option>
-              <option value="MEP">MEP {fmtA(liveFX.MEP)}</option>
-              <option value="oficial">Oficial {fmtA(liveFX.oficial)}</option>
-            </select>
-            {liveFX.sourceNote&&<div style={{fontSize:10,color:"var(--text-muted)"}}>{liveFX.source}</div>}
+            <div style={{display:"flex",flexDirection:"column",gap:1}}>
+              <select value={fx} onChange={e=>setFx(e.target.value)} style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"5px 10px",color:"var(--text-secondary)",fontSize:12,cursor:"pointer"}}>
+                <option value="CCL">💵 CCL {fmtA(liveFX.CCL)}</option>
+                <option value="MEP">💵 MEP {fmtA(liveFX.MEP)}</option>
+                <option value="oficial">💵 Oficial {fmtA(liveFX.oficial)}</option>
+              </select>
+              <div style={{fontSize:9,color:"var(--text-muted)",textAlign:"center"}}>dólar de valuación</div>
+            </div>
             <button onClick={refreshPrices} disabled={priceStatus==="loading"} style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"5px 10px",color:"var(--text-secondary)",cursor:"pointer",fontSize:12}}>↻</button>
             <button onClick={downloadTrades} style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"6px 10px",color:"var(--text-secondary)",cursor:"pointer",fontSize:13}}>⬇ CSV</button>
-            <button onClick={()=>downloadPortfolioTickers(trades)} title="Exportar lista de tickers para el script de históricos" style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"6px 10px",color:"var(--text-secondary)",cursor:"pointer",fontSize:13}}>⬇ Tickers</button>
+            <button onClick={()=>setDarkMode(d=>!d)} title={darkMode?"Modo día":"Modo noche"}
+              style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"6px 10px",color:"var(--text-secondary)",cursor:"pointer",fontSize:14}}>
+              {darkMode?"☀️":"🌙"}
+            </button>
             <button onClick={()=>setModal("add")} style={{background:"var(--accent)",border:"none",borderRadius:6,padding:"6px 14px",color:"#fff",cursor:"pointer",fontSize:13,fontWeight:600}}>+ Posición</button>
           </div>
         </div>

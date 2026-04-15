@@ -707,7 +707,7 @@ function VentaTickerSearch({port, value, onSelect}){
                   <span style={{fontWeight:700,fontFamily:"monospace",color:"var(--accent)",fontSize:13}}>{pos.ticker}</span>
                   <span style={{fontSize:12,color:"var(--text-secondary)",marginLeft:8}}>{pos.name}</span>
                 </div>
-                <span style={{fontSize:11,color:"var(--text-muted)"}}>{Number(pos.qty).toLocaleString("es-AR")} uds</span>
+                <span style={{fontSize:11,color:"var(--text-muted)"}}>{Number(pos.qty).toLocaleString("es-AR")} nominales</span>
               </div>
             ))}
           </div>
@@ -717,7 +717,7 @@ function VentaTickerSearch({port, value, onSelect}){
         const pos=port.find(p=>p.ticker===value);
         return pos?(
           <div style={{marginTop:6,fontSize:11,color:"var(--text-muted)"}}>
-            {pos.name} · Tenencia: <b style={{color:"var(--text-primary)"}}>{Number(pos.qty).toLocaleString("es-AR")} uds</b>
+            {pos.name} · Tenencia: <b style={{color:"var(--text-primary)"}}>{Number(pos.qty).toLocaleString("es-AR")} nominales</b>
           </div>
         ):null;
       })()}
@@ -1013,7 +1013,7 @@ function Modal({h,port=[],onSave,onClose}){
                 onChange={e=>{const v=+e.target.value;set("qty",f.operacion==="venta"?Math.min(v,availableQty):v||e.target.value);}}
                 style={{...inp,borderColor:overSelling?"var(--red)":undefined}}/>
               {f.operacion==="venta"&&f.ticker&&<div style={{fontSize:10,color:overSelling?"var(--red)":"var(--text-muted)",marginTop:3}}>
-                {overSelling?`⚠ Solo tenés ${availableQty.toLocaleString("es-AR")}`:`Disponible: ${availableQty.toLocaleString("es-AR")}`}
+                {overSelling?`⚠ Solo tenés ${availableQty.toLocaleString("es-AR")} nominales`:`Disponible: ${availableQty.toLocaleString("es-AR")} nominales`}
               </div>}
             </label>
             <div style={{display:"flex",flexDirection:"column",gap:4}}>
@@ -1755,7 +1755,7 @@ function OperacionesTab({trades,port,setTrades,setPort,card,livePrices}){
                   {confirmDelete.tipo==="compra"?"↑ Compra":"↓ Venta"}
                 </span>
               </div>
-              <div style={{fontSize:12,color:"var(--text-muted)"}}>{confirmDelete.date} · {Number(confirmDelete.qty).toLocaleString("es-AR")} uds · {confirmDelete.currency==="USD"?fmtU(confirmDelete.price,4):fmtA(confirmDelete.price)}</div>
+              <div style={{fontSize:12,color:"var(--text-muted)"}}>{confirmDelete.date} · {Number(confirmDelete.qty).toLocaleString("es-AR")} nominales · {confirmDelete.currency==="USD"?fmtU(confirmDelete.price,4):fmtA(confirmDelete.price)}</div>
             </div>
             <div style={{fontSize:12,color:"var(--yellow)",marginBottom:20}}>⚠ Esta acción elimina la operación del historial. Si era la única compra del activo, se elimina del portfolio.</div>
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>

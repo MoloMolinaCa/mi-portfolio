@@ -1504,15 +1504,29 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
   const renderRow=(h)=>{
     const isBond=h.type==="bono_usd"||h.type==="bono_ars";
     const qtyFactor=isBond?h.qty/100:h.qty;
-    // Valor y PnL correctos en moneda original (precio × qty/100 para bonos)
+    const isUSD=h.buyCurrency==="USD";
+
+    // Valores en moneda propia del activo
     const origVal=h.currentPrice*qtyFactor;
     const origCost=(h.ppc||h.buyPrice)*qtyFactor;
     const origPnl=origVal-origCost;
-    // Valor en ARS: bonos USD se convierten al TC seleccionado
-    const valARS=h.buyCurrency==="USD"?origVal*fxRate:origVal;
-    const costARS=h.buyCurrency==="USD"?origCost*fxRate:origCost;
+    const origPct=origCost>0?(origPnl/origCost)*100:0;
+
+    // Valores en ARS (bonos USD pesificados al TC actual)
+    const valARS=isUSD?origVal*fxRate:origVal;
+    const costARS=isUSD?origCost*fxRate:origCost;
     const pnlARS=valARS-costARS;
-    const isUSD=h.buyCurrency==="USD";
+    const pctARS=costARS>0?(pnlARS/costARS)*100:0;
+
+    // Valores en USD (bonos ARS dolarizados al TC actual)
+    const valUSD=isUSD?origVal:origVal/fxRate;
+    const costUSD=isUSD?origCost:origCost/fxRate;
+    const pnlUSD=valUSD-costUSD;
+    const pctUSD=costUSD>0?(pnlUSD/costUSD)*100:0;
+
+    // Qué % mostrar según vista
+    const dispPct = view==="native" ? origPct : view==="usd" ? pctUSD : pctARS;
+    // En dual mostramos ambos con etiqueta
     return(
       <tr key={`${h.ticker}-${h.type}-${h.id||""}`} style={{borderTop:"1px solid var(--border)"}}>
         <td style={{...tdL,fontWeight:700,fontFamily:"monospace",color:"var(--accent)"}}>
@@ -1530,30 +1544,52 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
           {h.liveChangePct!=null&&h.isLive&&<span style={{display:"block",fontSize:9,color:pc(h.liveChangePct)}}>{fmtP(h.liveChangePct)} hoy</span>}
           {!h.isLive&&<span style={{display:"block",fontSize:8,color:"var(--text-muted)"}}>guardado</span>}
         </td>
-        {/* Columna ARS — bonos USD pesificados al TC */}
-        {(view==="dual"||view==="native")&&(
+        {/* Columna ARS */}
+        {(view==="dual"||view==="ars")&&(
           <td style={{...tdR,fontWeight:600}}>
             {hideAmounts?"••••":fmtA(valARS)}
-            <span style={{display:"block",fontSize:9,color:"var(--text-muted)"}}>{isUSD?`× $${Math.round(fxRate).toLocaleString("es-AR")}`:""}</span>
+            {isUSD&&<span style={{display:"block",fontSize:9,color:"var(--text-muted)"}}>pesif. × {Math.round(fxRate).toLocaleString("es-AR")}</span>}
           </td>
         )}
-        {(view==="dual"||view==="native")&&(
-          <td style={{...tdR,color:pc(pnlARS),fontSize:11}}>
-            {hideAmounts?"••••":fmtA(pnlARS)}
+        {(view==="dual"||view==="ars")&&(
+          <td style={{...tdR,fontSize:11}}>
+            <span style={{color:pc(pnlARS),fontWeight:600}}>{hideAmounts?"••••":fmtA(pnlARS)}</span>
+            <span style={{display:"block",fontSize:10,color:pc(pctARS),fontWeight:700}}>{fmtP(pctARS)}</span>
           </td>
         )}
-        {/* Columna USD — bonos ARS dolarizados al TC */}
+        {/* Columna USD */}
         {(view==="dual"||view==="usd")&&(
           <td style={{...tdR,fontWeight:700}}>
-            {hideAmounts?"••••":fmtU(h.valUSD)}
+            {hideAmounts?"••••":fmtU(valUSD)}
+            {!isUSD&&<span style={{display:"block",fontSize:9,color:"var(--text-muted)"}}>dolar. ÷ {Math.round(fxRate).toLocaleString("es-AR")}</span>}
           </td>
         )}
         {(view==="dual"||view==="usd")&&(
-          <td style={{...tdR,color:pc(h.pnlUSD),fontSize:11}}>
-            {hideAmounts?"••••":fmtU(h.pnlUSD)}
+          <td style={{...tdR,fontSize:11}}>
+            <span style={{color:pc(pnlUSD),fontWeight:600}}>{hideAmounts?"••••":fmtU(pnlUSD)}</span>
+            <span style={{display:"block",fontSize:10,color:pc(pctUSD),fontWeight:700}}>{fmtP(pctUSD)}</span>
           </td>
         )}
-        <td style={{...tdR,fontWeight:600,color:pc(h.pnlPct)}}>{fmtP(h.pnlPct)}</td>
+        {/* Columna moneda propia */}
+        {view==="native"&&(
+          <td style={{...tdR,fontWeight:600}}>
+            {hideAmounts?"••••":(isUSD?fmtU(origVal):fmtA(origVal))}
+          </td>
+        )}
+        {view==="native"&&(
+          <td style={{...tdR,fontSize:11}}>
+            <span style={{color:pc(origPnl),fontWeight:600}}>{hideAmounts?"••••":(isUSD?fmtU(origPnl):fmtA(origPnl))}</span>
+            <span style={{display:"block",fontSize:10,color:pc(origPct),fontWeight:700}}>{fmtP(origPct)}</span>
+          </td>
+        )}
+        {/* % resumen al final según vista */}
+        {view==="dual"&&(
+          <td style={{...tdR,fontSize:11}}>
+            <span style={{display:"block",color:pc(pctARS),fontWeight:700}}>{fmtP(pctARS)} <span style={{fontSize:9,fontWeight:400}}>ARS</span></span>
+            <span style={{display:"block",color:pc(pctUSD),fontWeight:700}}>{fmtP(pctUSD)} <span style={{fontSize:9,fontWeight:400}}>USD</span></span>
+          </td>
+        )}
+        {view!=="dual"&&<td style={{...tdR,fontWeight:700,color:pc(dispPct)}}>{fmtP(dispPct)}</td>}
       </tr>
     );
   };
@@ -1564,7 +1600,7 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
     <div className="fi" style={{display:"grid",gap:14}}>
       {/* Header view toggle */}
       <div style={{display:"flex",justifyContent:"flex-end",gap:4}}>
-        {[["dual","⇄ Dual (ARS + USD)"],["native","Solo ARS"],["usd","Solo USD"]].map(([k,l])=>(
+        {[["dual","⇄ ARS + USD"],["ars","Solo ARS"],["usd","Solo USD"],["native","Moneda propia"]].map(([k,l])=>(
           <button key={k} onClick={()=>setView(k)}
             style={{padding:"4px 12px",borderRadius:6,border:"1px solid var(--border)",cursor:"pointer",fontSize:11,
               background:view===k?"var(--accent)":"var(--bg-input)",color:view===k?"#fff":"var(--text-secondary)"}}>
@@ -1604,9 +1640,10 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
                     <th style={thR}>Nominales</th>
                     <th style={thR}>PPC</th>
                     <th style={thR}>Precio actual</th>
-                    {(view==="dual"||view==="native")&&<><th style={thR}>Val. ARS</th><th style={thR}>PnL ARS</th></>}
-                    {(view==="dual"||view==="usd")&&<><th style={thR}>Val. USD</th><th style={thR}>PnL USD</th></>}
-                    <th style={thR}>Rend %</th>
+                    {(view==="dual"||view==="ars")&&<><th style={thR}>Val. ARS</th><th style={thR}>PnL · % ARS</th></>}
+                    {(view==="dual"||view==="usd")&&<><th style={thR}>Val. USD</th><th style={thR}>PnL · % USD</th></>}
+                    {view==="native"&&<><th style={thR}>Val. moneda</th><th style={thR}>PnL · % moneda</th></>}
+                    <th style={thR}>{view==="dual"?"Rend %":"Rend %"}</th>
                   </tr>
                 </thead>
                 <tbody>{items.map(renderRow)}</tbody>

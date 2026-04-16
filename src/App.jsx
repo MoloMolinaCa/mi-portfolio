@@ -1486,7 +1486,7 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
   );
 }
 
-function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setModal,del,card}){
+function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setModal,del,card,hideAmounts=false}){
   const [view,setView]=useState("dual");
   const fmtU=(n,d=0)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"USD",maximumFractionDigits:d}).format(n);
   const fmtA=(n)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:0}).format(n);
@@ -1563,8 +1563,8 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
                 <span style={{fontSize:11,color:"var(--text-muted)"}}>· {items.length} posición{items.length!==1?"es":""}</span>
               </div>
               <div style={{display:"flex",gap:20,alignItems:"center",fontSize:12}}>
-                <span style={{color:"var(--text-muted)"}}>Saldo: <b style={{color:"var(--text-primary)"}}>{fmtU(secVal)}</b></span>
-                <span style={{color:"var(--text-muted)"}}>PnL: <b style={{color:pc(secPnl)}}>{fmtU(secPnl,0)}</b></span>
+                <span style={{color:"var(--text-muted)"}}>Saldo: <b style={{color:"var(--text-primary)"}}>{hideAmounts?"••••••":fmtU(secVal)}</b></span>
+                <span style={{color:"var(--text-muted)"}}>PnL: <b style={{color:pc(secPnl)}}>{hideAmounts?"••••••":fmtU(secPnl,0)}</b></span>
                 <span style={{fontWeight:700,color:pc(secPct),fontSize:13}}>{fmtP(secPct)}</span>
               </div>
             </div>
@@ -1591,9 +1591,9 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
 
       {/* Totales globales */}
       <div style={{...card,padding:"12px 16px",display:"flex",gap:24,flexWrap:"wrap",fontSize:12}}>
-        <span style={{color:"var(--text-muted)"}}>Total: <b style={{color:"var(--text-primary)"}}>{fmtU(totUSD)}</b></span>
-        <span style={{color:"var(--text-muted)"}}>Costo: <b>{fmtU(totCost)}</b></span>
-        <span style={{color:"var(--text-muted)"}}>PnL: <b style={{color:pc(totPnl)}}>{fmtU(totPnl)}</b></span>
+        <span style={{color:"var(--text-muted)"}}>Total: <b style={{color:"var(--text-primary)"}}>{hideAmounts?"••••••":fmtU(totUSD)}</b></span>
+        <span style={{color:"var(--text-muted)"}}>Costo: <b>{hideAmounts?"••••••":fmtU(totCost)}</b></span>
+        <span style={{color:"var(--text-muted)"}}>PnL: <b style={{color:pc(totPnl)}}>{hideAmounts?"••••••":fmtU(totPnl)}</b></span>
         <span style={{color:"var(--text-muted)"}}>Rend: <b style={{color:pc(totPct)}}>{fmtP(totPct)}</b></span>
         <span style={{color:"var(--text-muted)",fontSize:10,marginLeft:"auto"}}>TC {fxMode}: {new Intl.NumberFormat("es-AR").format(Math.round(fxRate))}</span>
       </div>
@@ -1913,7 +1913,7 @@ function RankingWidget({en, historicos, fxRate, currency}){
   );
 }
 
-function DayMoversWidget({en, historicos, fxRate, livePrices, card}){
+function DayMoversWidget({en, historicos, fxRate, livePrices, card, hideAmounts=false}){
   const fmtU=(n,d=0)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"USD",maximumFractionDigits:d}).format(n);
   const fmtA=(n)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:0}).format(n);
   const fmtP=(n)=>`${n>=0?"+":""}${n.toFixed(2)}%`;
@@ -1952,7 +1952,7 @@ function DayMoversWidget({en, historicos, fxRate, livePrices, card}){
       <div style={{flex:1,fontSize:11,color:"var(--text-secondary)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.name}</div>
       <div style={{textAlign:"right",flexShrink:0}}>
         <div style={{fontWeight:700,fontSize:13,color:pc(h.dayPct)}}>{fmtP(h.dayPct)}</div>
-        <div style={{fontSize:10,color:pc(h.dayPnl)}}>{h.dayPnl>=0?"+":""}{fmtU(h.dayPnl,0)}</div>
+        <div style={{fontSize:10,color:pc(h.dayPnl)}}>{hideAmounts?"••••":(h.dayPnl>=0?"+":"")+fmtU(h.dayPnl,0)}</div>
       </div>
     </div>
   );
@@ -1978,7 +1978,7 @@ function DayMoversWidget({en, historicos, fxRate, livePrices, card}){
 }
 
 
-function AnalisisTab({en, historicos, fxRate, currency, card, livePrices}){
+function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAmounts=false}){
   const fmtU=(n,d=0)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"USD",maximumFractionDigits:d}).format(n);
   const fmtA=(n)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:0}).format(n);
   const fmtP=(n)=>`${n>=0?"+":""}${n.toFixed(2)}%`;
@@ -2037,8 +2037,8 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices}){
                     {h.hasLive&&<span style={{display:"block",fontSize:9,color:"var(--green)"}}>● live</span>}
                   </td>
                   <td style={{padding:"10px 12px",textAlign:"right",fontWeight:700,color:pc(h.dayPct)}}>{fmtP(h.dayPct)}</td>
-                  <td style={{padding:"10px 12px",textAlign:"right",color:pc(h.dayPnlUSD||0)}}>{h.dayPnlUSD!=null?(h.dayPnlUSD>=0?"+":"")+fmtU(h.dayPnlUSD,0):"—"}</td>
-                  <td style={{padding:"10px 12px",textAlign:"right",color:pc(h.pnlUSD)}}>{fmtU(h.pnlUSD,0)}</td>
+                  <td style={{padding:"10px 12px",textAlign:"right",color:pc(h.dayPnlUSD||0)}}>{hideAmounts?"••••":(h.dayPnlUSD!=null?(h.dayPnlUSD>=0?"+":"")+fmtU(h.dayPnlUSD,0):"—")}</td>
+                  <td style={{padding:"10px 12px",textAlign:"right",color:pc(h.pnlUSD)}}>{hideAmounts?"••••":fmtU(h.pnlUSD,0)}</td>
                 </tr>
               ))}
             </tbody>
@@ -2383,6 +2383,7 @@ export default function App(){
 
   const card={background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:12};
   const [darkMode, setDarkMode] = useState(true);
+  const [hideAmounts, setHideAmounts] = useState(false);
 
   return(
     <>
@@ -2426,14 +2427,18 @@ export default function App(){
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             <div style={{display:"flex",flexDirection:"column",gap:1}}>
               <select value={fx} onChange={e=>setFx(e.target.value)} style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"5px 10px",color:"var(--text-secondary)",fontSize:12,cursor:"pointer"}}>
-                <option value="CCL">💵 CCL {fmtA(liveFX.CCL)}</option>
-                <option value="MEP">💵 MEP {fmtA(liveFX.MEP)}</option>
-                <option value="oficial">💵 Oficial {fmtA(liveFX.oficial)}</option>
+                <option value="CCL">💵 CCL {hideAmounts?"••••":fmtA(liveFX.CCL)}</option>
+                <option value="MEP">💵 MEP {hideAmounts?"••••":fmtA(liveFX.MEP)}</option>
+                <option value="oficial">💵 Oficial {hideAmounts?"••••":fmtA(liveFX.oficial)}</option>
               </select>
               <div style={{fontSize:9,color:"var(--text-muted)",textAlign:"center"}}>dólar de valuación</div>
             </div>
             <button onClick={refreshPrices} disabled={priceStatus==="loading"} style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"5px 10px",color:"var(--text-secondary)",cursor:"pointer",fontSize:12}}>↻</button>
             <button onClick={downloadTrades} style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"6px 10px",color:"var(--text-secondary)",cursor:"pointer",fontSize:13}}>⬇ CSV</button>
+            <button onClick={()=>setHideAmounts(h=>!h)} title={hideAmounts?"Mostrar montos":"Ocultar montos"}
+              style={{background:hideAmounts?"rgba(37,99,235,0.15)":"var(--bg-card)",border:hideAmounts?"1px solid var(--accent)":"1px solid var(--border)",borderRadius:6,padding:"6px 10px",color:hideAmounts?"var(--accent)":"var(--text-secondary)",cursor:"pointer",fontSize:14}}>
+              {hideAmounts?"🙈":"👁"}
+            </button>
             <button onClick={()=>setDarkMode(d=>!d)} title={darkMode?"Modo día":"Modo noche"}
               style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"6px 10px",color:"var(--text-secondary)",cursor:"pointer",fontSize:14}}>
               {darkMode?"☀️":"🌙"}
@@ -2458,11 +2463,11 @@ export default function App(){
             <div className="fi" style={{display:"grid",gap:16}}>
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(185px,1fr))",gap:12}}>
                 {[
-                  {lbl:"Valor Total USD",val:fmtU(totUSD),sub:fmtA(totUSD*fxRate)+" ARS",col:"var(--accent)"},
-                  {lbl:"PnL Total",val:fmtP(totPct),sub:fmtU(totPnl)+" PnL",col:pc(totPnl)},
+                  {lbl:"Valor Total USD",val:hideAmounts?"••••••":fmtU(totUSD),sub:hideAmounts?"••••••":fmtA(totUSD*fxRate)+" ARS",col:"var(--accent)"},
+                  {lbl:"PnL Total",val:fmtP(totPct),sub:hideAmounts?"••••••":fmtU(totPnl)+" PnL",col:pc(totPnl)},
                   {lbl:"Alpha vs T10Y",val:fmtP(alpha),sub:"Benchmark "+fmtP(benchPct),col:pc(alpha)},
                   {lbl:"Treasury 10Y",val:liveT10Y+"%",sub:"Yield anual USD",col:"var(--yellow)"},
-                  {lbl:"TC "+fx,val:"$"+fxRate.toLocaleString("es-AR"),sub:"ARS/USD · "+liveFX.source,col:"var(--text-secondary)"},
+                  {lbl:"TC "+fx,val:hideAmounts?"••••••":"$"+fxRate.toLocaleString("es-AR"),sub:"ARS/USD · "+liveFX.source,col:"var(--text-secondary)"},
                 ].map(c=>(
                   <div key={c.lbl} style={{...card,padding:"15px 17px"}}>
                     <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:5}}>{c.lbl}</div>
@@ -2490,14 +2495,14 @@ export default function App(){
                 </div>
                 <div style={{...card,padding:18,display:"flex",flexDirection:"column"}}>
                   <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Rendimiento base 100 · USD CCL</div>
-                  <div style={{flex:1,minHeight:0,height:340}}>
+                  <div style={{flex:1,minHeight:0,height:260}}>
                     <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos}/>
                   </div>
                 </div>
               </div>
 
               {/* Top/Bottom 5 del día en Dashboard */}
-              <DayMoversWidget en={enGrouped} historicos={historicos} fxRate={fxRate} livePrices={livePrices} card={card}/>
+              <DayMoversWidget en={enGrouped} historicos={historicos} fxRate={fxRate} livePrices={livePrices} card={card} hideAmounts={hideAmounts}/>
 
 
             </div>
@@ -2507,12 +2512,12 @@ export default function App(){
           {tab==="portfolio"&&(
             <PortfolioTab byType={byType} en={enGrouped} totUSD={totUSD} totCost={totCost}
               totPnl={totPnl} totPct={totPct} fxRate={fxRate} fxMode={fx}
-              setModal={setModal} del={del} card={card}/>
+              setModal={setModal} del={del} card={card} hideAmounts={hideAmounts}/>
           )}
 
           {/* ANÁLISIS */}
           {tab==="analisis"&&(
-            <AnalisisTab en={enGrouped} historicos={historicos} fxRate={fxRate} currency={fx} card={card} livePrices={livePrices}/>
+            <AnalisisTab en={enGrouped} historicos={historicos} fxRate={fxRate} currency={fx} card={card} livePrices={livePrices} hideAmounts={hideAmounts}/>
           )}
 
           {/* OPERACIONES */}

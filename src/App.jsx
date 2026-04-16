@@ -290,7 +290,7 @@ function Donut({segs, size=120}){
 function Chart100({series}){
   const [hover,setHover]=useState(null);
   if(!series?.length)return null;
-  const W=560,H=280,PL=52,PT=14,PR=68,PB=30;
+  const W=560,H=280,PL=52,PT=14,PR=80,PB=30;
   const allV=series.flatMap(s=>s.data.map(d=>d.val));
   const minV=Math.min(...allV)*0.997,maxV=Math.max(...allV)*1.003;
   const n=series[0].data.length;
@@ -343,8 +343,8 @@ function Chart100({series}){
           return(
             <g key={`lbl-${s.key}`}>
               {Math.abs(cy-origY)>2&&<line x1={xS(n-1)} y1={origY} x2={lastX-2} y2={cy} stroke={s.color} strokeWidth="0.8" opacity="0.4"/>}
-              <circle cx={xS(n-1)} cy={origY} r={s.bold?3.5:2.5} fill={s.color}/>
-              <text x={lastX+2} y={cy+4} fontSize="11" fill={s.color} fontWeight="700">
+              <circle cx={xS(n-1)} cy={origY} r={s.bold?4:3} fill={s.color}/>
+              <text x={lastX+4} y={cy+5} fontSize="14" fill={s.color} fontWeight="700">
                 {pct>=0?"+":""}{pct}%
               </text>
             </g>

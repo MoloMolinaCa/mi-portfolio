@@ -286,32 +286,78 @@ function Donut({segs}){
 }
 
 function Chart100({series}){
+  const [hover,setHover]=useState(null);
   if(!series?.length)return null;
-  const W=560,H=200,PL=44,PT=12,PR=12,PB=26;
+  const W=560,H=280,PL=52,PT=14,PR=16,PB=30;
   const allV=series.flatMap(s=>s.data.map(d=>d.val));
   const minV=Math.min(...allV)*0.997,maxV=Math.max(...allV)*1.003;
   const n=series[0].data.length;
-  const xS=i=>PL+(i/(n-1))*(W-PL-PR);
+  const xS=i=>PL+(i/(Math.max(n-1,1)))*(W-PL-PR);
   const yS=v=>PT+(1-(v-minV)/(maxV-minV))*(H-PT-PB);
-  const path=data=>data.map((d,i)=>`${i===0?"M":"L"}${xS(i).toFixed(1)},${yS(d.val).toFixed(1)}`).join(" ");
-  const yTicks=Array.from({length:5},(_,i)=>minV+(maxV-minV)*i/4);
-  const xLabels=[0,Math.floor(n/3),Math.floor(2*n/3),n-1].filter((v,i,a)=>a.indexOf(v)===i);
+  const makePath=data=>data.map((d,i)=>`${i===0?"M":"L"}${xS(i).toFixed(1)},${yS(d.val).toFixed(1)}`).join(" ");
+  const yTicks=Array.from({length:6},(_,i)=>minV+(maxV-minV)*i/5);
+  const xLabels=[0,Math.floor(n/4),Math.floor(n/2),Math.floor(3*n/4),n-1].filter((v,i,a)=>a.indexOf(v)===i&&v<n);
+  const onMove=(e)=>{
+    const rect=e.currentTarget.getBoundingClientRect();
+    const svgX=(e.clientX-rect.left)*(W/rect.width);
+    setHover(Math.max(0,Math.min(n-1,Math.round((svgX-PL)/(W-PL-PR)*(n-1)))));
+  };
+  const ttRight=hover!=null&&xS(hover)>W*0.65;
+  const ttPct=hover!=null?(xS(hover)/W*100):0;
+  const LABELS={port:"Portfolio",spy:"S&P 500",ccl:"CCL",mep:"MEP",t10y:"T10Y"};
   return(
-    <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:"100%",display:"block"}}>
-      {yTicks.map((v,i)=>(
-        <g key={i}>
-          <line x1={PL} x2={W-PR} y1={yS(v)} y2={yS(v)} stroke="var(--border)" strokeWidth="0.5"/>
-          <text x={PL-4} y={yS(v)+4} textAnchor="end" fontSize="9" fill="var(--text-muted)">{v.toFixed(0)}</text>
-        </g>
-      ))}
-      <line x1={PL} x2={W-PR} y1={yS(100)} y2={yS(100)} stroke="rgba(255,255,255,0.1)" strokeWidth="1" strokeDasharray="3,3"/>
-      {series.map(s=>(
-        <path key={s.key} d={path(s.data)} fill="none" stroke={s.color} strokeWidth={s.bold?2:1.5} strokeLinejoin="round" opacity={s.bold?1:0.7}/>
-      ))}
-      {xLabels.map(i=>(
-        <text key={i} x={xS(i)} y={H-4} textAnchor="middle" fontSize="9" fill="var(--text-muted)">{series[0].data[i]?.date?.slice(5)}</text>
-      ))}
-    </svg>
+    <div style={{position:"relative",width:"100%",height:"100%"}}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:"100%",display:"block",cursor:"crosshair"}}
+        onMouseMove={onMove} onMouseLeave={()=>setHover(null)}>
+        {yTicks.map((v,i)=>(
+          <g key={i}>
+            <line x1={PL} x2={W-PR} y1={yS(v)} y2={yS(v)} stroke="var(--border)" strokeWidth="0.5"/>
+            <text x={PL-6} y={yS(v)+4} textAnchor="end" fontSize="10" fill="var(--text-muted)">{v.toFixed(1)}</text>
+          </g>
+        ))}
+        <line x1={PL} x2={W-PR} y1={yS(100)} y2={yS(100)} stroke="rgba(255,255,255,0.12)" strokeWidth="1" strokeDasharray="4,4"/>
+        {series.map(s=>(
+          <path key={s.key} d={makePath(s.data)} fill="none" stroke={s.color} strokeWidth={s.bold?2.5:1.5} strokeLinejoin="round" opacity={s.bold?1:0.75}/>
+        ))}
+        {xLabels.map(i=>(
+          <text key={i} x={xS(i)} y={H-8} textAnchor="middle" fontSize="10" fill="var(--text-muted)">{series[0].data[i]?.date?.slice(5)}</text>
+        ))}
+        {hover!=null&&(
+          <>
+            <line x1={xS(hover)} x2={xS(hover)} y1={PT} y2={H-PB} stroke="rgba(255,255,255,0.2)" strokeWidth="1" strokeDasharray="3,3"/>
+            {series.map(s=>{const v=s.data[hover]?.val;if(v==null)return null;return <circle key={s.key} cx={xS(hover)} cy={yS(v)} r={s.bold?4.5:3} fill={s.color} stroke="var(--bg-card)" strokeWidth="1.5"/>;  })}
+          </>
+        )}
+      </svg>
+      {hover!=null&&(
+        <div style={{
+          position:"absolute",top:10,
+          left:ttRight?undefined:ttPct+"%",
+          right:ttRight?(100-ttPct)+"%":undefined,
+          transform:ttRight?"translateX(10px)":"translateX(-50%)",
+          background:"var(--bg-card)",border:"1px solid var(--border)",
+          borderRadius:9,padding:"9px 13px",pointerEvents:"none",
+          fontSize:12,minWidth:152,boxShadow:"0 6px 20px rgba(0,0,0,0.45)",zIndex:10,
+        }}>
+          <div style={{fontSize:10,color:"var(--text-muted)",marginBottom:7,fontWeight:700,letterSpacing:1}}>
+            {series[0].data[hover]?.date?.slice(5).replace("-","/")}
+          </div>
+          {series.map(s=>{
+            const v=s.data[hover]?.val;
+            if(v==null)return null;
+            const pct=(v-100).toFixed(2);
+            return(
+              <div key={s.key} style={{display:"flex",justifyContent:"space-between",gap:14,marginBottom:4,alignItems:"center"}}>
+                <span style={{color:s.color,fontSize:11,fontWeight:s.bold?700:400}}>{LABELS[s.key]||s.key}</span>
+                <span style={{fontWeight:700,fontFamily:"monospace",fontSize:12,color:v>=100?"var(--green)":"var(--red)"}}>
+                  {v>=100?"+":""}{pct}%
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1865,6 +1911,254 @@ function RankingWidget({en, historicos, fxRate, currency}){
   );
 }
 
+function DayMoversWidget({en, historicos, fxRate, livePrices, card}){
+  const fmtU=(n,d=0)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"USD",maximumFractionDigits:d}).format(n);
+  const fmtA=(n)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:0}).format(n);
+  const fmtP=(n)=>`${n>=0?"+":""}${n.toFixed(2)}%`;
+  const pc=(n)=>n>=0?"var(--green)":"var(--red)";
+
+  const ranked=useMemo(()=>{
+    return en.map(h=>{
+      const bars=historicos?.[h.ticker]||[];
+      const prevBar=bars.length?bars[bars.length-1]:null;
+      const prevPrice=prevBar?.close||null;
+      const currPrice=h.currentPrice;
+      if(!prevPrice||!currPrice)return null;
+      const dayPct=((currPrice-prevPrice)/prevPrice)*100;
+      const isBond=h.type==="bono_usd"||h.type==="bono_ars";
+      const qtyFactor=isBond?h.qty/100:h.qty;
+      const valNow=h.buyCurrency==="USD"?currPrice*qtyFactor:currPrice*qtyFactor/fxRate;
+      const valPrev=h.buyCurrency==="USD"?prevPrice*qtyFactor:prevPrice*qtyFactor/fxRate;
+      const dayPnl=valNow-valPrev;
+      const hasLive=!!(livePrices&&livePrices[h.ticker]);
+      return{...h,dayPct,dayPnl,hasLive,prevPrice};
+    }).filter(Boolean).sort((a,b)=>b.dayPct-a.dayPct);
+  },[en,historicos,fxRate,livePrices]);
+
+  if(!ranked.length)return null;
+  const top5=ranked.slice(0,5);
+  const bot5=[...ranked].reverse().slice(0,5);
+
+  const row=(h,isTop)=>(
+    <div key={h.ticker} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",borderTop:"1px solid var(--border)"}}>
+      <div style={{width:36,flexShrink:0}}>
+        <div style={{fontWeight:700,fontFamily:"monospace",fontSize:12,color:"var(--accent)"}}>{h.ticker}</div>
+        {h.hasLive
+          ?<div style={{fontSize:9,color:"var(--green)"}}>● live</div>
+          :<div style={{fontSize:9,color:"var(--text-muted)"}}>hist.</div>}
+      </div>
+      <div style={{flex:1,fontSize:11,color:"var(--text-secondary)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.name}</div>
+      <div style={{textAlign:"right",flexShrink:0}}>
+        <div style={{fontWeight:700,fontSize:13,color:pc(h.dayPct)}}>{fmtP(h.dayPct)}</div>
+        <div style={{fontSize:10,color:pc(h.dayPnl)}}>{h.dayPnl>=0?"+":""}{fmtU(h.dayPnl,0)}</div>
+      </div>
+    </div>
+  );
+
+  return(
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+      <div style={{...card,overflow:"hidden"}}>
+        <div style={{padding:"10px 14px",borderBottom:"1px solid var(--border)",display:"flex",alignItems:"center",gap:8,background:"rgba(52,211,153,0.05)"}}>
+          <span>🚀</span>
+          <span style={{fontWeight:700,fontSize:12,color:"var(--green)"}}>Top 5 · Mejores del día</span>
+        </div>
+        {top5.map(h=>row(h,true))}
+      </div>
+      <div style={{...card,overflow:"hidden"}}>
+        <div style={{padding:"10px 14px",borderBottom:"1px solid var(--border)",display:"flex",alignItems:"center",gap:8,background:"rgba(248,113,113,0.05)"}}>
+          <span>📉</span>
+          <span style={{fontWeight:700,fontSize:12,color:"var(--red)"}}>Bottom 5 · Peores del día</span>
+        </div>
+        {bot5.map(h=>row(h,false))}
+      </div>
+    </div>
+  );
+}
+
+
+function AnalisisTab({en, historicos, fxRate, currency, card, livePrices}){
+  const fmtU=(n,d=0)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"USD",maximumFractionDigits:d}).format(n);
+  const fmtA=(n)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:0}).format(n);
+  const fmtP=(n)=>`${n>=0?"+":""}${n.toFixed(2)}%`;
+  const pc=(n)=>n>=0?"var(--green)":"var(--red)";
+  const todayStr=new Date().toISOString().slice(0,10);
+
+  // Calcular rendimiento del día para cada activo
+  const withDayReturn=useMemo(()=>{
+    return en.map(h=>{
+      const live=livePrices[h.ticker];
+      const hasLive=!!live;
+      const bars=historicos?.[h.ticker]||[];
+      // Precio anterior: último bar histórico (cierre de ayer)
+      const prevBar=bars.length?bars[bars.length-1]:null;
+      const prevPrice=prevBar?.close||null;
+      const currPrice=h.currentPrice;
+      let dayPct=null,dayPnlUSD=null;
+      if(prevPrice&&prevPrice>0&&currPrice){
+        dayPct=((currPrice-prevPrice)/prevPrice)*100;
+        const isBond=h.type==="bono_usd"||h.type==="bono_ars";
+        const qtyFactor=isBond?h.qty/100:h.qty;
+        const valNow=h.buyCurrency==="USD"?currPrice*qtyFactor:currPrice*qtyFactor/fxRate;
+        const valPrev=h.buyCurrency==="USD"?prevPrice*qtyFactor:prevPrice*qtyFactor/fxRate;
+        dayPnlUSD=valNow-valPrev;
+      }
+      return{...h,dayPct,dayPnlUSD,hasLive,prevPrice};
+    }).filter(h=>h.dayPct!=null);
+  },[en,historicos,fxRate,livePrices]);
+
+  const hasLiveCount=withDayReturn.filter(h=>h.hasLive).length;
+  const sorted=[...withDayReturn].sort((a,b)=>b.dayPct-a.dayPct);
+  const top5=sorted.slice(0,5);
+  const bot5=[...sorted].reverse().slice(0,5);
+
+  const renderCard=(h,rank,isTop)=>{
+    const isBond=h.type==="bono_usd"||h.type==="bono_ars";
+    const qtyFactor=isBond?h.qty/100:h.qty;
+    const t=ASSET_TYPES[h.type]||{};
+    return(
+      <div key={h.ticker} style={{
+        display:"grid",gridTemplateColumns:"32px 1fr auto",gap:12,alignItems:"center",
+        padding:"13px 16px",borderTop:"1px solid var(--border)",
+        background:rank===1?`${isTop?"rgba(52,211,153,":"rgba(248,113,113,"}0.04)`:undefined,
+        position:"relative",overflow:"hidden",
+      }}>
+        <div style={{
+          width:32,height:32,borderRadius:8,
+          background:`${isTop?"rgba(52,211,153,":"rgba(248,113,113,"}0.12)`,
+          display:"flex",alignItems:"center",justifyContent:"center",
+          fontSize:14,fontWeight:700,color:isTop?"var(--green)":"var(--red)",flexShrink:0,
+        }}>
+          {rank}
+        </div>
+        <div style={{minWidth:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
+            <span style={{fontWeight:700,fontFamily:"monospace",color:"var(--accent)",fontSize:13}}>{h.ticker}</span>
+            <span style={{fontSize:10,padding:"1px 5px",borderRadius:4,
+              background:`${t.color||"#888"}22`,color:t.color||"#888",
+              border:`1px solid ${t.color||"#888"}33`}}>{t.icon} {t.label}</span>
+            {h.hasLive&&<span style={{fontSize:9,color:"var(--green)"}}>● live</span>}
+            {!h.hasLive&&<span style={{fontSize:9,color:"var(--text-muted)"}}>hist.</span>}
+          </div>
+          <div style={{fontSize:11,color:"var(--text-secondary)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.name}</div>
+          <div style={{fontSize:10,color:"var(--text-muted)",marginTop:2}}>
+            {h.buyCurrency==="USD"?fmtU(h.prevPrice,4):fmtA(h.prevPrice)} → {h.buyCurrency==="USD"?fmtU(h.currentPrice,4):fmtA(h.currentPrice)}
+          </div>
+        </div>
+        <div style={{textAlign:"right",flexShrink:0}}>
+          <div style={{fontSize:18,fontWeight:700,color:pc(h.dayPct),fontFamily:"Georgia,serif"}}>
+            {fmtP(h.dayPct)}
+          </div>
+          <div style={{fontSize:12,color:pc(h.dayPnlUSD||0),marginTop:2}}>
+            {h.dayPnlUSD!=null?(h.dayPnlUSD>=0?"+":"")+fmtU(h.dayPnlUSD,0):"—"}
+          </div>
+          <div style={{fontSize:10,color:"var(--text-muted)"}}>P&L del día (USD)</div>
+        </div>
+      </div>
+    );
+  };
+
+  // Total P&L del día
+  const totalDayPnl=withDayReturn.reduce((a,h)=>a+(h.dayPnlUSD||0),0);
+
+  return(
+    <div className="fi" style={{display:"grid",gap:16}}>
+
+      {/* Header banner */}
+      <div style={{...card,padding:"16px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
+        <div>
+          <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Movimiento del día</div>
+          <div style={{fontSize:26,fontWeight:700,fontFamily:"Georgia,serif",color:pc(totalDayPnl)}}>
+            {totalDayPnl>=0?"+":""}{fmtU(totalDayPnl,0)}
+          </div>
+          <div style={{fontSize:11,color:"var(--text-muted)",marginTop:2}}>
+            {hasLiveCount} activos con precio live · {withDayReturn.length} con datos históricos
+            {hasLiveCount<withDayReturn.length&&<span style={{color:"var(--yellow)"}}> · {withDayReturn.length-hasLiveCount} usan cierre anterior</span>}
+          </div>
+        </div>
+        <div style={{fontSize:11,color:"var(--text-muted)",textAlign:"right"}}>
+          <div style={{marginBottom:2}}>Fecha: <b style={{color:"var(--text-primary)"}}>{todayStr}</b></div>
+          <div>Rendimientos vs cierre anterior</div>
+        </div>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+
+        {/* Top 5 mejores */}
+        <div style={{...card,overflow:"hidden"}}>
+          <div style={{padding:"12px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center",background:"rgba(52,211,153,0.05)"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:16}}>🚀</span>
+              <span style={{fontWeight:700,fontSize:13,color:"var(--green)"}}>Top 5 · Mejores del día</span>
+            </div>
+            <span style={{fontSize:11,color:"var(--text-muted)"}}>% · P&L USD</span>
+          </div>
+          {top5.length===0
+            ?<div style={{padding:24,textAlign:"center",color:"var(--text-muted)",fontSize:12}}>Sin datos disponibles</div>
+            :top5.map((h,i)=>renderCard(h,i+1,true))
+          }
+        </div>
+
+        {/* Top 5 peores */}
+        <div style={{...card,overflow:"hidden"}}>
+          <div style={{padding:"12px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center",background:"rgba(248,113,113,0.05)"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:16}}>📉</span>
+              <span style={{fontWeight:700,fontSize:13,color:"var(--red)"}}>Bottom 5 · Peores del día</span>
+            </div>
+            <span style={{fontSize:11,color:"var(--text-muted)"}}>% · P&L USD</span>
+          </div>
+          {bot5.length===0
+            ?<div style={{padding:24,textAlign:"center",color:"var(--text-muted)",fontSize:12}}>Sin datos disponibles</div>
+            :bot5.map((h,i)=>renderCard(h,i+1,false))
+          }
+        </div>
+      </div>
+
+      {/* Ranking completo */}
+      <div style={{...card,overflow:"hidden"}}>
+        <div style={{padding:"12px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{fontWeight:700,fontSize:13}}>Todos los activos · rendimiento del día</span>
+          <span style={{fontSize:11,color:"var(--text-muted)"}}>{sorted.length} instrumentos</span>
+        </div>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead>
+              <tr style={{borderBottom:"1px solid var(--border)"}}>
+                {["#","Ticker","Nombre","Tipo","Prev. cierre","Precio actual","Rend. día","P&L día (USD)","P&L total (USD)"].map((h,i)=>(
+                  <th key={i} style={{padding:"8px 12px",textAlign:i>=6?"right":"left",fontSize:10,color:"var(--text-muted)",fontWeight:500,textTransform:"uppercase",letterSpacing:0.8,whiteSpace:"nowrap"}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((h,i)=>(
+                <tr key={h.ticker} style={{borderTop:"1px solid var(--border)"}}>
+                  <td style={{padding:"10px 12px",color:"var(--text-muted)",fontSize:11}}>{i+1}</td>
+                  <td style={{padding:"10px 12px",fontWeight:700,fontFamily:"monospace",color:"var(--accent)"}}>{h.ticker}</td>
+                  <td style={{padding:"10px 12px",color:"var(--text-secondary)",maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.name}</td>
+                  <td style={{padding:"10px 12px",color:"var(--text-muted)",fontSize:11}}>{ASSET_TYPES[h.type]?.icon} {ASSET_TYPES[h.type]?.label}</td>
+                  <td style={{padding:"10px 12px",textAlign:"right",color:"var(--text-muted)",fontSize:11}}>{h.buyCurrency==="USD"?fmtU(h.prevPrice,4):fmtA(h.prevPrice)}</td>
+                  <td style={{padding:"10px 12px",textAlign:"right",fontSize:11}}>
+                    {h.buyCurrency==="USD"?fmtU(h.currentPrice,4):fmtA(h.currentPrice)}
+                    {h.hasLive&&<span style={{display:"block",fontSize:9,color:"var(--green)"}}>● live</span>}
+                  </td>
+                  <td style={{padding:"10px 12px",textAlign:"right",fontWeight:700,color:pc(h.dayPct)}}>{fmtP(h.dayPct)}</td>
+                  <td style={{padding:"10px 12px",textAlign:"right",color:pc(h.dayPnlUSD||0)}}>{h.dayPnlUSD!=null?(h.dayPnlUSD>=0?"+":"")+fmtU(h.dayPnlUSD,0):"—"}</td>
+                  <td style={{padding:"10px 12px",textAlign:"right",color:pc(h.pnlUSD)}}>{fmtU(h.pnlUSD,0)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* RankingWidget por período */}
+      <div style={{...card,overflow:"hidden"}}>
+        <RankingWidget en={en} historicos={historicos} fxRate={fxRate} currency={currency}/>
+      </div>
+    </div>
+  );
+}
+
 export default function App(){
   // ── State ────────────────────────────────────────────────────────────────
   const SEED_TRADES = GALICIA_PORTFOLIO.map(h=>({
@@ -2253,7 +2547,7 @@ export default function App(){
 
         {/* Nav */}
         <div style={{background:"var(--bg-card)",borderBottom:"1px solid var(--border)",padding:"0 20px",display:"flex",gap:0}}>
-          {[["dashboard","📊 Dashboard"],["portfolio","💼 Portfolio"],["evolutivo","📈 Evolutivo"],["operaciones","📋 Operaciones"]].map(([id,lbl])=>(
+          {[["dashboard","📊 Dashboard"],["portfolio","💼 Portfolio"],["evolutivo","📈 Evolutivo"],["analisis","🔍 Análisis"],["operaciones","📋 Operaciones"]].map(([id,lbl])=>(
             <button key={id} onClick={()=>setTab(id)} style={{padding:"12px 16px",background:"transparent",border:"none",borderBottom:tab===id?"2px solid var(--accent)":"2px solid transparent",color:tab===id?"var(--text-primary)":"var(--text-muted)",cursor:"pointer",fontSize:13,fontWeight:tab===id?600:400}}>
               {lbl}
             </button>
@@ -2299,15 +2593,16 @@ export default function App(){
                 </div>
                 <div style={{...card,padding:18}}>
                   <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Rendimiento base 100 · USD CCL</div>
-                  <div style={{height:230}}>
+                  <div style={{height:310}}>
                     <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos}/>
                   </div>
                 </div>
               </div>
 
-              <div style={{...card,overflow:"hidden"}}>
-                <RankingWidget en={enGrouped} historicos={historicos} fxRate={fxRate} currency={fx}/>
-              </div>
+              {/* Top/Bottom 5 del día en Dashboard */}
+              <DayMoversWidget en={enGrouped} historicos={historicos} fxRate={fxRate} livePrices={livePrices} card={card}/>
+
+
             </div>
           )}
 
@@ -2324,6 +2619,11 @@ export default function App(){
               benchPct={benchPct} alpha={alpha} liveT10Y={liveT10Y}
               byType={byType} fxRate={fxRate} fx={fx}
               fxMode={fx} card={card} historicos={historicos}/>
+          )}
+
+          {/* ANÁLISIS */}
+          {tab==="analisis"&&(
+            <AnalisisTab en={enGrouped} historicos={historicos} fxRate={fxRate} currency={fx} card={card} livePrices={livePrices}/>
           )}
 
           {/* OPERACIONES */}

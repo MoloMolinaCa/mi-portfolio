@@ -1504,10 +1504,15 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
   const renderRow=(h)=>{
     const isBond=h.type==="bono_usd"||h.type==="bono_ars";
     const qtyFactor=isBond?h.qty/100:h.qty;
-    const nativeVal=h.currentPrice*h.qty;
-    const nativeCost=(h.ppc||h.buyPrice)*h.qty;
-    const nativePnl=nativeVal-nativeCost;
-    const nativeFmt=h.buyCurrency==="USD"?(v=>fmtU(v,2)):(v=>fmtA(v));
+    // Valor y PnL correctos en moneda original (precio × qty/100 para bonos)
+    const origVal=h.currentPrice*qtyFactor;
+    const origCost=(h.ppc||h.buyPrice)*qtyFactor;
+    const origPnl=origVal-origCost;
+    // Valor en ARS: bonos USD se convierten al TC seleccionado
+    const valARS=h.buyCurrency==="USD"?origVal*fxRate:origVal;
+    const costARS=h.buyCurrency==="USD"?origCost*fxRate:origCost;
+    const pnlARS=valARS-costARS;
+    const isUSD=h.buyCurrency==="USD";
     return(
       <tr key={`${h.ticker}-${h.type}-${h.id||""}`} style={{borderTop:"1px solid var(--border)"}}>
         <td style={{...tdL,fontWeight:700,fontFamily:"monospace",color:"var(--accent)"}}>
@@ -1517,18 +1522,37 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
         <td style={{...tdL,color:"var(--text-secondary)",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.name}</td>
         <td style={tdR}>{Number(h.qty).toLocaleString("es-AR",{maximumFractionDigits:4})}</td>
         <td style={{...tdR,color:"var(--text-muted)",fontSize:11}}>
-          {h.buyCurrency==="USD"?fmtU(h.ppc||h.buyPrice,4):fmtA(h.ppc||h.buyPrice)}
+          {isUSD?fmtU(h.ppc||h.buyPrice,4):fmtA(h.ppc||h.buyPrice)}
           <span style={{display:"block",fontSize:9,color:"var(--text-muted)"}}>{h.buyCurrency} · PPC</span>
         </td>
         <td style={{...tdR,fontSize:11}}>
-          {h.buyCurrency==="USD"?fmtU(h.currentPrice,4):fmtA(h.currentPrice)}
+          {isUSD?fmtU(h.currentPrice,4):fmtA(h.currentPrice)}
           {h.liveChangePct!=null&&h.isLive&&<span style={{display:"block",fontSize:9,color:pc(h.liveChangePct)}}>{fmtP(h.liveChangePct)} hoy</span>}
           {!h.isLive&&<span style={{display:"block",fontSize:8,color:"var(--text-muted)"}}>guardado</span>}
         </td>
-        {(view==="dual"||view==="native")&&<td style={{...tdR,fontWeight:600}}>{nativeFmt(nativeVal)}</td>}
-        {(view==="dual"||view==="native")&&<td style={{...tdR,color:pc(nativePnl),fontSize:11}}>{nativeFmt(nativePnl)}</td>}
-        {(view==="dual"||view==="usd")&&<td style={{...tdR,fontWeight:700}}>{fmtU(h.valUSD)}</td>}
-        {(view==="dual"||view==="usd")&&<td style={{...tdR,color:pc(h.pnlUSD),fontSize:11}}>{fmtU(h.pnlUSD)}</td>}
+        {/* Columna ARS — bonos USD pesificados al TC */}
+        {(view==="dual"||view==="native")&&(
+          <td style={{...tdR,fontWeight:600}}>
+            {hideAmounts?"••••":fmtA(valARS)}
+            <span style={{display:"block",fontSize:9,color:"var(--text-muted)"}}>{isUSD?`× $${Math.round(fxRate).toLocaleString("es-AR")}`:""}</span>
+          </td>
+        )}
+        {(view==="dual"||view==="native")&&(
+          <td style={{...tdR,color:pc(pnlARS),fontSize:11}}>
+            {hideAmounts?"••••":fmtA(pnlARS)}
+          </td>
+        )}
+        {/* Columna USD — bonos ARS dolarizados al TC */}
+        {(view==="dual"||view==="usd")&&(
+          <td style={{...tdR,fontWeight:700}}>
+            {hideAmounts?"••••":fmtU(h.valUSD)}
+          </td>
+        )}
+        {(view==="dual"||view==="usd")&&(
+          <td style={{...tdR,color:pc(h.pnlUSD),fontSize:11}}>
+            {hideAmounts?"••••":fmtU(h.pnlUSD)}
+          </td>
+        )}
         <td style={{...tdR,fontWeight:600,color:pc(h.pnlPct)}}>{fmtP(h.pnlPct)}</td>
       </tr>
     );
@@ -1540,7 +1564,7 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
     <div className="fi" style={{display:"grid",gap:14}}>
       {/* Header view toggle */}
       <div style={{display:"flex",justifyContent:"flex-end",gap:4}}>
-        {[["dual","⇄ Dual"],["native","Moneda orig."],["usd","USD"]].map(([k,l])=>(
+        {[["dual","⇄ Dual (ARS + USD)"],["native","Solo ARS"],["usd","Solo USD"]].map(([k,l])=>(
           <button key={k} onClick={()=>setView(k)}
             style={{padding:"4px 12px",borderRadius:6,border:"1px solid var(--border)",cursor:"pointer",fontSize:11,
               background:view===k?"var(--accent)":"var(--bg-input)",color:view===k?"#fff":"var(--text-secondary)"}}>
@@ -1580,7 +1604,7 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
                     <th style={thR}>Nominales</th>
                     <th style={thR}>PPC</th>
                     <th style={thR}>Precio actual</th>
-                    {(view==="dual"||view==="native")&&<><th style={thR}>Val. nativo</th><th style={thR}>PnL nativo</th></>}
+                    {(view==="dual"||view==="native")&&<><th style={thR}>Val. ARS</th><th style={thR}>PnL ARS</th></>}
                     {(view==="dual"||view==="usd")&&<><th style={thR}>Val. USD</th><th style={thR}>PnL USD</th></>}
                     <th style={thR}>Rend %</th>
                   </tr>

@@ -617,55 +617,72 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos}){
         {loading&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--text-muted)",fontSize:12}}><span style={{animation:"spin 0.8s linear infinite",display:"inline-block",marginRight:6}}>⟳</span>Cargando...</div>}
         {cd&&!loading&&series.length>0&&<Chart100 series={series}/>}
       </div>
-      {cd&&!loading&&(
-        <div style={{display:"flex",gap:16,fontSize:11,paddingTop:6,borderTop:"1px solid var(--border)",marginTop:4,flexWrap:"wrap"}}>
-          <span style={{color:"var(--text-muted)"}}>Portfolio: <b style={{color:pc(+cd.portRet)}}>{cd.portRet>=0?"+":""}{cd.portRet}%</b></span>
-          {cd.spy100&&<span style={{color:"var(--text-muted)"}}>S&amp;P 500: <b style={{color:"#60A5FA"}}>{cd.spyRet>=0?"+":""}{cd.spyRet}%</b></span>}
-          {cd.currency==="ARS"&&<span style={{color:"var(--text-muted)"}}>T10Y: <b style={{color:"var(--yellow)"}}>{(cd.t10y100[cd.t10y100.length-1].val-100).toFixed(2)}%</b></span>}
-          {cd.ccl100&&<span style={{color:"var(--text-muted)"}}>CCL: <b style={{color:pc(+cd.cclRet)}}>{cd.cclRet>=0?"+":""}{cd.cclRet}%</b></span>}
-          {cd.mep100&&<span style={{color:"var(--text-muted)"}}>MEP: <b style={{color:"#F472B6"}}>{cd.mepRet>=0?"+":""}{cd.mepRet}%</b></span>}
-          <span style={{color:"var(--text-muted)",marginLeft:"auto",fontSize:10}}>{cd.startDate} → {cd.endDate}</span>
-        </div>
-      )}
       {cd&&!loading&&(()=>{
-        // Sharpe Ratio = (retorno_portfolio - tasa_libre_riesgo) / desvío_estándar_retornos_diarios
-        // Usamos T10Y como tasa libre de riesgo, anualizada
+        // Sharpe
         const port100=cd.port100;
-        if(port100.length<3)return null;
-        // Retornos diarios del portfolio
-        const dailyRets=[];
-        for(let i=1;i<port100.length;i++){
-          const prev=port100[i-1].val,curr=port100[i].val;
-          if(prev>0)dailyRets.push((curr-prev)/prev);
-        }
-        if(dailyRets.length<2)return null;
-        const avgRet=dailyRets.reduce((a,r)=>a+r,0)/dailyRets.length;
-        const variance=dailyRets.reduce((a,r)=>a+Math.pow(r-avgRet,2),0)/dailyRets.length;
-        const stdDev=Math.sqrt(variance);
-        if(stdDev===0)return null;
-        // T10Y diaria
-        const rfDaily=liveT10Y/100/252;
-        // Sharpe anualizado
-        const sharpe=((avgRet-rfDaily)/stdDev)*Math.sqrt(252);
-        // Sharpe del S&P500 para comparar
-        let spySharpe=null;
-        if(cd.spy100&&cd.spy100.length>2){
-          const spyRets=[];
-          for(let i=1;i<cd.spy100.length;i++){const p=cd.spy100[i-1].val,c=cd.spy100[i].val;if(p>0)spyRets.push((c-p)/p);}
-          if(spyRets.length>=2){
-            const spyAvg=spyRets.reduce((a,r)=>a+r,0)/spyRets.length;
-            const spyVar=spyRets.reduce((a,r)=>a+Math.pow(r-spyAvg,2),0)/spyRets.length;
-            const spyStd=Math.sqrt(spyVar);
-            if(spyStd>0)spySharpe=((spyAvg-rfDaily)/spyStd)*Math.sqrt(252);
+        let sharpe=null,spySharpe=null;
+        if(port100.length>=3){
+          const dailyRets=[];
+          for(let i=1;i<port100.length;i++){const prev=port100[i-1].val,curr=port100[i].val;if(prev>0)dailyRets.push((curr-prev)/prev);}
+          if(dailyRets.length>=2){
+            const avg=dailyRets.reduce((a,r)=>a+r,0)/dailyRets.length;
+            const std=Math.sqrt(dailyRets.reduce((a,r)=>a+Math.pow(r-avg,2),0)/dailyRets.length);
+            const rf=liveT10Y/100/252;
+            if(std>0)sharpe=((avg-rf)/std)*Math.sqrt(252);
+            if(cd.spy100&&cd.spy100.length>2){
+              const sr=[];for(let i=1;i<cd.spy100.length;i++){const p=cd.spy100[i-1].val,c=cd.spy100[i].val;if(p>0)sr.push((c-p)/p);}
+              if(sr.length>=2){const sa=sr.reduce((a,r)=>a+r,0)/sr.length;const ss=Math.sqrt(sr.reduce((a,r)=>a+Math.pow(r-sa,2),0)/sr.length);if(ss>0)spySharpe=((sa-rf)/ss)*Math.sqrt(252);}
+            }
           }
         }
-        const sharpeColor=sharpe>1?"var(--green)":sharpe>0?"var(--yellow)":"var(--red)";
+        const sharpeColor=sharpe!=null?(sharpe>1?"var(--green)":sharpe>0?"var(--yellow)":"var(--red)"):"var(--text-muted)";
+
+        // Build stat pills
+        const stats=[
+          {label:"Portfolio",val:cd.portRet,color:pc(+cd.portRet),type:"ret"},
+          ...(cd.spy100?[{label:"S&P 500",val:cd.spyRet,color:"#60A5FA",type:"ret"}]:[]),
+          ...(cd.currency==="ARS"&&cd.t10y100?[{label:"T10Y",val:(cd.t10y100[cd.t10y100.length-1].val-100).toFixed(2),color:"var(--yellow)",type:"ret"}]:[]),
+          ...(cd.ccl100?[{label:"CCL",val:cd.cclRet,color:"#A78BFA",type:"ret"}]:[]),
+          ...(cd.mep100?[{label:"MEP",val:cd.mepRet,color:"#F472B6",type:"ret"}]:[]),
+        ];
+
         return(
-          <div style={{display:"flex",gap:16,fontSize:11,paddingTop:5,flexWrap:"wrap",alignItems:"center"}}>
-            <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Sharpe:</span>
-            <span style={{color:"var(--text-muted)"}}>Portfolio: <b style={{color:sharpeColor}}>{sharpe.toFixed(2)}</b></span>
-            {spySharpe!==null&&<span style={{color:"var(--text-muted)"}}>S&amp;P 500: <b style={{color:"#60A5FA"}}>{spySharpe.toFixed(2)}</b></span>}
-            <span style={{fontSize:10,color:"var(--text-muted)"}}>· rf T10Y {liveT10Y}% · anualizado</span>
+          <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid var(--border)"}}>
+            {/* Stat pills row */}
+            <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:8}}>
+              {stats.map(s=>(
+                <div key={s.label} style={{
+                  display:"flex",alignItems:"center",gap:6,
+                  background:"var(--bg-input)",borderRadius:8,
+                  padding:"5px 10px",border:"1px solid var(--border)",
+                }}>
+                  <span style={{fontSize:10,color:"var(--text-muted)",letterSpacing:0.5}}>{s.label}</span>
+                  <span style={{fontSize:13,fontWeight:700,color:s.color,fontFamily:"Georgia,serif"}}>
+                    {+s.val>=0?"+":""}{s.val}%
+                  </span>
+                </div>
+              ))}
+              <span style={{fontSize:10,color:"var(--text-muted)",marginLeft:"auto"}}>
+                {cd.startDate?.slice(5).replace("-","/")} → {cd.endDate?.slice(5).replace("-","/")}
+              </span>
+            </div>
+            {/* Sharpe row */}
+            {sharpe!=null&&(
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+                <span style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1.2,padding:"4px 8px",background:"var(--bg-input)",borderRadius:5,border:"1px solid var(--border)"}}>Sharpe</span>
+                <div style={{display:"flex",alignItems:"center",gap:6,background:"var(--bg-input)",borderRadius:8,padding:"5px 10px",border:"1px solid var(--border)"}}>
+                  <span style={{fontSize:10,color:"var(--text-muted)"}}>Portfolio</span>
+                  <span style={{fontSize:13,fontWeight:700,color:sharpeColor,fontFamily:"Georgia,serif"}}>{sharpe.toFixed(2)}</span>
+                </div>
+                {spySharpe!=null&&(
+                  <div style={{display:"flex",alignItems:"center",gap:6,background:"var(--bg-input)",borderRadius:8,padding:"5px 10px",border:"1px solid var(--border)"}}>
+                    <span style={{fontSize:10,color:"var(--text-muted)"}}>S&amp;P 500</span>
+                    <span style={{fontSize:13,fontWeight:700,color:"#60A5FA",fontFamily:"Georgia,serif"}}>{spySharpe.toFixed(2)}</span>
+                  </div>
+                )}
+                <span style={{fontSize:9,color:"var(--text-muted)"}}>rf {liveT10Y}% · anualizado</span>
+              </div>
+            )}
           </div>
         );
       })()}
@@ -1506,7 +1523,7 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
     const nativePnl=nativeVal-nativeCost;
     const nativeFmt=h.buyCurrency==="USD"?(v=>fmtU(v,2)):(v=>fmtA(v));
     return(
-      <tr key={h.id||h.ticker} style={{borderTop:"1px solid var(--border)"}}>
+      <tr key={`${h.ticker}-${h.type}-${h.id||""}`} style={{borderTop:"1px solid var(--border)"}}>
         <td style={{...tdL,fontWeight:700,fontFamily:"monospace",color:"var(--accent)"}}>
           {h.ticker}
           {h.isLive&&<span style={{display:"block",fontSize:9,color:"var(--green)",fontFamily:"sans-serif",fontWeight:400}}>● live</span>}
@@ -1554,7 +1571,7 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
         const secPnl=secVal-secCost;
         const secPct=secCost>0?(secPnl/secCost)*100:0;
         return(
-          <div key={t.key} style={{...card,overflow:"hidden"}}>
+          <div key={`section-${t.key}`} style={{...card,overflow:"hidden"}}>
             {/* Encabezado de sección */}
             <div style={{padding:"12px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center",background:`${t.color}0d`}}>
               <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -2385,6 +2402,7 @@ export default function App(){
   const card={background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:12};
   const [darkMode, setDarkMode] = useState(true);
   const [hideAmounts, setHideAmounts] = useState(false);
+  const [chartModal, setChartModal] = useState(false);
 
   return(
     <>
@@ -2494,41 +2512,34 @@ export default function App(){
                     </div>
                   </div>
                 </div>
-                {(()=>{
-                  const [chartModal,setChartModal]=React.useState(false);
-                  return(
-                    <>
-                      <div style={{...card,padding:18,display:"flex",flexDirection:"column"}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                          <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Rendimiento base 100 · USD CCL</div>
-                          <button onClick={()=>setChartModal(true)}
-                            title="Ampliar gráfico"
-                            style={{background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:12,color:"var(--text-muted)",lineHeight:1,display:"flex",alignItems:"center",gap:4}}>
-                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M7.5 1.5H10.5V4.5M4.5 10.5H1.5V7.5M10.5 1.5L6.5 5.5M1.5 10.5L5.5 6.5"/></svg>
-                          </button>
-                        </div>
-                        <div style={{height:280}}>
-                          <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos}/>
-                        </div>
-                      </div>
-                      {chartModal&&(
-                        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",zIndex:500,display:"flex",flexDirection:"column"}}>
-                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 24px",borderBottom:"1px solid var(--border)",background:"var(--bg-card)",flexShrink:0}}>
-                            <div style={{fontSize:13,fontWeight:600,color:"var(--text-primary)"}}>Rendimiento base 100</div>
-                            <button onClick={()=>setChartModal(false)}
-                              style={{background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontSize:13,color:"var(--text-muted)",display:"flex",alignItems:"center",gap:6}}>
-                              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M1.5 4.5V1.5H4.5M7.5 1.5H10.5V4.5M10.5 7.5V10.5H7.5M4.5 10.5H1.5V7.5"/></svg>
-                              Cerrar
-                            </button>
-                          </div>
-                          <div style={{flex:1,padding:"24px",minHeight:0}}>
-                            <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos}/>
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  );
-                })()}
+                <div style={{...card,padding:18,display:"flex",flexDirection:"column"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                    <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Rendimiento base 100 · USD CCL</div>
+                    <button onClick={()=>setChartModal(true)}
+                      title="Ampliar gráfico"
+                      style={{background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:12,color:"var(--text-muted)",lineHeight:1,display:"flex",alignItems:"center",gap:4}}>
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M7.5 1.5H10.5V4.5M4.5 10.5H1.5V7.5M10.5 1.5L6.5 5.5M1.5 10.5L5.5 6.5"/></svg>
+                    </button>
+                  </div>
+                  <div style={{height:280}}>
+                    <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos}/>
+                  </div>
+                </div>
+                {chartModal&&(
+                  <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",zIndex:500,display:"flex",flexDirection:"column"}} className={darkMode?"theme-dark":"theme-light"}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 24px",borderBottom:"1px solid var(--border)",background:"var(--bg-card)",flexShrink:0}}>
+                      <div style={{fontSize:13,fontWeight:600,color:"var(--text-primary)"}}>Rendimiento base 100</div>
+                      <button onClick={()=>setChartModal(false)}
+                        style={{background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontSize:13,color:"var(--text-muted)",display:"flex",alignItems:"center",gap:6}}>
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M1.5 4.5V1.5H4.5M7.5 1.5H10.5V4.5M10.5 7.5V10.5H7.5M4.5 10.5H1.5V7.5"/></svg>
+                        Cerrar
+                      </button>
+                    </div>
+                    <div style={{flex:1,padding:"24px",minHeight:0}}>
+                      <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos}/>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Top/Bottom 5 del día en Dashboard */}

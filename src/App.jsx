@@ -344,7 +344,7 @@ function Chart100({series}){
             <g key={`lbl-${s.key}`}>
               {Math.abs(cy-origY)>2&&<line x1={xS(n-1)} y1={origY} x2={lastX-2} y2={cy} stroke={s.color} strokeWidth="0.8" opacity="0.4"/>}
               <circle cx={xS(n-1)} cy={origY} r={s.bold?3.5:2.5} fill={s.color}/>
-              <text x={lastX+2} y={cy+4} fontSize="9" fill={s.color} fontWeight={s.bold?"700":"400"}>
+              <text x={lastX+2} y={cy+4} fontSize="11" fill={s.color} fontWeight="700">
                 {pct>=0?"+":""}{pct}%
               </text>
             </g>
@@ -477,7 +477,7 @@ function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRa
   return twr;
 }
 
-function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos}){
+function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=false}){
   const PERIODS=[{key:"30d",label:"30d",days:30},{key:"90d",label:"90d",days:90},{key:"ytd",label:"YTD",days:null},{key:"1y",label:"1 año",days:365},{key:"3y",label:"3 años",days:1095}];
   const [period,setPeriod]=useState("90d");
   const [currency,setCurrency]=useState("USD_CCL");
@@ -664,11 +664,11 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos}){
         }
         const sc=sharpe!=null?(sharpe>1?"var(--green)":sharpe>0?"var(--yellow)":"var(--red)"):"var(--text-muted)";
         return sharpe!=null?(
-          <div style={{display:"flex",alignItems:"center",gap:10,marginTop:6,paddingTop:6,borderTop:"1px solid var(--border)"}}>
-            <span style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Sharpe</span>
-            <span style={{fontSize:11,color:"var(--text-muted)"}}>Port: <b style={{color:sc}}>{sharpe.toFixed(2)}</b></span>
-            {spySharpe!=null&&<span style={{fontSize:11,color:"var(--text-muted)"}}>S&amp;P: <b style={{color:"#60A5FA"}}>{spySharpe.toFixed(2)}</b></span>}
-            <span style={{fontSize:9,color:"var(--text-muted)",marginLeft:"auto"}}>rf {liveT10Y}% · {cd.startDate?.slice(5)} → {cd.endDate?.slice(5)}</span>
+          <div style={{display:"flex",alignItems:"center",gap:isModal?16:10,marginTop:isModal?12:6,paddingTop:isModal?12:6,borderTop:"1px solid var(--border)",flexWrap:"wrap"}}>
+            <span style={{fontSize:isModal?11:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,fontWeight:600}}>Sharpe</span>
+            <span style={{fontSize:isModal?15:11,color:"var(--text-muted)"}}>Portfolio: <b style={{color:sc,fontSize:isModal?18:13}}>{sharpe.toFixed(2)}</b></span>
+            {spySharpe!=null&&<span style={{fontSize:isModal?15:11,color:"var(--text-muted)"}}>S&amp;P 500: <b style={{color:"#60A5FA",fontSize:isModal?18:13}}>{spySharpe.toFixed(2)}</b></span>}
+            <span style={{fontSize:isModal?11:9,color:"var(--text-muted)",marginLeft:"auto"}}>rf {liveT10Y}% anualizado · {cd.startDate?.slice(5)} → {cd.endDate?.slice(5)}</span>
           </div>
         ):null;
       })()}
@@ -2522,7 +2522,7 @@ export default function App(){
                       </button>
                     </div>
                     <div style={{flex:1,padding:"24px",minHeight:0}}>
-                      <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos}/>
+                      <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} isModal={true}/>
                     </div>
                   </div>
                 )}

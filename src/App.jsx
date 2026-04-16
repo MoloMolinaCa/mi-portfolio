@@ -2,12 +2,12 @@
 import React, { useState, useEffect, useMemo } from "react";
 
 const ASSET_TYPES = {
-  accion_ar: { label: "Acciones AR",  color: "#3B82F6", icon: "AR" },
-  cedear:    { label: "CEDEARs",      color: "#10B981", icon: "US" },
-  bono_ars:  { label: "Bonos ARS",    color: "#F59E0B", icon: "📄" },
-  bono_usd:  { label: "Bonos USD",    color: "#F97316", icon: "$" },
-  fci_ars:   { label: "FCI Pesos",    color: "#8B5CF6", icon: "B" },
-  fci_usd:   { label: "FCI Dólares",  color: "#A78BFA", icon: "💼" },
+  accion_ar: { label: "Acciones AR",  color: "#3B82F6", icon: "🇦🇷" },
+  cedear:    { label: "CEDEARs",      color: "#10B981", icon: "🌎" },
+  bono_ars:  { label: "Bonos ARS",    color: "#F59E0B", icon: "📜" },
+  bono_usd:  { label: "Bonos USD",    color: "#F97316", icon: "💵" },
+  fci_ars:   { label: "FCI Pesos",    color: "#8B5CF6", icon: "🏦" },
+  fci_usd:   { label: "FCI Dólares",  color: "#A78BFA", icon: "💰" },
 };
 
 const GALICIA_PORTFOLIO = [
@@ -1497,9 +1497,9 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
   const pc=(n)=>n>=0?"var(--green)":"var(--red)";
 
   const thS={padding:"8px 12px",textAlign:"left",fontSize:10,color:"var(--text-muted)",fontWeight:500,textTransform:"uppercase",letterSpacing:0.8,borderBottom:"1px solid var(--border)",whiteSpace:"nowrap"};
-  const thR={...thS,textAlign:"right"};
+  const thR={...thS,textAlign:"center"};
   const tdL={padding:"10px 12px",color:"var(--text-secondary)",fontSize:13};
-  const tdR={...tdL,textAlign:"right"};
+  const tdR={...tdL,textAlign:"center"};
 
   // Helper: encontrar TC histórico más cercano a una fecha
   const findHistCCL=(dateStr)=>{
@@ -1582,26 +1582,26 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
         </td>
         {/* Columna ARS */}
         {(view==="dual"||view==="ars")&&(
-          <td style={{...tdR,fontWeight:600,background:"rgba(245,158,11,0.05)"}}>
+          <td style={{...tdR,fontWeight:600,background:"rgba(96,165,250,0.08)"}}>
             {hideAmounts?"••••":fmtA(valARS)}
             {isUSD&&<span style={{display:"block",fontSize:9,color:"var(--text-muted)"}}>pesif. × {Math.round(fxRate).toLocaleString("es-AR")}</span>}
           </td>
         )}
         {(view==="dual"||view==="ars")&&(
-          <td style={{...tdR,fontSize:11,background:"rgba(245,158,11,0.05)"}}>
+          <td style={{...tdR,fontSize:11,background:"rgba(96,165,250,0.08)"}}>
             <span style={{color:pc(pnlARS),fontWeight:600}}>{hideAmounts?"••••":fmtA(pnlARS)}</span>
             <span style={{display:"block",fontSize:10,color:pc(pctARS),fontWeight:700}}>{fmtP(pctARS)}</span>
           </td>
         )}
         {/* Columna USD */}
         {(view==="dual"||view==="usd")&&(
-          <td style={{...tdR,fontWeight:700,background:"rgba(52,211,153,0.05)"}}>
+          <td style={{...tdR,fontWeight:700,background:"rgba(52,211,153,0.08)"}}>
             {hideAmounts?"••••":fmtU(valUSD)}
             {!isUSD&&<span style={{display:"block",fontSize:9,color:"var(--text-muted)"}}>dolar. ÷ {Math.round(fxRate).toLocaleString("es-AR")}</span>}
           </td>
         )}
         {(view==="dual"||view==="usd")&&(
-          <td style={{...tdR,fontSize:11,background:"rgba(52,211,153,0.05)"}}>
+          <td style={{...tdR,fontSize:11,background:"rgba(52,211,153,0.08)"}}>
             <span style={{color:pc(pnlUSD),fontWeight:600}}>{hideAmounts?"••••":fmtU(pnlUSD)}</span>
             <span style={{display:"block",fontSize:10,color:pc(pctUSD),fontWeight:700}}>{fmtP(pctUSD)}</span>
           </td>
@@ -1676,9 +1676,9 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
                     <th style={thR}>Nominales</th>
                     <th style={thR}>PPC</th>
                     <th style={thR}>Precio actual</th>
-                    {(view==="dual"||view==="ars")&&<><th style={{...thR,background:"rgba(245,158,11,0.08)"}}>Val. ARS</th><th style={{...thR,background:"rgba(245,158,11,0.08)"}}>PnL · % ARS</th></>}
-                    {(view==="dual"||view==="usd")&&<><th style={{...thR,background:"rgba(52,211,153,0.1)"}}>Val. USD</th><th style={{...thR,background:"rgba(52,211,153,0.1)"}}>PnL · % USD</th></>}
-                    {view==="native"&&<><th style={{...thR,background:"rgba(139,92,246,0.08)"}}>Val. moneda</th><th style={{...thR,background:"rgba(139,92,246,0.08)"}}>PnL · % moneda</th></>}
+                    {(view==="dual"||view==="ars")&&<><th style={{...thR,background:"transparent"}}>Val. ARS</th><th style={{...thR,background:"transparent"}}>PnL · % ARS</th></>}
+                    {(view==="dual"||view==="usd")&&<><th style={{...thR,background:"transparent"}}>Val. USD</th><th style={{...thR,background:"transparent"}}>PnL · % USD</th></>}
+                    {view==="native"&&<><th style={{...thR,background:"transparent"}}>Val. moneda</th><th style={{...thR,background:"transparent"}}>PnL · % moneda</th></>}
                     <th style={thR}>{view==="dual"?"Rend %":"Rend %"}</th>
                   </tr>
                 </thead>
@@ -1759,9 +1759,9 @@ function OperacionesTab({trades,port,setTrades,setPort,card,livePrices}){
   };
 
   const thS={padding:"8px 12px",textAlign:"left",fontSize:10,color:"var(--text-muted)",fontWeight:500,textTransform:"uppercase",letterSpacing:0.8,borderBottom:"1px solid var(--border)",whiteSpace:"nowrap"};
-  const thR={...thS,textAlign:"right"};
+  const thR={...thS,textAlign:"center"};
   const tdL={padding:"10px 12px",fontSize:13,color:"var(--text-secondary)"};
-  const tdR={...tdL,textAlign:"right"};
+  const tdR={...tdL,textAlign:"center"};
 
   return(
     <div className="fi" style={{display:"grid",gap:14}}>
@@ -2061,7 +2061,7 @@ function DayMoversWidget({en, historicos, fxRate, livePrices, card, hideAmounts=
   return(
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
       <div style={{...card,overflow:"hidden"}}>
-        <div style={{padding:"10px 14px",borderBottom:"1px solid var(--border)",display:"flex",alignItems:"center",gap:8,background:"rgba(52,211,153,0.05)"}}>
+        <div style={{padding:"10px 14px",borderBottom:"1px solid var(--border)",display:"flex",alignItems:"center",gap:8,background:"rgba(52,211,153,0.08)"}}>
           <span>🚀</span>
           <span style={{fontWeight:700,fontSize:12,color:"var(--green)"}}>Top 5 · Mejores del día</span>
         </div>

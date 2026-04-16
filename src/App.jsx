@@ -1489,7 +1489,7 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
   );
 }
 
-function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setModal,del,card,hideAmounts=false}){
+function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setModal,del,card,hideAmounts=false,trades=[],historicos={}}){
   const [view,setView]=useState("dual");
   const fmtU=(n,d=0)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"USD",maximumFractionDigits:d}).format(n);
   const fmtA=(n)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:0}).format(n);
@@ -1501,32 +1501,68 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
   const tdL={padding:"10px 12px",color:"var(--text-secondary)",fontSize:13};
   const tdR={...tdL,textAlign:"right"};
 
+  // Helper: encontrar TC histórico más cercano a una fecha
+  const findHistCCL=(dateStr)=>{
+    const bars=historicos?.CCL||[];
+    if(!bars.length)return fxRate;
+    const t=new Date(dateStr).getTime();
+    return bars.reduce((b,x)=>Math.abs(new Date(x.date)-t)<Math.abs(new Date(b.date)-t)?x:b,bars[0])?.close||fxRate;
+  };
+
   const renderRow=(h)=>{
     const isBond=h.type==="bono_usd"||h.type==="bono_ars";
     const qtyFactor=isBond?h.qty/100:h.qty;
     const isUSD=h.buyCurrency==="USD";
 
-    // Valores en moneda propia del activo
+    // Valor actual en moneda propia
     const origVal=h.currentPrice*qtyFactor;
+
+    // Costo en moneda propia (PPC × qty)
     const origCost=(h.ppc||h.buyPrice)*qtyFactor;
     const origPnl=origVal-origCost;
     const origPct=origCost>0?(origPnl/origCost)*100:0;
 
-    // Valores en ARS (bonos USD pesificados al TC actual)
-    const valARS=isUSD?origVal*fxRate:origVal;
-    const costARS=isUSD?origCost*fxRate:origCost;
-    const pnlARS=valARS-costARS;
-    const pctARS=costARS>0?(pnlARS/costARS)*100:0;
+    // Costo en ARS usando TC histórico de cada lote de compra
+    // Para activos USD: suma cada lote × precio_compra × TC_del_dia_de_compra
+    // Para activos ARS: el costo ya está en ARS
+    const buyLots=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra");
+    let costARSHist=0;
+    if(isUSD){
+      for(const lot of buyLots){
+        const lotFactor=isBond?lot.qty/100:lot.qty;
+        const tcLot=lot.tcCompra||findHistCCL(lot.date);
+        costARSHist+=lot.price*lotFactor*tcLot;
+      }
+    } else {
+      costARSHist=origCost; // ya está en ARS
+    }
 
-    // Valores en USD (bonos ARS dolarizados al TC actual)
+    // Valor actual en ARS (precio actual × qty × TC actual)
+    const valARS=isUSD?origVal*fxRate:origVal;
+    const pnlARS=valARS-costARSHist;
+    const pctARS=costARSHist>0?(pnlARS/costARSHist)*100:0;
+
+    // Costo en USD usando TC histórico de cada lote
+    // Para activos ARS: suma cada lote ÷ TC_del_dia_de_compra
+    // Para activos USD: el costo ya está en USD
+    let costUSDHist=0;
+    if(!isUSD){
+      for(const lot of buyLots){
+        const lotFactor=isBond?lot.qty/100:lot.qty;
+        const tcLot=findHistCCL(lot.date);
+        costUSDHist+=lot.price*lotFactor/tcLot;
+      }
+    } else {
+      costUSDHist=origCost; // ya está en USD
+    }
+
+    // Valor actual en USD (precio actual × qty ÷ TC actual)
     const valUSD=isUSD?origVal:origVal/fxRate;
-    const costUSD=isUSD?origCost:origCost/fxRate;
-    const pnlUSD=valUSD-costUSD;
-    const pctUSD=costUSD>0?(pnlUSD/costUSD)*100:0;
+    const pnlUSD=valUSD-costUSDHist;
+    const pctUSD=costUSDHist>0?(pnlUSD/costUSDHist)*100:0;
 
     // Qué % mostrar según vista
-    const dispPct = view==="native" ? origPct : view==="usd" ? pctUSD : pctARS;
-    // En dual mostramos ambos con etiqueta
+    const dispPct=view==="native"?origPct:view==="usd"?pctUSD:pctARS;
     return(
       <tr key={`${h.ticker}-${h.type}-${h.id||""}`} style={{borderTop:"1px solid var(--border)"}}>
         <td style={{...tdL,fontWeight:700,fontFamily:"monospace",color:"var(--accent)"}}>
@@ -2601,7 +2637,8 @@ export default function App(){
           {tab==="portfolio"&&(
             <PortfolioTab byType={byType} en={enGrouped} totUSD={totUSD} totCost={totCost}
               totPnl={totPnl} totPct={totPct} fxRate={fxRate} fxMode={fx}
-              setModal={setModal} del={del} card={card} hideAmounts={hideAmounts}/>
+              setModal={setModal} del={del} card={card} hideAmounts={hideAmounts}
+              trades={trades} historicos={historicos}/>
           )}
 
           {/* ANÁLISIS */}

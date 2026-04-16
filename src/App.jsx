@@ -266,21 +266,23 @@ function Spark({pct}){
   return <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}><polyline points={s} fill="none" stroke={pct>=0?"var(--green)":"var(--red)"} strokeWidth="1.5" strokeLinecap="round"/></svg>;
 }
 
-function Donut({segs}){
+function Donut({segs, size=120}){
   const total=segs.reduce((a,s)=>a+s.v,0);if(!total)return null;
-  let cur=-Math.PI/2;const cx=60,cy=60,r=48,inn=27;
+  const half=size/2;
+  const r=half*0.8,inn=half*0.45;
+  let cur=-Math.PI/2;
   return(
-    <svg width="120" height="120" viewBox="0 0 120 120">
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
       {segs.map(s=>{
         const ang=(s.v/total)*2*Math.PI;
-        const x1=cx+r*Math.cos(cur),y1=cy+r*Math.sin(cur);cur+=ang;
-        const x2=cx+r*Math.cos(cur),y2=cy+r*Math.sin(cur);
-        const ix1=cx+inn*Math.cos(cur),iy1=cy+inn*Math.sin(cur);
-        const ix2=cx+inn*Math.cos(cur-ang),iy2=cy+inn*Math.sin(cur-ang);
+        const x1=half+r*Math.cos(cur),y1=half+r*Math.sin(cur);cur+=ang;
+        const x2=half+r*Math.cos(cur),y2=half+r*Math.sin(cur);
+        const ix1=half+inn*Math.cos(cur),iy1=half+inn*Math.sin(cur);
+        const ix2=half+inn*Math.cos(cur-ang),iy2=half+inn*Math.sin(cur-ang);
         const lg=ang>Math.PI?1:0;
         return <path key={s.k} d={`M${x1} ${y1}A${r} ${r} 0 ${lg} 1 ${x2} ${y2}L${ix1} ${iy1}A${inn} ${inn} 0 ${lg} 0 ${ix2} ${iy2}Z`} fill={s.color} opacity="0.9"/>;
       })}
-      <circle cx={cx} cy={cy} r={inn-1} fill="var(--bg-card)"/>
+      <circle cx={half} cy={half} r={inn-1} fill="var(--bg-card)"/>
     </svg>
   );
 }
@@ -1981,15 +1983,11 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices}){
   const fmtA=(n)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:0}).format(n);
   const fmtP=(n)=>`${n>=0?"+":""}${n.toFixed(2)}%`;
   const pc=(n)=>n>=0?"var(--green)":"var(--red)";
-  const todayStr=new Date().toISOString().slice(0,10);
 
-  // Calcular rendimiento del día para cada activo
   const withDayReturn=useMemo(()=>{
     return en.map(h=>{
-      const live=livePrices[h.ticker];
-      const hasLive=!!live;
+      const hasLive=!!(livePrices&&livePrices[h.ticker]);
       const bars=historicos?.[h.ticker]||[];
-      // Precio anterior: último bar histórico (cierre de ayer)
       const prevBar=bars.length?bars[bars.length-1]:null;
       const prevPrice=prevBar?.close||null;
       const currPrice=h.currentPrice;
@@ -2006,113 +2004,10 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices}){
     }).filter(h=>h.dayPct!=null);
   },[en,historicos,fxRate,livePrices]);
 
-  const hasLiveCount=withDayReturn.filter(h=>h.hasLive).length;
   const sorted=[...withDayReturn].sort((a,b)=>b.dayPct-a.dayPct);
-  const top5=sorted.slice(0,5);
-  const bot5=[...sorted].reverse().slice(0,5);
-
-  const renderCard=(h,rank,isTop)=>{
-    const isBond=h.type==="bono_usd"||h.type==="bono_ars";
-    const qtyFactor=isBond?h.qty/100:h.qty;
-    const t=ASSET_TYPES[h.type]||{};
-    return(
-      <div key={h.ticker} style={{
-        display:"grid",gridTemplateColumns:"32px 1fr auto",gap:12,alignItems:"center",
-        padding:"13px 16px",borderTop:"1px solid var(--border)",
-        background:rank===1?`${isTop?"rgba(52,211,153,":"rgba(248,113,113,"}0.04)`:undefined,
-        position:"relative",overflow:"hidden",
-      }}>
-        <div style={{
-          width:32,height:32,borderRadius:8,
-          background:`${isTop?"rgba(52,211,153,":"rgba(248,113,113,"}0.12)`,
-          display:"flex",alignItems:"center",justifyContent:"center",
-          fontSize:14,fontWeight:700,color:isTop?"var(--green)":"var(--red)",flexShrink:0,
-        }}>
-          {rank}
-        </div>
-        <div style={{minWidth:0}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
-            <span style={{fontWeight:700,fontFamily:"monospace",color:"var(--accent)",fontSize:13}}>{h.ticker}</span>
-            <span style={{fontSize:10,padding:"1px 5px",borderRadius:4,
-              background:`${t.color||"#888"}22`,color:t.color||"#888",
-              border:`1px solid ${t.color||"#888"}33`}}>{t.icon} {t.label}</span>
-            {h.hasLive&&<span style={{fontSize:9,color:"var(--green)"}}>● live</span>}
-            {!h.hasLive&&<span style={{fontSize:9,color:"var(--text-muted)"}}>hist.</span>}
-          </div>
-          <div style={{fontSize:11,color:"var(--text-secondary)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.name}</div>
-          <div style={{fontSize:10,color:"var(--text-muted)",marginTop:2}}>
-            {h.buyCurrency==="USD"?fmtU(h.prevPrice,4):fmtA(h.prevPrice)} → {h.buyCurrency==="USD"?fmtU(h.currentPrice,4):fmtA(h.currentPrice)}
-          </div>
-        </div>
-        <div style={{textAlign:"right",flexShrink:0}}>
-          <div style={{fontSize:18,fontWeight:700,color:pc(h.dayPct),fontFamily:"Georgia,serif"}}>
-            {fmtP(h.dayPct)}
-          </div>
-          <div style={{fontSize:12,color:pc(h.dayPnlUSD||0),marginTop:2}}>
-            {h.dayPnlUSD!=null?(h.dayPnlUSD>=0?"+":"")+fmtU(h.dayPnlUSD,0):"—"}
-          </div>
-          <div style={{fontSize:10,color:"var(--text-muted)"}}>P&L del día (USD)</div>
-        </div>
-      </div>
-    );
-  };
-
-  // Total P&L del día
-  const totalDayPnl=withDayReturn.reduce((a,h)=>a+(h.dayPnlUSD||0),0);
 
   return(
     <div className="fi" style={{display:"grid",gap:16}}>
-
-      {/* Header banner */}
-      <div style={{...card,padding:"16px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
-        <div>
-          <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Movimiento del día</div>
-          <div style={{fontSize:26,fontWeight:700,fontFamily:"Georgia,serif",color:pc(totalDayPnl)}}>
-            {totalDayPnl>=0?"+":""}{fmtU(totalDayPnl,0)}
-          </div>
-          <div style={{fontSize:11,color:"var(--text-muted)",marginTop:2}}>
-            {hasLiveCount} activos con precio live · {withDayReturn.length} con datos históricos
-            {hasLiveCount<withDayReturn.length&&<span style={{color:"var(--yellow)"}}> · {withDayReturn.length-hasLiveCount} usan cierre anterior</span>}
-          </div>
-        </div>
-        <div style={{fontSize:11,color:"var(--text-muted)",textAlign:"right"}}>
-          <div style={{marginBottom:2}}>Fecha: <b style={{color:"var(--text-primary)"}}>{todayStr}</b></div>
-          <div>Rendimientos vs cierre anterior</div>
-        </div>
-      </div>
-
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-
-        {/* Top 5 mejores */}
-        <div style={{...card,overflow:"hidden"}}>
-          <div style={{padding:"12px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center",background:"rgba(52,211,153,0.05)"}}>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <span style={{fontSize:16}}>🚀</span>
-              <span style={{fontWeight:700,fontSize:13,color:"var(--green)"}}>Top 5 · Mejores del día</span>
-            </div>
-            <span style={{fontSize:11,color:"var(--text-muted)"}}>% · P&L USD</span>
-          </div>
-          {top5.length===0
-            ?<div style={{padding:24,textAlign:"center",color:"var(--text-muted)",fontSize:12}}>Sin datos disponibles</div>
-            :top5.map((h,i)=>renderCard(h,i+1,true))
-          }
-        </div>
-
-        {/* Top 5 peores */}
-        <div style={{...card,overflow:"hidden"}}>
-          <div style={{padding:"12px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center",background:"rgba(248,113,113,0.05)"}}>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <span style={{fontSize:16}}>📉</span>
-              <span style={{fontWeight:700,fontSize:13,color:"var(--red)"}}>Bottom 5 · Peores del día</span>
-            </div>
-            <span style={{fontSize:11,color:"var(--text-muted)"}}>% · P&L USD</span>
-          </div>
-          {bot5.length===0
-            ?<div style={{padding:24,textAlign:"center",color:"var(--text-muted)",fontSize:12}}>Sin datos disponibles</div>
-            :bot5.map((h,i)=>renderCard(h,i+1,false))
-          }
-        </div>
-      </div>
 
       {/* Ranking completo */}
       <div style={{...card,overflow:"hidden"}}>
@@ -2517,7 +2412,7 @@ export default function App(){
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <div style={{width:28,height:28,borderRadius:8,background:"var(--accent)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>📊</div>
             <div>
-              <div style={{fontWeight:700,fontSize:14}}>Mi Portfolio - Galicia</div>
+              <div style={{fontWeight:700,fontSize:14}}>Mi Portfolio</div>
               <div style={{fontSize:11,color:"var(--text-muted)"}}>
                 {priceStatus==="live"&&<span style={{color:"var(--green)"}}>● {liveCount}/{port.length} activos · actualizado {lastRefresh?.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})} · próx. {Math.floor(countdown/60)}:{String(countdown%60).padStart(2,"0")}</span>}
                 {priceStatus==="partial"&&<span style={{color:"var(--yellow)"}}>◐ Parcial · actualizado {lastRefresh?.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})} · próx. {Math.floor(countdown/60)}:{String(countdown%60).padStart(2,"0")}</span>}
@@ -2547,7 +2442,7 @@ export default function App(){
 
         {/* Nav */}
         <div style={{background:"var(--bg-card)",borderBottom:"1px solid var(--border)",padding:"0 20px",display:"flex",gap:0}}>
-          {[["dashboard","📊 Dashboard"],["portfolio","💼 Portfolio"],["evolutivo","📈 Evolutivo"],["analisis","🔍 Análisis"],["operaciones","📋 Operaciones"]].map(([id,lbl])=>(
+          {[["dashboard","📊 Dashboard"],["portfolio","💼 Portfolio"],["analisis","🔍 Análisis"],["operaciones","📋 Operaciones"]].map(([id,lbl])=>(
             <button key={id} onClick={()=>setTab(id)} style={{padding:"12px 16px",background:"transparent",border:"none",borderBottom:tab===id?"2px solid var(--accent)":"2px solid transparent",color:tab===id?"var(--text-primary)":"var(--text-muted)",cursor:"pointer",fontSize:13,fontWeight:tab===id?600:400}}>
               {lbl}
             </button>
@@ -2575,12 +2470,12 @@ export default function App(){
                 ))}
               </div>
 
-              <div style={{display:"grid",gridTemplateColumns:"270px 1fr",gap:14}}>
-                <div style={{...card,padding:18}}>
+              <div style={{display:"grid",gridTemplateColumns:"270px 1fr",gap:14,alignItems:"stretch"}}>
+                <div style={{...card,padding:18,display:"flex",flexDirection:"column"}}>
                   <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:14}}>Asignación por tipo</div>
-                  <div style={{display:"flex",alignItems:"center",gap:12}}>
-                    <Donut segs={byType.map(t=>({k:t.key,v:t.val,color:t.color}))}/>
-                    <div style={{flex:1,display:"grid",gap:8}}>
+                  <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
+                    <Donut segs={byType.map(t=>({k:t.key,v:t.val,color:t.color}))} size={150}/>
+                    <div style={{width:"100%",display:"grid",gap:8}}>
                       {byType.map(t=>(
                         <div key={t.key} style={{display:"flex",alignItems:"center",gap:7}}>
                           <div style={{width:7,height:7,borderRadius:"50%",background:t.color,flexShrink:0}}/>
@@ -2591,9 +2486,9 @@ export default function App(){
                     </div>
                   </div>
                 </div>
-                <div style={{...card,padding:18}}>
+                <div style={{...card,padding:18,display:"flex",flexDirection:"column"}}>
                   <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Rendimiento base 100 · USD CCL</div>
-                  <div style={{height:310}}>
+                  <div style={{flex:1,minHeight:320}}>
                     <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos}/>
                   </div>
                 </div>
@@ -2611,14 +2506,6 @@ export default function App(){
             <PortfolioTab byType={byType} en={enGrouped} totUSD={totUSD} totCost={totCost}
               totPnl={totPnl} totPct={totPct} fxRate={fxRate} fxMode={fx}
               setModal={setModal} del={del} card={card}/>
-          )}
-
-          {/* EVOLUTIVO */}
-          {tab==="evolutivo"&&(
-            <EvoTab en={en} trades={trades} totUSD={totUSD} totPct={totPct}
-              benchPct={benchPct} alpha={alpha} liveT10Y={liveT10Y}
-              byType={byType} fxRate={fxRate} fx={fx}
-              fxMode={fx} card={card} historicos={historicos}/>
           )}
 
           {/* ANÁLISIS */}

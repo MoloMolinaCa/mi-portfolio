@@ -316,20 +316,23 @@ function Chart100({series}){
 }
 
 // ── Time-Weighted Return (TWR) ────────────────────────────────────────────────
-// Calcula el rendimiento encadenado del portfolio sin distorsión por compras/ventas.
-// Para cada día calcula el valor del portfolio, luego encadena los retornos diarios.
-// Cuando hay un evento de flujo (compra/venta), el retorno de ese día se calcula
-// antes del flujo (valor cierre día anterior con qty nueva vs qty anterior * mismo precio).
+// Para cada sub-período entre flujos, el retorno es valor_fin / valor_inicio.
+// Los flujos no generan retorno — solo cambian la base del siguiente sub-período.
 function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRate, livePricesMap){
   if(!dates||dates.length<2) return [];
-  const today=new Date().toISOString().slice(0,10);
+  const todayStr=new Date().toISOString().slice(0,10);
   const liveMap=livePricesMap||{};
 
-  // Pre-calcular el valor del portfolio para cada fecha.
-  // useToday: cuando true, usa precio live aunque dateT sea anterior al cierre del día
-  const getPortVal=(dateStr, dateT, useToday=false)=>{
+  function findPrice2(bars,d){
+    if(!bars?.length)return null;
+    const t=new Date(d).getTime();
+    return bars.reduce((b,x)=>Math.abs(new Date(x.date)-t)<Math.abs(new Date(b.date)-t)?x:b,bars[0])?.close||null;
+  }
+
+  // Valor del portfolio en dateStr, usando solo trades cuyo timestamp <= dateT
+  const getPortVal=(dateStr, dateT)=>{
     let total=0;
-    const isToday=dateStr===today||useToday;
+    const isToday=dateStr===todayStr;
     for(const h of en){
       const buys=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra"&&new Date(t.date).getTime()<=dateT);
       const sells=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="venta"&&new Date(t.date).getTime()<=dateT);
@@ -338,79 +341,60 @@ function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRa
       const isBond=h.type==="bono_usd"||h.type==="bono_ars";
       const qtyFactor=isBond?qty/100:qty;
       const bars=tickerBars[h.ticker];
-
       let price;
       if(isToday&&liveMap[h.ticker]){
-        // Precio en vivo — pero si el ticker fue comprado HOY por primera vez,
-        // su retorno del día es 0 (no puede haber ganado nada en el día de alta).
-        const hadPositionBefore=trades.some(t=>
-          t.ticker===h.ticker&&t.tipo==="compra"&&new Date(t.date).getTime()<dateT
-        );
-        if(!hadPositionBefore)continue;
         price=liveMap[h.ticker];
       } else if(bars&&bars.length){
         if(dateStr<bars[0].date)continue;
         price=findPrice2(bars,dateStr);
         if(!price)continue;
       } else {
-        // Sin histórico: usar PPC desde fecha de compra
-        const firstBuy=buys.sort((a,b)=>a.date.localeCompare(b.date))[0];
+        const firstBuy=buys.slice().sort((a,b)=>a.date.localeCompare(b.date))[0];
         if(!firstBuy||dateStr<firstBuy.date)continue;
-        // Primera compra es hoy → retorno del día = 0, no contribuye
-        if(firstBuy.date===dateStr)continue;
         const totalCost=buys.reduce((a,t)=>a+t.qty*t.price,0);
         const totalQty=buys.reduce((a,t)=>a+t.qty,0);
         price=totalQty>0?totalCost/totalQty:h.currentPrice;
       }
-
       const cclDay=cclBars.length?findPrice2(cclBars,dateStr)||fxRate:fxRate;
       const mepDay=mepBars.length?findPrice2(mepBars,dateStr)||fxRate:fxRate;
       if(currency==="ARS")total+=price*qtyFactor;
       else if(currency==="USD_CCL")total+=price*qtyFactor/cclDay;
       else total+=price*qtyFactor/mepDay;
     }
-    return Math.max(total,0.001);
+    return total; // puede ser 0 si no hay posición aún
   };
 
-  // Detectar fechas con eventos de flujo
-  const flowDates=new Set(trades.map(t=>t.date));
-
-  // Helper findPrice local
-  function findPrice2(bars,d){
-    if(!bars?.length)return null;
-    const t=new Date(d).getTime();
-    return bars.reduce((b,x)=>Math.abs(new Date(x.date)-t)<Math.abs(new Date(b.date)-t)?x:b,bars[0])?.close||null;
-  }
-
-  // Calcular valor absoluto por día
-  const vals=dates.map(d=>({date:d,val:getPortVal(d,new Date(d).getTime())}));
-
-  // Encadenar retornos diarios → TWR
-  // TWR[i] = TWR[i-1] * (val[i] / val_antes_flujo[i])
-  // Para días sin flujo: val_antes_flujo = val[i-1] (misma posición)
-  // Para días con flujo: el flujo ocurre al cierre, el retorno del día es val_fin/val_ini con la posición ANTERIOR
-  const twr=[{date:vals[0].date,val:100}];
+  const twr=[{date:dates[0],val:100}];
   let cumulative=1;
 
-  for(let i=1;i<vals.length;i++){
-    const curr=vals[i];
-    const prev=vals[i-1];
-    let dayReturn;
+  for(let i=1;i<dates.length;i++){
+    const dateStr=dates[i];
+    const prevDateStr=dates[i-1];
+    const dateT=new Date(dateStr).getTime();
+    const prevDateT=new Date(prevDateStr).getTime();
 
-    if(flowDates.has(curr.date)){
-      // Hay un flujo hoy — el retorno del día debe calcularse SOLO por variación de precios,
-      // sin que el nuevo capital aportado cuente como ganancia.
-      // Valor con la posición de AYER al precio de HOY (excluye qty del flujo de hoy):
-      const dateT_before=new Date(curr.date).getTime()-1;
-      const valYesterdayQtyTodayPrice=getPortVal(curr.date, dateT_before, true);
-      // Retorno del día = (posición anterior × precio hoy) / (posición anterior × precio ayer)
-      dayReturn = prev.val > 0 ? valYesterdayQtyTodayPrice / prev.val : 1;
+    // Valor al cierre de ayer (posición completa de ayer, precio de ayer)
+    const valPrevClose=getPortVal(prevDateStr, prevDateT);
+
+    // Valor de hoy CON la posición de AYER (antes de cualquier flujo de hoy) al precio de HOY
+    // = excluir trades cuya fecha sea exactamente hoy
+    const dateT_before=dateT-1; // 1ms antes → excluye trades de hoy
+    const valTodayBeforeFlow=getPortVal(dateStr, dateT_before);
+
+    // Retorno del día = solo movimiento de precios, sin distorsión por flujos
+    let dayReturn;
+    if(valPrevClose<=0){
+      // Portfolio vacío ayer — no hay retorno que calcular
+      dayReturn=1;
     } else {
-      dayReturn = prev.val > 0 ? curr.val / prev.val : 1;
+      dayReturn=valTodayBeforeFlow/valPrevClose;
     }
 
-    cumulative *= dayReturn;
-    twr.push({date:curr.date, val:parseFloat((100*cumulative).toFixed(4))});
+    // Clampear retornos absurdos (errores de datos)
+    if(!isFinite(dayReturn)||dayReturn<=0||dayReturn>3)dayReturn=1;
+
+    cumulative*=dayReturn;
+    twr.push({date:dateStr,val:parseFloat((100*cumulative).toFixed(4))});
   }
 
   return twr;

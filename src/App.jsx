@@ -2393,11 +2393,13 @@ export default function App(){
           --bg:#07101f;--bg-card:#0d1a2e;--bg-input:#152030;--border:#1c2e44;
           --accent:#2563EB;--text-primary:#E8F0FE;--text-secondary:#7A9EC4;
           --text-muted:#364F6B;--red:#F87171;--green:#34D399;--yellow:#FBBF24;
+          --title-color:#ffffff;
         }
         .theme-light{
           --bg:#F0F4F8;--bg-card:#FFFFFF;--bg-input:#E8EEF4;--border:#CBD5E1;
           --accent:#2563EB;--text-primary:#0F172A;--text-secondary:#475569;
           --text-muted:#94A3B8;--red:#EF4444;--green:#16A34A;--yellow:#D97706;
+          --title-color:#0F172A;
         }
         @keyframes spin{to{transform:rotate(360deg)}}
         .fi *{box-sizing:border-box;}
@@ -2412,7 +2414,7 @@ export default function App(){
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <div style={{width:28,height:28,borderRadius:8,background:"var(--accent)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>📊</div>
             <div>
-              <div style={{fontWeight:700,fontSize:14}}>Mi Portfolio</div>
+              <div style={{fontWeight:700,fontSize:14,color:"var(--title-color)"}}>Mi Portfolio</div>
               <div style={{fontSize:11,color:"var(--text-muted)"}}>
                 {priceStatus==="live"&&<span style={{color:"var(--green)"}}>● {liveCount}/{port.length} activos · actualizado {lastRefresh?.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})} · próx. {Math.floor(countdown/60)}:{String(countdown%60).padStart(2,"0")}</span>}
                 {priceStatus==="partial"&&<span style={{color:"var(--yellow)"}}>◐ Parcial · actualizado {lastRefresh?.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})} · próx. {Math.floor(countdown/60)}:{String(countdown%60).padStart(2,"0")}</span>}
@@ -2488,7 +2490,7 @@ export default function App(){
                 </div>
                 <div style={{...card,padding:18,display:"flex",flexDirection:"column"}}>
                   <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Rendimiento base 100 · USD CCL</div>
-                  <div style={{flex:1,minHeight:320}}>
+                  <div style={{flex:1,minHeight:0,height:340}}>
                     <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos}/>
                   </div>
                 </div>

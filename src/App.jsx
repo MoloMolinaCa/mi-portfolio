@@ -290,7 +290,7 @@ function Donut({segs, size=120}){
 function Chart100({series}){
   const [hover,setHover]=useState(null);
   if(!series?.length)return null;
-  const W=560,H=280,PL=52,PT=14,PR=16,PB=30;
+  const W=560,H=280,PL=52,PT=14,PR=68,PB=30;
   const allV=series.flatMap(s=>s.data.map(d=>d.val));
   const minV=Math.min(...allV)*0.997,maxV=Math.max(...allV)*1.003;
   const n=series[0].data.length;
@@ -307,6 +307,18 @@ function Chart100({series}){
   const ttRight=hover!=null&&xS(hover)>W*0.65;
   const ttPct=hover!=null?(xS(hover)/W*100):0;
   const LABELS={port:"Portfolio",spy:"S&P 500",ccl:"CCL",mep:"MEP",t10y:"T10Y"};
+  // Ordenar series por valor final para evitar solapamiento de labels
+  const lastX=xS(n-1)+8;
+  const sortedByLastVal=[...series].filter(s=>s.data[n-1]?.val!=null).sort((a,b)=>(b.data[n-1]?.val||0)-(a.data[n-1]?.val||0));
+  // Separar labels que se solapan
+  const labelY=[];
+  sortedByLastVal.forEach(s=>{
+    const rawY=yS(s.data[n-1].val);
+    const minGap=13;
+    let y=rawY;
+    for(const prev of labelY){if(Math.abs(y-prev)<minGap)y=prev+minGap;}
+    labelY.push(y);
+  });
   return(
     <div style={{position:"relative",width:"100%",height:"100%"}}>
       <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:"100%",display:"block",cursor:"crosshair"}}
@@ -321,6 +333,23 @@ function Chart100({series}){
         {series.map(s=>(
           <path key={s.key} d={makePath(s.data)} fill="none" stroke={s.color} strokeWidth={s.bold?2.5:1.5} strokeLinejoin="round" opacity={s.bold?1:0.75}/>
         ))}
+        {/* End-of-line labels */}
+        {sortedByLastVal.map((s,i)=>{
+          const v=s.data[n-1]?.val;
+          if(v==null)return null;
+          const pct=(v-100).toFixed(2);
+          const cy=labelY[i];
+          const origY=yS(v);
+          return(
+            <g key={`lbl-${s.key}`}>
+              {Math.abs(cy-origY)>2&&<line x1={xS(n-1)} y1={origY} x2={lastX-2} y2={cy} stroke={s.color} strokeWidth="0.8" opacity="0.4"/>}
+              <circle cx={xS(n-1)} cy={origY} r={s.bold?3.5:2.5} fill={s.color}/>
+              <text x={lastX+2} y={cy+4} fontSize="9" fill={s.color} fontWeight={s.bold?"700":"400"}>
+                {pct>=0?"+":""}{pct}%
+              </text>
+            </g>
+          );
+        })}
         {xLabels.map(i=>(
           <text key={i} x={xS(i)} y={H-8} textAnchor="middle" fontSize="10" fill="var(--text-muted)">{series[0].data[i]?.date?.slice(5)}</text>
         ))}
@@ -618,73 +647,30 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos}){
         {cd&&!loading&&series.length>0&&<Chart100 series={series}/>}
       </div>
       {cd&&!loading&&(()=>{
-        // Sharpe
         const port100=cd.port100;
         let sharpe=null,spySharpe=null;
         if(port100.length>=3){
-          const dailyRets=[];
-          for(let i=1;i<port100.length;i++){const prev=port100[i-1].val,curr=port100[i].val;if(prev>0)dailyRets.push((curr-prev)/prev);}
-          if(dailyRets.length>=2){
-            const avg=dailyRets.reduce((a,r)=>a+r,0)/dailyRets.length;
-            const std=Math.sqrt(dailyRets.reduce((a,r)=>a+Math.pow(r-avg,2),0)/dailyRets.length);
+          const dr=[];for(let i=1;i<port100.length;i++){const p=port100[i-1].val,c=port100[i].val;if(p>0)dr.push((c-p)/p);}
+          if(dr.length>=2){
+            const avg=dr.reduce((a,r)=>a+r,0)/dr.length;
+            const std=Math.sqrt(dr.reduce((a,r)=>a+Math.pow(r-avg,2),0)/dr.length);
             const rf=liveT10Y/100/252;
             if(std>0)sharpe=((avg-rf)/std)*Math.sqrt(252);
-            if(cd.spy100&&cd.spy100.length>2){
+            if(cd.spy100?.length>2){
               const sr=[];for(let i=1;i<cd.spy100.length;i++){const p=cd.spy100[i-1].val,c=cd.spy100[i].val;if(p>0)sr.push((c-p)/p);}
               if(sr.length>=2){const sa=sr.reduce((a,r)=>a+r,0)/sr.length;const ss=Math.sqrt(sr.reduce((a,r)=>a+Math.pow(r-sa,2),0)/sr.length);if(ss>0)spySharpe=((sa-rf)/ss)*Math.sqrt(252);}
             }
           }
         }
-        const sharpeColor=sharpe!=null?(sharpe>1?"var(--green)":sharpe>0?"var(--yellow)":"var(--red)"):"var(--text-muted)";
-
-        // Build stat pills
-        const stats=[
-          {label:"Portfolio",val:cd.portRet,color:pc(+cd.portRet),type:"ret"},
-          ...(cd.spy100?[{label:"S&P 500",val:cd.spyRet,color:"#60A5FA",type:"ret"}]:[]),
-          ...(cd.currency==="ARS"&&cd.t10y100?[{label:"T10Y",val:(cd.t10y100[cd.t10y100.length-1].val-100).toFixed(2),color:"var(--yellow)",type:"ret"}]:[]),
-          ...(cd.ccl100?[{label:"CCL",val:cd.cclRet,color:"#A78BFA",type:"ret"}]:[]),
-          ...(cd.mep100?[{label:"MEP",val:cd.mepRet,color:"#F472B6",type:"ret"}]:[]),
-        ];
-
-        return(
-          <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid var(--border)"}}>
-            {/* Stat pills row */}
-            <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:8}}>
-              {stats.map(s=>(
-                <div key={s.label} style={{
-                  display:"flex",alignItems:"center",gap:6,
-                  background:"var(--bg-input)",borderRadius:8,
-                  padding:"5px 10px",border:"1px solid var(--border)",
-                }}>
-                  <span style={{fontSize:10,color:"var(--text-muted)",letterSpacing:0.5}}>{s.label}</span>
-                  <span style={{fontSize:13,fontWeight:700,color:s.color,fontFamily:"Georgia,serif"}}>
-                    {+s.val>=0?"+":""}{s.val}%
-                  </span>
-                </div>
-              ))}
-              <span style={{fontSize:10,color:"var(--text-muted)",marginLeft:"auto"}}>
-                {cd.startDate?.slice(5).replace("-","/")} → {cd.endDate?.slice(5).replace("-","/")}
-              </span>
-            </div>
-            {/* Sharpe row */}
-            {sharpe!=null&&(
-              <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-                <span style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1.2,padding:"4px 8px",background:"var(--bg-input)",borderRadius:5,border:"1px solid var(--border)"}}>Sharpe</span>
-                <div style={{display:"flex",alignItems:"center",gap:6,background:"var(--bg-input)",borderRadius:8,padding:"5px 10px",border:"1px solid var(--border)"}}>
-                  <span style={{fontSize:10,color:"var(--text-muted)"}}>Portfolio</span>
-                  <span style={{fontSize:13,fontWeight:700,color:sharpeColor,fontFamily:"Georgia,serif"}}>{sharpe.toFixed(2)}</span>
-                </div>
-                {spySharpe!=null&&(
-                  <div style={{display:"flex",alignItems:"center",gap:6,background:"var(--bg-input)",borderRadius:8,padding:"5px 10px",border:"1px solid var(--border)"}}>
-                    <span style={{fontSize:10,color:"var(--text-muted)"}}>S&amp;P 500</span>
-                    <span style={{fontSize:13,fontWeight:700,color:"#60A5FA",fontFamily:"Georgia,serif"}}>{spySharpe.toFixed(2)}</span>
-                  </div>
-                )}
-                <span style={{fontSize:9,color:"var(--text-muted)"}}>rf {liveT10Y}% · anualizado</span>
-              </div>
-            )}
+        const sc=sharpe!=null?(sharpe>1?"var(--green)":sharpe>0?"var(--yellow)":"var(--red)"):"var(--text-muted)";
+        return sharpe!=null?(
+          <div style={{display:"flex",alignItems:"center",gap:10,marginTop:6,paddingTop:6,borderTop:"1px solid var(--border)"}}>
+            <span style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Sharpe</span>
+            <span style={{fontSize:11,color:"var(--text-muted)"}}>Port: <b style={{color:sc}}>{sharpe.toFixed(2)}</b></span>
+            {spySharpe!=null&&<span style={{fontSize:11,color:"var(--text-muted)"}}>S&amp;P: <b style={{color:"#60A5FA"}}>{spySharpe.toFixed(2)}</b></span>}
+            <span style={{fontSize:9,color:"var(--text-muted)",marginLeft:"auto"}}>rf {liveT10Y}% · {cd.startDate?.slice(5)} → {cd.endDate?.slice(5)}</span>
           </div>
-        );
+        ):null;
       })()}
     </div>
   );

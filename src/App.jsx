@@ -1582,38 +1582,38 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
         </td>
         {/* Columna ARS */}
         {(view==="dual"||view==="ars")&&(
-          <td style={{...tdR,fontWeight:600}}>
+          <td style={{...tdR,fontWeight:600,background:"rgba(245,158,11,0.05)"}}>
             {hideAmounts?"••••":fmtA(valARS)}
             {isUSD&&<span style={{display:"block",fontSize:9,color:"var(--text-muted)"}}>pesif. × {Math.round(fxRate).toLocaleString("es-AR")}</span>}
           </td>
         )}
         {(view==="dual"||view==="ars")&&(
-          <td style={{...tdR,fontSize:11}}>
+          <td style={{...tdR,fontSize:11,background:"rgba(245,158,11,0.05)"}}>
             <span style={{color:pc(pnlARS),fontWeight:600}}>{hideAmounts?"••••":fmtA(pnlARS)}</span>
             <span style={{display:"block",fontSize:10,color:pc(pctARS),fontWeight:700}}>{fmtP(pctARS)}</span>
           </td>
         )}
         {/* Columna USD */}
         {(view==="dual"||view==="usd")&&(
-          <td style={{...tdR,fontWeight:700}}>
+          <td style={{...tdR,fontWeight:700,background:"rgba(52,211,153,0.05)"}}>
             {hideAmounts?"••••":fmtU(valUSD)}
             {!isUSD&&<span style={{display:"block",fontSize:9,color:"var(--text-muted)"}}>dolar. ÷ {Math.round(fxRate).toLocaleString("es-AR")}</span>}
           </td>
         )}
         {(view==="dual"||view==="usd")&&(
-          <td style={{...tdR,fontSize:11}}>
+          <td style={{...tdR,fontSize:11,background:"rgba(52,211,153,0.05)"}}>
             <span style={{color:pc(pnlUSD),fontWeight:600}}>{hideAmounts?"••••":fmtU(pnlUSD)}</span>
             <span style={{display:"block",fontSize:10,color:pc(pctUSD),fontWeight:700}}>{fmtP(pctUSD)}</span>
           </td>
         )}
         {/* Columna moneda propia */}
         {view==="native"&&(
-          <td style={{...tdR,fontWeight:600}}>
+          <td style={{...tdR,fontWeight:600,background:"rgba(139,92,246,0.05)"}}>
             {hideAmounts?"••••":(isUSD?fmtU(origVal):fmtA(origVal))}
           </td>
         )}
         {view==="native"&&(
-          <td style={{...tdR,fontSize:11}}>
+          <td style={{...tdR,fontSize:11,background:"rgba(139,92,246,0.05)"}}>
             <span style={{color:pc(origPnl),fontWeight:600}}>{hideAmounts?"••••":(isUSD?fmtU(origPnl):fmtA(origPnl))}</span>
             <span style={{display:"block",fontSize:10,color:pc(origPct),fontWeight:700}}>{fmtP(origPct)}</span>
           </td>
@@ -1676,9 +1676,9 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
                     <th style={thR}>Nominales</th>
                     <th style={thR}>PPC</th>
                     <th style={thR}>Precio actual</th>
-                    {(view==="dual"||view==="ars")&&<><th style={thR}>Val. ARS</th><th style={thR}>PnL · % ARS</th></>}
-                    {(view==="dual"||view==="usd")&&<><th style={thR}>Val. USD</th><th style={thR}>PnL · % USD</th></>}
-                    {view==="native"&&<><th style={thR}>Val. moneda</th><th style={thR}>PnL · % moneda</th></>}
+                    {(view==="dual"||view==="ars")&&<><th style={{...thR,background:"rgba(245,158,11,0.08)"}}>Val. ARS</th><th style={{...thR,background:"rgba(245,158,11,0.08)"}}>PnL · % ARS</th></>}
+                    {(view==="dual"||view==="usd")&&<><th style={{...thR,background:"rgba(52,211,153,0.1)"}}>Val. USD</th><th style={{...thR,background:"rgba(52,211,153,0.1)"}}>PnL · % USD</th></>}
+                    {view==="native"&&<><th style={{...thR,background:"rgba(139,92,246,0.08)"}}>Val. moneda</th><th style={{...thR,background:"rgba(139,92,246,0.08)"}}>PnL · % moneda</th></>}
                     <th style={thR}>{view==="dual"?"Rend %":"Rend %"}</th>
                   </tr>
                 </thead>

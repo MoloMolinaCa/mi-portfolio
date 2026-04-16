@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 
 const ASSET_TYPES = {
-  accion_ar: { label: "Acciones AR",  color: "#3B82F6", icon: "🇦🇷" },
+  accion_ar: { label: "Acciones AR",  color: "#3B82F6", icon: "📈" },
   cedear:    { label: "CEDEARs",      color: "#10B981", icon: "🌎" },
   bono_ars:  { label: "Bonos ARS",    color: "#F59E0B", icon: "📜" },
   bono_usd:  { label: "Bonos USD",    color: "#F97316", icon: "💵" },
@@ -533,19 +533,43 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
       const dates=getDates(p,_hist);
       const cclBars=_getCCL(),mepBars=_getMEP(),sp500Bars=_getSPY(),spyByma=_getTicker("SPY")||[];
 
+      const todayStr=new Date().toISOString().slice(0,10);
+
+      // Función que obtiene el precio de una barra, usando el valor live para hoy si está disponible
+      const getPriceWithLive=(bars,dateStr,liveVal)=>{
+        if(dateStr===todayStr&&liveVal!=null)return liveVal;
+        return findPrice(bars,dateStr);
+      };
+
       let spy100=null;
       if(sp500Bars.length>=2&&currency!=="ARS"){
-        const pts=dates.map(d=>({date:d,val:findPrice(sp500Bars,d)||null})).filter(x=>x.val);
+        // liveSP500 es el precio live del S&P500 en USD
+        const pts=dates.map(d=>({date:d,val:getPriceWithLive(sp500Bars,d,liveSP500)||null})).filter(x=>x.val);
         if(pts.length>=2){const base=pts[0].val;spy100=pts.map(x=>({date:x.date,val:base>0?100*x.val/base:100}));}
       }else if(spyByma.length>=2){
         const tcBars=currency==="USD_MEP"?mepBars:cclBars;
-        const pts=dates.map(d=>{const pARS=findPrice(spyByma,d);if(!pARS)return{date:d,val:null};if(currency==="ARS")return{date:d,val:pARS};const tc=tcBars.length?(findPrice(tcBars,d)||fxRate):fxRate;return{date:d,val:pARS/tc};}).filter(x=>x.val!=null);
+        const pts=dates.map(d=>{
+          const pARS=findPrice(spyByma,d);
+          if(!pARS)return{date:d,val:null};
+          if(currency==="ARS")return{date:d,val:pARS};
+          // Para hoy usar fxRate live en lugar del bar histórico
+          const tc=d===todayStr?fxRate:(tcBars.length?(findPrice(tcBars,d)||fxRate):fxRate);
+          return{date:d,val:pARS/tc};
+        }).filter(x=>x.val!=null);
         if(pts.length>=2){const base=pts[0].val;spy100=pts.map(x=>({date:x.date,val:base>0?100*x.val/base:100}));}
       }
 
       let ccl100=null,mep100=null;
-      if(currency==="ARS"&&cclBars.length>=2){const pts=dates.map(d=>({date:d,val:findPrice(cclBars,d)||cclBars[0].close}));const base=pts[0].val;ccl100=pts.map(x=>({date:x.date,val:base>0?100*x.val/base:100}));}
-      if(currency==="ARS"&&mepBars.length>=2){const pts=dates.map(d=>({date:d,val:findPrice(mepBars,d)||mepBars[0].close}));const base=pts[0].val;mep100=pts.map(x=>({date:x.date,val:base>0?100*x.val/base:100}));}
+      if(currency==="ARS"&&cclBars.length>=2){
+        // Para hoy usar liveFX.CCL
+        const pts=dates.map(d=>({date:d,val:d===todayStr?liveFX.CCL:(findPrice(cclBars,d)||cclBars[0].close)}));
+        const base=pts[0].val;ccl100=pts.map(x=>({date:x.date,val:base>0?100*x.val/base:100}));
+      }
+      if(currency==="ARS"&&mepBars.length>=2){
+        // Para hoy usar liveFX.MEP
+        const pts=dates.map(d=>({date:d,val:d===todayStr?liveFX.MEP:(findPrice(mepBars,d)||mepBars[0].close)}));
+        const base=pts[0].val;mep100=pts.map(x=>({date:x.date,val:base>0?100*x.val/base:100}));
+      }
 
       const t10yBars=_getTicker("t10y")||[];
       let t10y100=null;

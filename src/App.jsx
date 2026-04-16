@@ -2427,9 +2427,9 @@ export default function App(){
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             <div style={{display:"flex",flexDirection:"column",gap:1}}>
               <select value={fx} onChange={e=>setFx(e.target.value)} style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"5px 10px",color:"var(--text-secondary)",fontSize:12,cursor:"pointer"}}>
-                <option value="CCL">💵 CCL {hideAmounts?"••••":fmtA(liveFX.CCL)}</option>
-                <option value="MEP">💵 MEP {hideAmounts?"••••":fmtA(liveFX.MEP)}</option>
-                <option value="oficial">💵 Oficial {hideAmounts?"••••":fmtA(liveFX.oficial)}</option>
+                <option value="CCL">💵 CCL {fmtA(liveFX.CCL)}</option>
+                <option value="MEP">💵 MEP {fmtA(liveFX.MEP)}</option>
+                <option value="oficial">💵 Oficial {fmtA(liveFX.oficial)}</option>
               </select>
               <div style={{fontSize:9,color:"var(--text-muted)",textAlign:"center"}}>dólar de valuación</div>
             </div>
@@ -2467,7 +2467,7 @@ export default function App(){
                   {lbl:"PnL Total",val:fmtP(totPct),sub:hideAmounts?"••••••":fmtU(totPnl)+" PnL",col:pc(totPnl)},
                   {lbl:"Alpha vs T10Y",val:fmtP(alpha),sub:"Benchmark "+fmtP(benchPct),col:pc(alpha)},
                   {lbl:"Treasury 10Y",val:liveT10Y+"%",sub:"Yield anual USD",col:"var(--yellow)"},
-                  {lbl:"TC "+fx,val:hideAmounts?"••••••":"$"+fxRate.toLocaleString("es-AR"),sub:"ARS/USD · "+liveFX.source,col:"var(--text-secondary)"},
+                  {lbl:"TC "+fx,val:"$"+fxRate.toLocaleString("es-AR"),sub:"ARS/USD · "+liveFX.source,col:"var(--text-secondary)"},
                 ].map(c=>(
                   <div key={c.lbl} style={{...card,padding:"15px 17px"}}>
                     <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:5}}>{c.lbl}</div>
@@ -2493,12 +2493,24 @@ export default function App(){
                     </div>
                   </div>
                 </div>
-                <div style={{...card,padding:18,display:"flex",flexDirection:"column"}}>
-                  <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Rendimiento base 100 · USD CCL</div>
-                  <div style={{flex:1,minHeight:0,height:260}}>
-                    <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos}/>
-                  </div>
-                </div>
+                {(()=>{
+                  const [chartExpanded,setChartExpanded]=React.useState(false);
+                  return(
+                    <div style={{...card,padding:18,display:"flex",flexDirection:"column"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                        <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Rendimiento base 100 · USD CCL</div>
+                        <button onClick={()=>setChartExpanded(e=>!e)}
+                          title={chartExpanded?"Achicar":"Ampliar"}
+                          style={{background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:12,color:"var(--text-muted)",lineHeight:1}}>
+                          {chartExpanded?"⊖":"⊕"}
+                        </button>
+                      </div>
+                      <div style={{height:chartExpanded?420:190,transition:"height 0.25s ease"}}>
+                        <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos}/>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Top/Bottom 5 del día en Dashboard */}

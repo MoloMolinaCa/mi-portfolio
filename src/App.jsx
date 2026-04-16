@@ -1655,9 +1655,8 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
         return(
           <div key={`section-${t.key}`} style={{...card,overflow:"hidden"}}>
             {/* Encabezado de sección */}
-            <div style={{padding:"12px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center",background:`${t.color}0d`}}>
+            <div style={{padding:"12px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center",background:'transparent'}}>
               <div style={{display:"flex",alignItems:"center",gap:10}}>
-                <div style={{width:10,height:10,borderRadius:"50%",background:t.color}}/>
                 <span style={{fontWeight:700,fontSize:13,color:"var(--text-primary)"}}>{t.icon} {t.label}</span>
                 <span style={{fontSize:11,color:"var(--text-muted)"}}>· {items.length} posición{items.length!==1?"es":""}</span>
               </div>

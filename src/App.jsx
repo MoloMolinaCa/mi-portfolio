@@ -385,23 +385,24 @@ function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRa
   let cumulative=1;
 
   for(let i=1;i<vals.length;i++){
-    const today=vals[i];
-    const yesterday=vals[i-1];
+    const curr=vals[i];
+    const prev=vals[i-1];
     let dayReturn;
 
-    if(flowDates.has(today.date)){
-      // Hay un flujo hoy — calcular valor del portfolio con la posición de AYER al precio de HOY
-      const dateT_before=new Date(today.date).getTime()-1; // justo antes del flujo
-      const valBeforeFlow=getPortVal(today.date, dateT_before);
-      const valYesterdayPrice=getPortVal(yesterday.date, new Date(yesterday.date).getTime());
-      // Retorno del día = valor con posición anterior al precio de hoy / valor ayer
-      dayReturn = valYesterdayPrice > 0 ? valBeforeFlow / valYesterdayPrice : 1;
+    if(flowDates.has(curr.date)){
+      // Hay un flujo hoy — el retorno del día debe calcularse SOLO por variación de precios,
+      // sin que el nuevo capital aportado cuente como ganancia.
+      // Valor con la posición de AYER al precio de HOY (excluye qty del flujo de hoy):
+      const dateT_before=new Date(curr.date).getTime()-1;
+      const valYesterdayQtyTodayPrice=getPortVal(curr.date, dateT_before);
+      // Retorno del día = (posición anterior × precio hoy) / (posición anterior × precio ayer)
+      dayReturn = prev.val > 0 ? valYesterdayQtyTodayPrice / prev.val : 1;
     } else {
-      dayReturn = yesterday.val > 0 ? today.val / yesterday.val : 1;
+      dayReturn = prev.val > 0 ? curr.val / prev.val : 1;
     }
 
     cumulative *= dayReturn;
-    twr.push({date:today.date, val:parseFloat((100*cumulative).toFixed(4))});
+    twr.push({date:curr.date, val:parseFloat((100*cumulative).toFixed(4))});
   }
 
   return twr;

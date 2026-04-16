@@ -1913,6 +1913,7 @@ function RankingWidget({en, historicos, fxRate, currency}){
   );
 }
 
+
 function DayMoversWidget({en, historicos, fxRate, livePrices, card, hideAmounts=false}){
   const fmtU=(n,d=0)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"USD",maximumFractionDigits:d}).format(n);
   const fmtA=(n)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:0}).format(n);
@@ -2494,27 +2495,45 @@ export default function App(){
                   </div>
                 </div>
                 {(()=>{
-                  const [chartExpanded,setChartExpanded]=React.useState(false);
+                  const [chartModal,setChartModal]=React.useState(false);
                   return(
-                    <div style={{...card,padding:18,display:"flex",flexDirection:"column"}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                        <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Rendimiento base 100 · USD CCL</div>
-                        <button onClick={()=>setChartExpanded(e=>!e)}
-                          title={chartExpanded?"Achicar":"Ampliar"}
-                          style={{background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:12,color:"var(--text-muted)",lineHeight:1}}>
-                          {chartExpanded?"⊖":"⊕"}
-                        </button>
+                    <>
+                      <div style={{...card,padding:18,display:"flex",flexDirection:"column"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                          <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Rendimiento base 100 · USD CCL</div>
+                          <button onClick={()=>setChartModal(true)}
+                            title="Ampliar gráfico"
+                            style={{background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:12,color:"var(--text-muted)",lineHeight:1,display:"flex",alignItems:"center",gap:4}}>
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M7.5 1.5H10.5V4.5M4.5 10.5H1.5V7.5M10.5 1.5L6.5 5.5M1.5 10.5L5.5 6.5"/></svg>
+                          </button>
+                        </div>
+                        <div style={{height:280}}>
+                          <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos}/>
+                        </div>
                       </div>
-                      <div style={{height:chartExpanded?420:190,transition:"height 0.25s ease"}}>
-                        <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos}/>
-                      </div>
-                    </div>
+                      {chartModal&&(
+                        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",zIndex:500,display:"flex",flexDirection:"column"}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 24px",borderBottom:"1px solid var(--border)",background:"var(--bg-card)",flexShrink:0}}>
+                            <div style={{fontSize:13,fontWeight:600,color:"var(--text-primary)"}}>Rendimiento base 100</div>
+                            <button onClick={()=>setChartModal(false)}
+                              style={{background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontSize:13,color:"var(--text-muted)",display:"flex",alignItems:"center",gap:6}}>
+                              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M1.5 4.5V1.5H4.5M7.5 1.5H10.5V4.5M10.5 7.5V10.5H7.5M4.5 10.5H1.5V7.5"/></svg>
+                              Cerrar
+                            </button>
+                          </div>
+                          <div style={{flex:1,padding:"24px",minHeight:0}}>
+                            <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos}/>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   );
                 })()}
               </div>
 
               {/* Top/Bottom 5 del día en Dashboard */}
               <DayMoversWidget en={enGrouped} historicos={historicos} fxRate={fxRate} livePrices={livePrices} card={card} hideAmounts={hideAmounts}/>
+
 
 
             </div>

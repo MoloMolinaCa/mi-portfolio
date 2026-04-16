@@ -325,10 +325,11 @@ function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRa
   const today=new Date().toISOString().slice(0,10);
   const liveMap=livePricesMap||{};
 
-  // Pre-calcular el valor del portfolio para cada fecha
-  const getPortVal=(dateStr, dateT)=>{
+  // Pre-calcular el valor del portfolio para cada fecha.
+  // useToday: cuando true, usa precio live aunque dateT sea anterior al cierre del día
+  const getPortVal=(dateStr, dateT, useToday=false)=>{
     let total=0;
-    const isToday=dateStr===today;
+    const isToday=dateStr===today||useToday;
     for(const h of en){
       const buys=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra"&&new Date(t.date).getTime()<=dateT);
       const sells=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="venta"&&new Date(t.date).getTime()<=dateT);
@@ -340,7 +341,12 @@ function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRa
 
       let price;
       if(isToday&&liveMap[h.ticker]){
-        // Para hoy usar precio en vivo
+        // Precio en vivo — pero si el ticker fue comprado HOY por primera vez,
+        // su retorno del día es 0 (no puede haber ganado nada en el día de alta).
+        const hadPositionBefore=trades.some(t=>
+          t.ticker===h.ticker&&t.tipo==="compra"&&new Date(t.date).getTime()<dateT
+        );
+        if(!hadPositionBefore)continue;
         price=liveMap[h.ticker];
       } else if(bars&&bars.length){
         if(dateStr<bars[0].date)continue;
@@ -350,6 +356,8 @@ function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRa
         // Sin histórico: usar PPC desde fecha de compra
         const firstBuy=buys.sort((a,b)=>a.date.localeCompare(b.date))[0];
         if(!firstBuy||dateStr<firstBuy.date)continue;
+        // Primera compra es hoy → retorno del día = 0, no contribuye
+        if(firstBuy.date===dateStr)continue;
         const totalCost=buys.reduce((a,t)=>a+t.qty*t.price,0);
         const totalQty=buys.reduce((a,t)=>a+t.qty,0);
         price=totalQty>0?totalCost/totalQty:h.currentPrice;
@@ -394,7 +402,7 @@ function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRa
       // sin que el nuevo capital aportado cuente como ganancia.
       // Valor con la posición de AYER al precio de HOY (excluye qty del flujo de hoy):
       const dateT_before=new Date(curr.date).getTime()-1;
-      const valYesterdayQtyTodayPrice=getPortVal(curr.date, dateT_before);
+      const valYesterdayQtyTodayPrice=getPortVal(curr.date, dateT_before, true);
       // Retorno del día = (posición anterior × precio hoy) / (posición anterior × precio ayer)
       dayReturn = prev.val > 0 ? valYesterdayQtyTodayPrice / prev.val : 1;
     } else {

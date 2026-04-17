@@ -493,7 +493,7 @@ function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRa
   return twr;
 }
 
-function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=false,livePricesAll={}}){
+function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=false,livePricesAll={},onExpand=null}){
   const PERIODS=[{key:"mtd",label:"MTD",days:null,mtd:true},{key:"30d",label:"30d",days:30},{key:"90d",label:"90d",days:90},{key:"ytd",label:"YTD",days:null},{key:"1y",label:"1 año",days:365},{key:"3y",label:"3 años",days:1095}];
   const [period,setPeriod]=useState("90d");
   const [currency,setCurrency]=useState("USD_CCL");
@@ -706,7 +706,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
           {cd?.ccl100&&<span style={{fontSize:10,color:"#A78BFA"}}>— CCL</span>}
           {cd?.mep100&&<span style={{fontSize:10,color:"#F472B6"}}>— MEP</span>}
         </div>
-        <div style={{display:"flex",gap:4}}>
+        <div style={{display:"flex",gap:4,alignItems:"center"}}>
           {PERIODS.map(p=>(
             <button key={p.key} onClick={()=>{setPeriod(p.key);setScrubStart(null);setScrubEnd(null);}}
               style={{padding:"3px 8px",borderRadius:6,border:"1px solid var(--border)",cursor:"pointer",fontSize:11,
@@ -716,6 +716,10 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
               {p.label}
             </button>
           ))}
+          {onExpand&&<button onClick={onExpand} title="Ampliar"
+            style={{background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:5,padding:"3px 7px",cursor:"pointer",color:"var(--text-muted)",lineHeight:1,display:"flex",alignItems:"center",marginLeft:4}}>
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M7.5 1.5H10.5V4.5M4.5 10.5H1.5V7.5M10.5 1.5L6.5 5.5M1.5 10.5L5.5 6.5"/></svg>
+          </button>}
         </div>
       </div>
       <div style={{flex:1,overflow:"visible",minHeight:0,position:"relative"}}>
@@ -803,13 +807,12 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
                 boxShadow:"0 0 0 2px var(--bg-card)",
               }} onMouseDown={e=>onMouseDown(e,'end')}/>
             </div>
-            {/* Date labels under handles */}
-            <div style={{position:"relative",height:14,marginTop:3,fontSize:9,color:"var(--text-muted)"}}>
-              <span style={{position:"absolute",left:`${startX}%`,transform:"translateX(-50%)",whiteSpace:"nowrap"}}>
+            {/* Date labels - positioned under each handle */}
+            <div style={{position:"relative",height:14,marginTop:2,fontSize:9,color:"var(--text-muted)"}}>
+              <span style={{position:"absolute",left:`${startX}%`,transform:"translateX(-50%)",whiteSpace:"nowrap",textAlign:"center"}}>
                 {(d=>d?d.slice(8)+'/'+d.slice(5,7)+'/'+d.slice(0,4):''  )(scrubStart||cd?.startDate||firstDate)}
               </span>
-              <span style={{position:"absolute",left:"50%",transform:"translateX(-50%)",opacity:0.3,fontSize:8}}>← deslizá →</span>
-              <span style={{position:"absolute",left:`${endX}%`,transform:"translateX(-50%)",whiteSpace:"nowrap"}}>
+              <span style={{position:"absolute",left:`${endX}%`,transform:"translateX(-50%)",whiteSpace:"nowrap",textAlign:"center"}}>
                 {(d=>d?d.slice(8)+'/'+d.slice(5,7)+'/'+d.slice(0,4):''  )(scrubEnd||lastDate)}
               </span>
             </div>
@@ -2926,17 +2929,9 @@ export default function App(){
                     </div>
                   </div>
                 </div>
-                <div style={{...card,padding:18,display:"flex",flexDirection:"column"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                    <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Rendimiento base 100 · USD CCL</div>
-                    <button onClick={()=>setChartModal(true)}
-                      title="Ampliar gráfico"
-                      style={{background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:12,color:"var(--text-muted)",lineHeight:1,display:"flex",alignItems:"center",gap:4}}>
-                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M7.5 1.5H10.5V4.5M4.5 10.5H1.5V7.5M10.5 1.5L6.5 5.5M1.5 10.5L5.5 6.5"/></svg>
-                    </button>
-                  </div>
-                  <div style={{height:390}}>
-                    <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} livePricesAll={livePrices}/>
+                <div style={{...card,padding:"10px 18px 18px",display:"flex",flexDirection:"column"}}>
+                  <div style={{height:410}}>
+                    <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} livePricesAll={livePrices} onExpand={()=>setChartModal(true)}/>
                   </div>
                 </div>
                 {chartModal&&(

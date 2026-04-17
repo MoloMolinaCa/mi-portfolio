@@ -318,7 +318,7 @@ function Donut({segs, size=120}){
 function Chart100({series}){
   const [hover,setHover]=useState(null);
   if(!series?.length)return null;
-  const W=560,H=280,PL=52,PT=14,PR=80,PB=30;
+  const W=560,H=280,PL=52,PT=14,PR=58,PB=30;
   const allV=series.flatMap(s=>s.data.map(d=>d.val));
   const minV=Math.min(...allV)*0.997,maxV=Math.max(...allV)*1.003;
   const n=series[0].data.length;
@@ -779,7 +779,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
         return(
           <div style={{paddingTop:8,paddingBottom:2,userSelect:"none"}}
             onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}>
-            <div ref={scrubRef} style={{position:"relative",height:18,cursor:"default"}}>
+            <div ref={scrubRef} style={{position:"relative",height:18,cursor:"default",overflow:"hidden"}}>
               {/* Track line */}
               <div style={{position:"absolute",top:"50%",left:0,right:0,height:2,background:"var(--border)",borderRadius:1,transform:"translateY(-50%)"}}/>
               {/* Active segment */}
@@ -2807,7 +2807,7 @@ export default function App(){
           ))}
         </div>
 
-        <div style={{padding:"22px 32px",maxWidth:"100%"}}>
+        <div style={{padding:"22px 40px",maxWidth:"100%",boxSizing:"border-box"}}>
 
           {/* DASHBOARD */}
           {tab==="dashboard"&&(
@@ -2915,7 +2915,7 @@ export default function App(){
                 <div style={{...card,padding:18,display:"flex",flexDirection:"column"}}>
                   <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:14}}>Asignación por tipo</div>
                   <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
-                    <Donut segs={byType.map(t=>({k:t.key,v:t.val,color:t.color,label:t.label}))} size={150}/>
+                    <Donut segs={byType.map(t=>({k:t.key,v:t.val,color:t.color,label:t.label}))} size={170}/>
                     <div style={{width:"100%",display:"grid",gap:8}}>
                       {byType.map(t=>(
                         <div key={t.key} style={{display:"flex",alignItems:"center",gap:7}}>

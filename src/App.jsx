@@ -778,7 +778,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
         return(
           <div style={{paddingTop:8,paddingBottom:2,userSelect:"none"}}
             onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}>
-            <div ref={scrubRef} style={{position:"relative",height:18,cursor:"default",overflow:"hidden"}}>
+            <div ref={scrubRef} style={{position:"relative",height:18,cursor:"default",overflow:"hidden",margin:"0 20px"}}>
               {/* Track line */}
               <div style={{position:"absolute",top:"50%",left:0,right:0,height:2,background:"var(--border)",borderRadius:1,transform:"translateY(-50%)"}}/>
               {/* Active segment */}

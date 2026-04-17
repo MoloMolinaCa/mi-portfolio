@@ -516,8 +516,10 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
     else{periodStart=new Date(today);periodStart.setDate(periodStart.getDate()-p.days);}
     const firstBuy=trades.filter(t=>t.tipo==="compra").sort((a,b)=>a.date.localeCompare(b.date))[0]?.date;
     const firstBuyDate=firstBuy?new Date(firstBuy):end;
+    // customStart never goes before first buy date
+    if(customStart&&new Date(customStart)<firstBuyDate)customStart=firstBuyDate.toISOString().slice(0,10);
     const start=firstBuyDate>periodStart?firstBuyDate:periodStart;
-    const startStr=start.toISOString().slice(0,10);
+    const startStr=(customStart&&customStart>start.toISOString().slice(0,10))?customStart:start.toISOString().slice(0,10);
 
     // Obtener todas las fechas con datos de tickers del portfolio
     const portfolioTickers=[...new Set(trades.map(t=>t.ticker))];
@@ -721,7 +723,8 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
         if(allBars.length<2)return null;
         // Primera fecha: la primera con datos reales (CCL o primera compra)
         const firstBuyDate=trades.filter(t=>t.tipo==="compra").sort((a,b)=>a.date.localeCompare(b.date))[0]?.date||allBars[0].date;
-        const firstDate=[allBars[0].date,firstBuyDate].sort()[0];
+        // Scrubber starts at first buy — no point showing earlier
+        const firstDate=firstBuyDate;
         const lastDate=today;
         const totalDays=(new Date(lastDate)-new Date(firstDate))/(1000*60*60*24);
 

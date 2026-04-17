@@ -410,10 +410,11 @@ function Chart100({series}){
 // ── Time-Weighted Return (TWR) ────────────────────────────────────────────────
 // Para cada sub-período entre flujos, el retorno es valor_fin / valor_inicio.
 // Los flujos no generan retorno — solo cambian la base del siguiente sub-período.
-function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRate, livePricesMap){
+function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRate, livePricesMap, customEnd=null){
   if(!dates||dates.length<2) return [];
-  const todayStr=new Date().toISOString().slice(0,10);
-  const liveMap=livePricesMap||{};
+  const realTodayStr=new Date().toISOString().slice(0,10);
+  const todayStr=customEnd&&customEnd<realTodayStr?null:realTodayStr; // null = don't use live prices
+  const liveMap=(todayStr&&livePricesMap)||{};
 
   function findPrice2(bars,d){
     if(!bars?.length)return null;
@@ -559,11 +560,12 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
       const dates=getDates(p,_hist,customStart,customEnd);
       const cclBars=_getCCL(),mepBars=_getMEP(),sp500Bars=_getSPY(),spyByma=_getTicker("SPY")||[];
 
-      const todayStr=new Date().toISOString().slice(0,10);
+      const realToday=new Date().toISOString().slice(0,10);
+      const todayStr=customEnd&&customEnd<realToday?null:realToday; // null = no live prices
 
       // Función que obtiene el precio de una barra, usando el valor live para hoy si está disponible
       const getPriceWithLive=(bars,dateStr,liveVal)=>{
-        if(dateStr===todayStr&&liveVal!=null)return liveVal;
+        if(todayStr&&dateStr===todayStr&&liveVal!=null)return liveVal;
         return findPrice(bars,dateStr);
       };
 
@@ -608,12 +610,12 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
       let ccl100=null,mep100=null;
       if(currency==="ARS"&&cclBars.length>=2){
         // Para hoy usar liveFX.CCL
-        const pts=dates.map(d=>({date:d,val:d===todayStr?liveFX.CCL:(findPrice(cclBars,d)||cclBars[0].close)}));
+        const pts=dates.map(d=>({date:d,val:todayStr&&d===todayStr?liveFX.CCL:(findPrice(cclBars,d)||cclBars[0].close)}));
         const base=pts[0].val;ccl100=pts.map(x=>({date:x.date,val:base>0?100*x.val/base:100}));
       }
       if(currency==="ARS"&&mepBars.length>=2){
         // Para hoy usar liveFX.MEP
-        const pts=dates.map(d=>({date:d,val:d===todayStr?liveFX.MEP:(findPrice(mepBars,d)||mepBars[0].close)}));
+        const pts=dates.map(d=>({date:d,val:todayStr&&d===todayStr?liveFX.MEP:(findPrice(mepBars,d)||mepBars[0].close)}));
         const base=pts[0].val;mep100=pts.map(x=>({date:x.date,val:base>0?100*x.val/base:100}));
       }
 
@@ -638,14 +640,16 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
 
       // Precios en vivo para el punto de hoy
       const livePricesMap={};
-      for(const h of en){if(h.isLive)livePricesMap[h.ticker]=h.currentPrice;}
+      if(!customEnd||customEnd>=new Date().toISOString().slice(0,10)){
+        for(const h of en){if(h.isLive)livePricesMap[h.ticker]=h.currentPrice;}
+      }
 
       // TWR — Time Weighted Return con punto de hoy en vivo
       const today=new Date().toISOString().slice(0,10);
       const datesWithToday=[...dates];
       if(datesWithToday[datesWithToday.length-1]!==today)datesWithToday.push(today);
 
-      const port100=calcTWR(datesWithToday,trades,en,tickerBars,cclBars,mepBars,currency,fxRate,livePricesMap);
+      const port100=calcTWR(datesWithToday,trades,en,tickerBars,cclBars,mepBars,currency,fxRate,livePricesMap,customEnd);
 
       setChartData({
         port100,t10y100,spy100,ccl100,mep100,currency,
@@ -797,11 +801,15 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
                 boxShadow:"0 0 0 2px var(--bg-card)",
               }} onMouseDown={e=>onMouseDown(e,'end')}/>
             </div>
-            {/* Date labels */}
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"var(--text-muted)",marginTop:3}}>
-              <span style={{position:"relative",left:`${startX}%`,transform:"translateX(-50%)"}}>{fmtD(scrubStart||cd?.startDate||firstDate)}</span>
-              <span style={{position:"absolute",left:"50%",transform:"translateX(-50%)",opacity:0.35,fontSize:8}}>← deslizá →</span>
-              <span style={{position:"relative",right:`${100-endX}%`,transform:"translateX(50%)"}}>{fmtD(scrubEnd||lastDate)}</span>
+            {/* Date labels under handles */}
+            <div style={{position:"relative",height:14,marginTop:3,fontSize:9,color:"var(--text-muted)"}}>
+              <span style={{position:"absolute",left:`${startX}%`,transform:"translateX(-50%)",whiteSpace:"nowrap"}}>
+                {(d=>d?d.slice(8)+'/'+d.slice(5,7)+'/'+d.slice(0,4):''  )(scrubStart||cd?.startDate||firstDate)}
+              </span>
+              <span style={{position:"absolute",left:"50%",transform:"translateX(-50%)",opacity:0.3,fontSize:8}}>← deslizá →</span>
+              <span style={{position:"absolute",left:`${endX}%`,transform:"translateX(-50%)",whiteSpace:"nowrap"}}>
+                {(d=>d?d.slice(8)+'/'+d.slice(5,7)+'/'+d.slice(0,4):''  )(scrubEnd||lastDate)}
+              </span>
             </div>
           </div>
         );

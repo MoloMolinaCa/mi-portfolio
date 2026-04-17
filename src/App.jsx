@@ -2911,7 +2911,7 @@ export default function App(){
                 );
               })()}
 
-              <div style={{display:"grid",gridTemplateColumns:"200px 1fr",gap:14,alignItems:"stretch"}}>
+              <div style={{display:"grid",gridTemplateColumns:"180px 1fr",gap:12,alignItems:"stretch"}}>
                 <div style={{...card,padding:18,display:"flex",flexDirection:"column"}}>
                   <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:14}}>Asignación por tipo</div>
                   <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>

@@ -13,27 +13,26 @@ const ASSET_TYPES = {
 const GALICIA_PORTFOLIO = [
   // BONOS ARS
   { id:1,  ticker:"TZXD6",     name:"BONTES CER V15/12/26",          type:"bono_ars", qty:781503,   buyPrice:179,       currentPrice:269.35,   buyCurrency:"ARS", rendPct:50.53, buyDate:"2026-04-01" },
-  { id:2,  ticker:"TZX27",     name:"BONO REP ARG CER V30/06/27",    type:"bono_ars", qty:428449,   buyPrice:355,       currentPrice:360.95,   buyCurrency:"ARS", rendPct:1.60,  buyDate:"2026-04-01" },
+  { id:2,  ticker:"TZX27",     name:"BONO REP ARG CER V30/06/27",    type:"bono_ars", qty:428449,   buyPrice:3.553,     currentPrice:360.95,   buyCurrency:"ARS", rendPct:1.60,  buyDate:"2026-04-06" },
   // BONOS USD
   { id:3,  ticker:"TLCUD",     name:"ON Telecom C28 05/03/29",       type:"bono_usd", qty:7000,     buyPrice:100.0,     currentPrice:101.6,    buyCurrency:"USD", rendPct:1.60,  buyDate:"2026-04-01" },
   { id:4,  ticker:"AO27D",     name:"Bono Tesoro 6% V29/10/27",      type:"bono_usd", qty:2954,     buyPrice:102.0,     currentPrice:101.7,    buyCurrency:"USD", rendPct:0.10,  buyDate:"2026-04-01" },
   { id:5,  ticker:"GD38D",     name:"BONOS REP ARG U$S V09/01/38",   type:"bono_usd", qty:1681,     buyPrice:78.0,      currentPrice:79.82,    buyCurrency:"USD", rendPct:5.31,  buyDate:"2026-04-01" },
   // ACCIONES AR
-  { id:6,  ticker:"TXAR",      name:"Siderar (Ternium Argentina)",   type:"accion_ar",qty:2467,     buyPrice:607.00,    currentPrice:710.50,   buyCurrency:"ARS", rendPct:16.89, buyDate:"2026-04-01" },
-  { id:7,  ticker:"YPFD",      name:"YPF Ordinarias D",              type:"accion_ar",qty:21,       buyPrice:54214.29,  currentPrice:65250.00, buyCurrency:"ARS", rendPct:20.36, buyDate:"2026-04-01" },
+  { id:6,  ticker:"TXAR",      name:"Siderar (Ternium Argentina)",   type:"accion_ar",qty:2467,     buyPrice:607.00,    currentPrice:710.50,   buyCurrency:"ARS", rendPct:16.89, buyDate:"2026-03-03" },
   // CEDEARs
-  { id:8,  ticker:"GLD",       name:"ETF SPDR Gold Trust",           type:"cedear",   qty:177,      buyPrice:14064.12,  currentPrice:12730.00, buyCurrency:"ARS", rendPct:-9.49, buyDate:"2026-04-01" },
-  { id:9,  ticker:"NU",        name:"NU Holdings Cl A",              type:"cedear",   qty:189,      buyPrice:10850.00,  currentPrice:10590.00, buyCurrency:"ARS", rendPct:-2.40, buyDate:"2026-04-01" },
-  { id:10, ticker:"SPY",       name:"SPDR S&P 500 ETF",              type:"cedear",   qty:19,       buyPrice:50225.00,  currentPrice:48860.00, buyCurrency:"ARS", rendPct:-2.76, buyDate:"2026-04-01" },
-  { id:11, ticker:"META",      name:"Meta Platforms Inc",            type:"cedear",   qty:17,       buyPrice:34780.00,  currentPrice:35760.00, buyCurrency:"ARS", rendPct:2.82,  buyDate:"2026-04-01" },
-  { id:12, ticker:"MSFT",      name:"Microsoft Corp",                type:"cedear",   qty:27,       buyPrice:18300.00,  currentPrice:18480.00, buyCurrency:"ARS", rendPct:0.93,  buyDate:"2026-04-01" },
-  { id:13, ticker:"VIST",      name:"Vista Oil & Gas",               type:"cedear",   qty:14,       buyPrice:35600.00,  currentPrice:34940.00, buyCurrency:"ARS", rendPct:-1.63, buyDate:"2026-04-01" },
+  { id:7,  ticker:"GLD",       name:"ETF SPDR Gold Trust",           type:"cedear",   qty:177,      buyPrice:14064.12,  currentPrice:12730.00, buyCurrency:"ARS", rendPct:-9.49, buyDate:"2026-02-05" },
+  { id:8,  ticker:"NU",        name:"NU Holdings Cl A",              type:"cedear",   qty:189,      buyPrice:10850.00,  currentPrice:10590.00, buyCurrency:"ARS", rendPct:-2.40, buyDate:"2026-03-12" },
+  { id:9,  ticker:"SPY",       name:"SPDR S&P 500 ETF",              type:"cedear",   qty:19,       buyPrice:50225.00,  currentPrice:48860.00, buyCurrency:"ARS", rendPct:-2.76, buyDate:"2026-03-03" },
+  { id:10, ticker:"META",      name:"Meta Platforms Inc",            type:"cedear",   qty:44,       buyPrice:37941.38,  currentPrice:35760.00, buyCurrency:"ARS", rendPct:2.82,  buyDate:"2026-04-01" },
+  { id:11, ticker:"MSFT",      name:"Microsoft Corp",                type:"cedear",   qty:46,       buyPrice:18943.81,  currentPrice:18480.00, buyCurrency:"ARS", rendPct:0.93,  buyDate:"2026-04-06" },
+  { id:12, ticker:"VIST",      name:"Vista Oil & Gas",               type:"cedear",   qty:14,       buyPrice:35600.00,  currentPrice:34940.00, buyCurrency:"ARS", rendPct:-1.63, buyDate:"2026-03-30" },
   // FCI PESOS
-  { id:14, ticker:"FIMA-PREM", name:"FIMA Premium Cl A (TNA 19.3%)", type:"fci_ars",  qty:40284.34, buyPrice:78.767480, currentPrice:78.767480,buyCurrency:"ARS", rendPct:0.26,  buyDate:"2026-04-01" },
-  { id:15, ticker:"FIMA-AHP",  name:"FIMA Ahorro Pesos Cl A",        type:"fci_ars",  qty:9.88,     buyPrice:600.718,   currentPrice:600.718,  buyCurrency:"ARS", rendPct:0.23,  buyDate:"2026-04-01" },
-  { id:16, ticker:"FIMA-AHPP", name:"FIMA Ahorro Plus Cl A",         type:"fci_ars",  qty:2.30,     buyPrice:147.952,   currentPrice:147.952,  buyCurrency:"ARS", rendPct:0.26,  buyDate:"2026-04-01" },
+  { id:13, ticker:"FIMA-PREM", name:"FIMA Premium Cl A (TNA 19.3%)", type:"fci_ars",  qty:7599.32,  buyPrice:40.179255, currentPrice:78.767480,buyCurrency:"ARS", rendPct:0.26,  buyDate:"2024-02-29" },
+  { id:14, ticker:"FIMA-AHP",  name:"FIMA Ahorro Pesos Cl A",        type:"fci_ars",  qty:9.88,     buyPrice:600.718,   currentPrice:600.718,  buyCurrency:"ARS", rendPct:0.23,  buyDate:"2026-04-01" },
+  { id:15, ticker:"FIMA-AHPP", name:"FIMA Ahorro Plus Cl A",         type:"fci_ars",  qty:2.30,     buyPrice:147.952,   currentPrice:147.952,  buyCurrency:"ARS", rendPct:0.26,  buyDate:"2026-04-01" },
   // FCI USD
-  { id:17, ticker:"FIMA-PREMD",name:"FIMA Premium Dólares Cl A",     type:"fci_usd",  qty:140.00,   buyPrice:1.012932,  currentPrice:1.012932, buyCurrency:"USD", rendPct:0.01,  buyDate:"2026-04-01" },
+  { id:16, ticker:"FIMA-PREMD",name:"FIMA Premium Dólares Cl A",     type:"fci_usd",  qty:140.00,   buyPrice:1.012932,  currentPrice:1.012932, buyCurrency:"USD", rendPct:0.01,  buyDate:"2026-04-01" },
 ];
 
 const FX_FALLBACK = { CCL:1481, MEP:1427, oficial:1389 };  // updated Apr 2026
@@ -1175,13 +1174,37 @@ function Modal({h,port=[],onSave,onClose}){
                   {f.buyCurrency==="USD"?`USD ${(+f.qty*+f.buyPrice).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}`:`$ ${(+f.qty*+f.buyPrice).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}`}
                 </span>
               </div>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                <label style={{display:"flex",alignItems:"center",gap:8,fontSize:11,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>
-                  Comisión ({f.buyCurrency})
-                  <input type="number" min="0" value={f.comision||""} onChange={e=>set("comision",e.target.value)}
-                    placeholder="0.00"
-                    style={{...inp,width:120,padding:"4px 8px",fontSize:13,textAlign:"right"}}/>
-                </label>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,gap:8}}>
+                <span style={{fontSize:11,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,flexShrink:0}}>Comisión</span>
+                <div style={{display:"flex",gap:8,alignItems:"center",flex:1}}>
+                  {/* Monto */}
+                  <div style={{display:"flex",alignItems:"center",gap:4,flex:1}}>
+                    <span style={{fontSize:11,color:"var(--text-muted)"}}>{f.buyCurrency}</span>
+                    <input type="number" min="0" value={f.comision||""}
+                      onChange={e=>{
+                        const monto=+e.target.value;
+                        set("comision",monto);
+                        const bruto=+f.qty*+f.buyPrice;
+                        if(bruto>0)set("comisionPct",+((monto/bruto)*100).toFixed(4));
+                      }}
+                      placeholder="0.00"
+                      style={{...inp,padding:"4px 8px",fontSize:13,textAlign:"right"}}/>
+                  </div>
+                  <span style={{color:"var(--text-muted)",fontSize:12}}>↔</span>
+                  {/* Porcentaje */}
+                  <div style={{display:"flex",alignItems:"center",gap:4,flex:1}}>
+                    <input type="number" min="0" step="0.01" value={f.comisionPct||""}
+                      onChange={e=>{
+                        const pct=+e.target.value;
+                        set("comisionPct",pct);
+                        const bruto=+f.qty*+f.buyPrice;
+                        if(bruto>0)set("comision",+(bruto*pct/100).toFixed(2));
+                      }}
+                      placeholder="0.00"
+                      style={{...inp,padding:"4px 8px",fontSize:13,textAlign:"right"}}/>
+                    <span style={{fontSize:11,color:"var(--text-muted)"}}>%</span>
+                  </div>
+                </div>
               </div>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",borderTop:"1px solid var(--border)",paddingTop:8}}>
                 <span style={{fontSize:11,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Monto neto</span>
@@ -2229,13 +2252,51 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
 
 export default function App(){
   // ── State ────────────────────────────────────────────────────────────────
-  const SEED_TRADES = GALICIA_PORTFOLIO.map(h=>({
-    id:h.id, ticker:h.ticker, tipo:"compra",
-    qty:h.qty, price:h.buyPrice, currency:h.buyCurrency,
-    date:h.buyDate||"2026-04-01", ts:h.id*1000, name:h.name,
-  }));
+  const SEED_TRADES = [
+    // Posición previa YPFD (antes de 2026)
+    {id:99,ticker:"YPFD",tipo:"compra",qty:78,price:54214.29,currency:"ARS",date:"2026-01-01",ts:99000,name:"YPF Ordinarias D",comision:12686.14},
+    // GLD
+    {id:100,ticker:"GLD",tipo:"compra",qty:74,price:13499.19,currency:"ARS",date:"2026-02-05",ts:100000,name:"ETF SPDR Gold Trust",comision:2996.82},
+    {id:101,ticker:"GLD",tipo:"compra",qty:103,price:14470,currency:"ARS",date:"2026-03-03",ts:101000,name:"ETF SPDR Gold Trust",comision:4471.23},
+    // SPY
+    {id:102,ticker:"SPY",tipo:"compra",qty:19,price:50225,currency:"ARS",date:"2026-03-03",ts:102000,name:"SPDR S&P 500 ETF",comision:2862.83},
+    // TXAR
+    {id:103,ticker:"TXAR",tipo:"compra",qty:482,price:607,currency:"ARS",date:"2026-03-03",ts:103000,name:"Siderar (Ternium Argentina)",comision:877.72},
+    {id:104,ticker:"TXAR",tipo:"compra",qty:1985,price:607,currency:"ARS",date:"2026-03-03",ts:104000,name:"Siderar (Ternium Argentina)",comision:3614.68},
+    // YPFD compra 2026
+    {id:105,ticker:"YPFD",tipo:"compra",qty:9,price:51000,currency:"ARS",date:"2026-03-04",ts:105000,name:"YPF Ordinarias D",comision:1377.00},
+    // YPFD ventas
+    {id:106,ticker:"YPFD",tipo:"venta",qty:33,price:53500,currency:"ARS",date:"2026-03-11",ts:106000,name:"YPF Ordinarias D",comision:5296.50},
+    {id:107,ticker:"YPFD",tipo:"venta",qty:1,price:53525,currency:"ARS",date:"2026-03-11",ts:107000,name:"YPF Ordinarias D",comision:160.58},
+    {id:108,ticker:"YPFD",tipo:"venta",qty:3,price:53525,currency:"ARS",date:"2026-03-11",ts:108000,name:"YPF Ordinarias D",comision:481.73},
+    {id:109,ticker:"YPFD",tipo:"venta",qty:8,price:70325,currency:"ARS",date:"2026-04-01",ts:109000,name:"YPF Ordinarias D",comision:1687.80},
+    {id:110,ticker:"YPFD",tipo:"venta",qty:7,price:68600,currency:"ARS",date:"2026-04-01",ts:110000,name:"YPF Ordinarias D",comision:1440.60},
+    {id:111,ticker:"YPFD",tipo:"venta",qty:14,price:67200,currency:"ARS",date:"2026-04-06",ts:111000,name:"YPF Ordinarias D",comision:2822.40},
+    {id:112,ticker:"YPFD",tipo:"venta",qty:2,price:64325,currency:"ARS",date:"2026-04-10",ts:112000,name:"YPF Ordinarias D",comision:385.95},
+    {id:113,ticker:"YPFD",tipo:"venta",qty:5,price:64350,currency:"ARS",date:"2026-04-10",ts:113000,name:"YPF Ordinarias D",comision:965.25},
+    {id:114,ticker:"YPFD",tipo:"venta",qty:14,price:62215.01,currency:"ARS",date:"2026-04-15",ts:114000,name:"YPF Ordinarias D",comision:2613.03},
+    // NU
+    {id:115,ticker:"NU",tipo:"compra",qty:189,price:10850,currency:"ARS",date:"2026-03-12",ts:115000,name:"NU Holdings Cl A",comision:6151.95},
+    // GLOB venta
+    {id:116,ticker:"GLOB",tipo:"venta",qty:80,price:3594.09,currency:"ARS",date:"2026-03-30",ts:116000,name:"Globant S.A.",comision:862.58},
+    // VIST
+    {id:117,ticker:"VIST",tipo:"compra",qty:1,price:35600,currency:"ARS",date:"2026-03-30",ts:117000,name:"Vista Oil & Gas",comision:106.80},
+    {id:118,ticker:"VIST",tipo:"compra",qty:13,price:35600,currency:"ARS",date:"2026-03-30",ts:118000,name:"Vista Oil & Gas",comision:1388.40},
+    // META
+    {id:119,ticker:"META",tipo:"compra",qty:17,price:34780,currency:"ARS",date:"2026-04-01",ts:119000,name:"Meta Platforms Inc",comision:1773.78},
+    {id:120,ticker:"META",tipo:"compra",qty:2,price:38940,currency:"ARS",date:"2026-04-10",ts:120000,name:"Meta Platforms Inc",comision:233.64},
+    {id:121,ticker:"META",tipo:"compra",qty:7,price:38940,currency:"ARS",date:"2026-04-10",ts:121000,name:"Meta Platforms Inc",comision:817.74},
+    {id:122,ticker:"META",tipo:"compra",qty:6,price:38920,currency:"ARS",date:"2026-04-10",ts:122000,name:"Meta Platforms Inc",comision:700.56},
+    {id:123,ticker:"META",tipo:"compra",qty:12,price:41181.73,currency:"ARS",date:"2026-04-15",ts:123000,name:"Meta Platforms Inc",comision:1482.54},
+    // MSFT
+    {id:124,ticker:"MSFT",tipo:"compra",qty:27,price:18300,currency:"ARS",date:"2026-04-06",ts:124000,name:"Microsoft Corp",comision:1482.30},
+    {id:125,ticker:"MSFT",tipo:"compra",qty:19,price:19858.70,currency:"ARS",date:"2026-04-15",ts:125000,name:"Microsoft Corp",comision:1131.95},
+    // TZX27
+    {id:126,ticker:"TZX27",tipo:"compra",qty:315634,price:3.55,currency:"ARS",date:"2026-04-06",ts:126000,name:"BONO REP ARG CER V30/06/27",comision:3361.50},
+    {id:127,ticker:"TZX27",tipo:"compra",qty:112815,price:3.56,currency:"ARS",date:"2026-04-06",ts:127000,name:"BONO REP ARG CER V30/06/27",comision:1204.86},
+  ];
 
-  const [port,setPort]         = useState(GALICIA_PORTFOLIO);
+    const [port,setPort]         = useState(GALICIA_PORTFOLIO);
   const [trades,setTrades]     = useState(SEED_TRADES);
   const [storageReady,setStorageReady] = useState(false);
   const [historicos,setHistoricos] = useState(null);

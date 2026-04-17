@@ -780,9 +780,9 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
         const onMouseUp=()=>setScrubDrag(null);
 
         return(
-          <div style={{paddingTop:8,paddingBottom:2,userSelect:"none"}}
+          <div style={{paddingTop:8,paddingBottom:2,userSelect:"none",margin:"0 20px"}}
             onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}>
-            <div ref={scrubRef} style={{position:"relative",height:18,cursor:"default",overflow:"hidden",margin:"0 20px"}}>
+            <div ref={scrubRef} style={{position:"relative",height:18,cursor:"default",overflow:"visible"}}>
               {/* Track line */}
               <div style={{position:"absolute",top:"50%",left:0,right:0,height:2,background:"var(--border)",borderRadius:1,transform:"translateY(-50%)"}}/>
               {/* Active segment */}
@@ -808,28 +808,19 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
               }} onMouseDown={e=>onMouseDown(e,'end')}/>
             </div>
             {/* Date labels centered below each handle */}
-            <div style={{position:"relative",height:16,marginTop:4,fontSize:9,color:"var(--text-muted)"}}>
-              <span style={{
-                position:"absolute",
-                left:`${startX}%`,
-                transform:"translateX(-50%)",
-                whiteSpace:"nowrap",
-                textAlign:"center",
-                display:"block",
-              }}>
-                {(d=>d?d.slice(8)+'/'+d.slice(5,7)+'/'+d.slice(0,4):''  )(scrubStart||cd?.startDate||firstDate)}
-              </span>
-              <span style={{
-                position:"absolute",
-                left:`${endX}%`,
-                transform:"translateX(-50%)",
-                whiteSpace:"nowrap",
-                textAlign:"center",
-                display:"block",
-              }}>
-                {(d=>d?d.slice(8)+'/'+d.slice(5,7)+'/'+d.slice(0,4):''  )(scrubEnd||lastDate)}
-              </span>
-            </div>
+            {(()=>{
+              const fmt=d=>d?d.slice(8)+'/'+d.slice(5,7)+'/'+d.slice(0,4):'';
+              return(
+                <div style={{position:"relative",height:16,marginTop:4,fontSize:9,color:"var(--text-muted)"}}>
+                  <span style={{position:"absolute",left:`${startX}%`,transform:"translateX(-50%)",whiteSpace:"nowrap"}}>
+                    {fmt(scrubStart||cd?.startDate||firstDate)}
+                  </span>
+                  <span style={{position:"absolute",left:`${endX}%`,transform:"translateX(-50%)",whiteSpace:"nowrap"}}>
+                    {fmt(scrubEnd||lastDate)}
+                  </span>
+                </div>
+              );
+            })()}
           </div>
         );
       })()}

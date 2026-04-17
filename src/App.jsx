@@ -318,7 +318,7 @@ function Donut({segs, size=120}){
 function Chart100({series}){
   const [hover,setHover]=useState(null);
   if(!series?.length)return null;
-  const W=560,H=280,PL=52,PT=14,PR=58,PB=30;
+  const W=560,H=280,PL=40,PT=10,PR=52,PB=22;
   const allV=series.flatMap(s=>s.data.map(d=>d.val));
   const minV=Math.min(...allV)*0.997,maxV=Math.max(...allV)*1.003;
   const n=series[0].data.length;
@@ -722,9 +722,8 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
         {loading&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--text-muted)",fontSize:12}}><span style={{animation:"spin 0.8s linear infinite",display:"inline-block",marginRight:6}}>⟳</span>Cargando...</div>}
         {cd&&!loading&&series.length>0&&<Chart100 series={series}/>}
       </div>
-      {/* ── Scrubber: línea con handles para elegir período ── */}
+      {/* ── Scrubber ── */}
       {historicos&&(()=>{
-        // Todas las fechas disponibles para el scrubber background
         const today=new Date().toISOString().slice(0,10);
         const allBars=historicos?.CCL||[];
         if(allBars.length<2)return null;
@@ -2807,7 +2806,7 @@ export default function App(){
           ))}
         </div>
 
-        <div style={{padding:"22px 40px",maxWidth:"100%",boxSizing:"border-box"}}>
+        <div style={{padding:"22px 60px",maxWidth:"100%",boxSizing:"border-box"}}>
 
           {/* DASHBOARD */}
           {tab==="dashboard"&&(

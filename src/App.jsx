@@ -533,8 +533,10 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
     // Buscar el último día hábil <= startStr (no el siguiente)
     const firstValid=allDates.filter(d=>d<=startStr).slice(-1)[0] || allDates.find(d=>d>=startStr) || allDates[0];
 
-    const filtered=allDates.filter(d=>d>=firstValid&&d<=today);
-    filtered.push(today);
+    const actualEnd=customEnd||today;
+    const filtered=allDates.filter(d=>d>=firstValid&&d<=actualEnd);
+    // Solo agregar hoy si no hay customEnd o el customEnd es hoy
+    if(!customEnd||customEnd>=today)filtered.push(today);
     return[...new Set(filtered)].sort();
   };
 
@@ -697,11 +699,11 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
         </div>
         <div style={{display:"flex",gap:4}}>
           {PERIODS.map(p=>(
-            <button key={p.key} onClick={()=>setPeriod(p.key)}
+            <button key={p.key} onClick={()=>{setPeriod(p.key);setScrubStart(null);setScrubEnd(null);}}
               style={{padding:"3px 8px",borderRadius:6,border:"1px solid var(--border)",cursor:"pointer",fontSize:11,
-                fontWeight:period===p.key?700:400,
-                background:period===p.key?"var(--accent)":"var(--bg-input)",
-                color:period===p.key?"#fff":"var(--text-secondary)"}}>
+                fontWeight:period===p.key&&!scrubStart&&!scrubEnd?700:400,
+                background:period===p.key&&!scrubStart&&!scrubEnd?"var(--accent)":"var(--bg-input)",
+                color:period===p.key&&!scrubStart&&!scrubEnd?"#fff":"var(--text-secondary)"}}>
               {p.label}
             </button>
           ))}
@@ -717,7 +719,9 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
         const today=new Date().toISOString().slice(0,10);
         const allBars=historicos?.CCL||[];
         if(allBars.length<2)return null;
-        const firstDate=allBars[0].date;
+        // Primera fecha: la primera con datos reales (CCL o primera compra)
+        const firstBuyDate=trades.filter(t=>t.tipo==="compra").sort((a,b)=>a.date.localeCompare(b.date))[0]?.date||allBars[0].date;
+        const firstDate=[allBars[0].date,firstBuyDate].sort()[0];
         const lastDate=today;
         const totalDays=(new Date(lastDate)-new Date(firstDate))/(1000*60*60*24);
 
@@ -742,16 +746,22 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
           const pct=(e.clientX-rect.left)/rect.width*100;
           const delta=pct-scrubDrag.anchorPct;
           if(scrubDrag.type==='start'){
+            // Start can't go past end-2% and end can't be in the future (100%)
             const nx=Math.max(0,Math.min(scrubDrag.endX-2,scrubDrag.startX+delta));
-            setScrubStart(xToDate(nx));
+            const d=xToDate(nx);
+            setScrubStart(d>=lastDate?null:d); // if dragged to today, reset to null
           } else if(scrubDrag.type==='end'){
+            // End can't go past today (100%) and can't go before start+2%
             const nx=Math.max(scrubDrag.startX+2,Math.min(100,scrubDrag.endX+delta));
-            setScrubEnd(xToDate(nx));
+            const d=xToDate(nx);
+            setScrubEnd(d>=lastDate?null:d); // if at today, null = "use today"
           } else {
             const span=scrubDrag.endX-scrubDrag.startX;
             const ns=Math.max(0,Math.min(100-span,scrubDrag.startX+delta));
-            setScrubStart(xToDate(ns));
-            setScrubEnd(xToDate(ns+span));
+            const ds=xToDate(ns);
+            const de=xToDate(ns+span);
+            setScrubStart(ds>=lastDate?null:ds);
+            setScrubEnd(de>=lastDate?null:de);
           }
         };
         const onMouseUp=()=>setScrubDrag(null);

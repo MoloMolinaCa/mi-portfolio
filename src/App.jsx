@@ -813,7 +813,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
           ))}
         </div>
       </div>
-      <div style={{flex:1,overflow:"hidden",minHeight:0,position:"relative"}}>
+      <div style={{flex:1,overflow:"visible",minHeight:0,position:"relative"}}>
         {loading&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--text-muted)",fontSize:12}}><span style={{animation:"spin 0.8s linear infinite",display:"inline-block",marginRight:6}}>⟳</span>Cargando...</div>}
         {cd&&!loading&&series.length>0&&<Chart100 series={series}/>}
       </div>
@@ -2847,6 +2847,7 @@ export default function App(){
                     subLabel:"ARS",
                     mainColor:"var(--accent)",
                     trend:null,
+                    bigSub:true,
                   },
                   {
                     icon:"📈", lbl:"Rendimiento total",
@@ -2901,8 +2902,8 @@ export default function App(){
                           {k.main}
                         </div>
                         <div style={{display:"flex",alignItems:"baseline",gap:4}}>
-                          <span style={{fontSize:12,color:k.trend!=null?pc(k.trend):"var(--text-muted)",fontWeight:k.trend!=null?600:400}}>{k.sub}</span>
-                          {k.subLabel&&<span style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase"}}>{k.subLabel}</span>}
+                          <span style={{fontSize:k.bigSub?16:12,color:k.trend!=null?pc(k.trend):"var(--text-secondary)",fontWeight:k.bigSub?700:k.trend!=null?600:400,fontFamily:k.bigSub?"Georgia,serif":"inherit"}}>{k.sub}</span>
+                          {k.subLabel&&<span style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",marginLeft:2}}>{k.subLabel}</span>}
                         </div>
                       </div>
                     ))}
@@ -2910,7 +2911,7 @@ export default function App(){
                 );
               })()}
 
-              <div style={{display:"grid",gridTemplateColumns:"220px 1fr",gap:14,alignItems:"stretch"}}>
+              <div style={{display:"grid",gridTemplateColumns:"200px 1fr",gap:14,alignItems:"stretch"}}>
                 <div style={{...card,padding:18,display:"flex",flexDirection:"column"}}>
                   <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:14}}>Asignación por tipo</div>
                   <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
@@ -2935,7 +2936,7 @@ export default function App(){
                       <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M7.5 1.5H10.5V4.5M4.5 10.5H1.5V7.5M10.5 1.5L6.5 5.5M1.5 10.5L5.5 6.5"/></svg>
                     </button>
                   </div>
-                  <div style={{height:320}}>
+                  <div style={{height:390}}>
                     <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} livePricesAll={livePrices}/>
                   </div>
                 </div>

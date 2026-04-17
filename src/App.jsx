@@ -2284,10 +2284,20 @@ export default function App(){
       setLiveFX(newFX);
       setLivePrices(newPrices);
       setLiveT10Y(newT10Y);
-      // S&P500 en vivo via Yahoo proxy
+      // S&P500 en vivo via Yahoo proxy — usar intervalo 1d con premarket para precio actual
       try{
-        const r=await fetch(YAHOO_PROXY+"?symbol=%5EGSPC&range=5d&interval=1d",{signal:AbortSignal.timeout(6000)});
-        if(r.ok){const d=await r.json();const closes=(d?.chart?.result?.[0]?.indicators?.quote?.[0]?.close||[]).filter(Boolean);if(closes.length)setLiveSP500(closes[closes.length-1]);}
+        // Primero intentar con range=1d interval=5m para precio más fresco
+        const r=await fetch(YAHOO_PROXY+"?symbol=%5EGSPC&range=1d&interval=5m",{signal:AbortSignal.timeout(6000)});
+        if(r.ok){
+          const d=await r.json();
+          const closes=(d?.chart?.result?.[0]?.indicators?.quote?.[0]?.close||[]).filter(Boolean);
+          if(closes.length){setLiveSP500(closes[closes.length-1]);}
+          else{
+            // Fallback: cierre del día
+            const r2=await fetch(YAHOO_PROXY+"?symbol=%5EGSPC&range=5d&interval=1d",{signal:AbortSignal.timeout(6000)});
+            if(r2.ok){const d2=await r2.json();const c2=(d2?.chart?.result?.[0]?.indicators?.quote?.[0]?.close||[]).filter(Boolean);if(c2.length)setLiveSP500(c2[c2.length-1]);}
+          }
+        }
       }catch{}
       setLastRefresh(new Date());
       setPriceStatus(Object.keys(newPrices).length>0?"live":"partial");
@@ -2620,42 +2630,30 @@ export default function App(){
             <div className="fi" style={{display:"grid",gap:16}}>
               {/* KPI Cards — rediseñados */}
               {(()=>{
-                // Rendimiento diario: precio actual vs último cierre histórico
-                // Excluir activos cuya PRIMERA compra fue hoy (no tienen referencia de ayer)
+                // Rendimiento diario: usar liveChangePct de cada activo (viene de data912, es el cambio vs cierre anterior real)
+                // Esto es más preciso que comparar con el último bar del historicos.json
                 const todayKPI=new Date().toISOString().slice(0,10);
-                const cclBarsKPI=historicos?.CCL||[];
-                const cclAyer=cclBarsKPI.length?cclBarsKPI[cclBarsKPI.length-1]?.close||fxRate:fxRate;
-
-                let valHoy=0, valAyer=0;
+                let dayPnlUSD=0, baseValUSD=0;
                 for(const h of en){
+                  // Solo activos con precio live y cambio % del día
+                  if(h.liveChangePct==null||!h.isLive)continue;
                   const isBond=h.type==="bono_usd"||h.type==="bono_ars";
-                  const qtyFactor=isBond?h.qty/100:h.qty;
-                  const bars=historicos?.[h.ticker]||[];
-                  const prevClose=bars.length?bars[bars.length-1]?.close:null;
 
-                  // Sin histórico → activo nuevo, no tiene referencia de ayer → skip
-                  if(!prevClose||!h.currentPrice)continue;
-
-                  // Calcular qty que tenía AYER (excluir compras de hoy)
-                  const buysTotales=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra");
-                  const buysAyer=buysTotales.filter(t=>t.date<todayKPI);
+                  // Qty de ayer (excluir compras de hoy para no inflar)
+                  const buysAyer=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra"&&t.date<todayKPI);
                   const ventasAyer=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="venta"&&t.date<todayKPI);
                   const qtyAyer=Math.max(0,buysAyer.reduce((a,t)=>a+t.qty,0)-ventasAyer.reduce((a,t)=>a+t.qty,0));
-
-                  // Si no tenía posición ayer (todo fue comprado hoy) → skip
                   if(qtyAyer<=0)continue;
 
-                  const qtyFactorAyer=isBond?qtyAyer/100:qtyAyer;
-
-                  // Valor hoy con qty de AYER al precio de HOY (para no inflar por nuevas compras)
-                  const vHoy=h.buyCurrency==="USD"?h.currentPrice*qtyFactorAyer:h.currentPrice*qtyFactorAyer/fxRate;
-                  const vAyer=h.buyCurrency==="USD"?prevClose*qtyFactorAyer:prevClose*qtyFactorAyer/cclAyer;
-
-                  valHoy+=vHoy;
-                  valAyer+=vAyer;
+                  const qtyFactor=isBond?qtyAyer/100:qtyAyer;
+                  // Precio de ayer = precio actual / (1 + changePct/100)
+                  const prevPrice=h.currentPrice/(1+h.liveChangePct/100);
+                  const vHoy=h.buyCurrency==="USD"?h.currentPrice*qtyFactor:h.currentPrice*qtyFactor/fxRate;
+                  const vAyer=h.buyCurrency==="USD"?prevPrice*qtyFactor:prevPrice*qtyFactor/fxRate;
+                  dayPnlUSD+=vHoy-vAyer;
+                  baseValUSD+=vAyer;
                 }
-                const dayPnlUSD=valHoy-valAyer;
-                const dayPct=valAyer>0?(dayPnlUSD/valAyer)*100:0;
+                const dayPct=baseValUSD>0?(dayPnlUSD/baseValUSD)*100:0;
 
                 const kpis=[
                   {

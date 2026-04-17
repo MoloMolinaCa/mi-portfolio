@@ -506,7 +506,7 @@ function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRa
   return twr;
 }
 
-function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=false}){
+function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=false,livePricesAll={}}){
   const PERIODS=[{key:"30d",label:"30d",days:30},{key:"90d",label:"90d",days:90},{key:"ytd",label:"YTD",days:null},{key:"1y",label:"1 año",days:365},{key:"3y",label:"3 años",days:1095}];
   const [period,setPeriod]=useState("90d");
   const [currency,setCurrency]=useState("USD_CCL");
@@ -571,20 +571,39 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
       };
 
       let spy100=null;
+      // liveSPYars: precio live del CEDEAR SPY en ARS (ya disponible en livePricesMap)
+      const liveSPYars=livePricesMap["SPY"]||livePricesAll["SPY"]?.price||null;
+
       if(sp500Bars.length>=2&&currency!=="ARS"){
-        // Para hoy: si tenemos liveSP500 lo usamos, si no el último bar disponible
+        // S&P500 en USD: usar historicos + liveSP500 para hoy
         const ptsRaw=dates.map(d=>{
           if(d===todayStr&&liveSP500!=null)return{date:d,val:liveSP500};
           const v=findPrice(sp500Bars,d);
           return v?{date:d,val:v}:null;
         }).filter(Boolean);
         if(ptsRaw.length>=2){const base=ptsRaw[0].val;spy100=ptsRaw.map(x=>({date:x.date,val:base>0?100*x.val/base:100}));}
-      }else if(spyByma.length>=2){
+      }
+
+      // Si no hubo S&P en USD o estamos en ARS: usar CEDEAR SPY.BA con precio live para hoy
+      if(!spy100&&spyByma.length>=2){
         const tcBars=currency==="USD_MEP"?mepBars:cclBars;
         const pts=dates.map(d=>{
-          const pARS=findPrice(spyByma,d);
+          // Para hoy usar precio live del CEDEAR SPY si está disponible
+          const pARS=d===todayStr&&liveSPYars!=null?liveSPYars:findPrice(spyByma,d);
           if(!pARS)return{date:d,val:null};
           if(currency==="ARS")return{date:d,val:pARS};
+          const tc=d===todayStr?fxRate:(tcBars.length?(findPrice(tcBars,d)||fxRate):fxRate);
+          return{date:d,val:pARS/tc};
+        }).filter(x=>x.val!=null);
+        if(pts.length>=2){const base=pts[0].val;spy100=pts.map(x=>({date:x.date,val:base>0?100*x.val/base:100}));}
+      }
+
+      // Si en USD y no hay historicos sp500 pero sí CEDEAR SPY: convertir a USD con TC
+      if(!spy100&&spyByma.length>=2&&currency!=="ARS"){
+        const tcBars=currency==="USD_MEP"?mepBars:cclBars;
+        const pts=dates.map(d=>{
+          const pARS=d===todayStr&&liveSPYars!=null?liveSPYars:findPrice(spyByma,d);
+          if(!pARS)return{date:d,val:null};
           const tc=d===todayStr?fxRate:(tcBars.length?(findPrice(tcBars,d)||fxRate):fxRate);
           return{date:d,val:pARS/tc};
         }).filter(x=>x.val!=null);
@@ -2748,7 +2767,7 @@ export default function App(){
                     </button>
                   </div>
                   <div style={{height:280}}>
-                    <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos}/>
+                    <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} livePricesAll={livePrices}/>
                   </div>
                 </div>
                 {chartModal&&(
@@ -2762,7 +2781,7 @@ export default function App(){
                       </button>
                     </div>
                     <div style={{flex:1,padding:"24px",minHeight:0}}>
-                      <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} isModal={true}/>
+                      <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} isModal={true} livePricesAll={livePrices}/>
                     </div>
                   </div>
                 )}

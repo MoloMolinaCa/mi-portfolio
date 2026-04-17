@@ -604,7 +604,7 @@ function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRa
 }
 
 function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=false,livePricesAll={}}){
-  const PERIODS=[{key:"30d",label:"30d",days:30},{key:"90d",label:"90d",days:90},{key:"ytd",label:"YTD",days:null},{key:"1y",label:"1 año",days:365},{key:"3y",label:"3 años",days:1095}];
+  const PERIODS=[{key:"mtd",label:"MTD",days:null,mtd:true},{key:"30d",label:"30d",days:30},{key:"90d",label:"90d",days:90},{key:"ytd",label:"YTD",days:null},{key:"1y",label:"1 año",days:365},{key:"3y",label:"3 años",days:1095}];
   const [period,setPeriod]=useState("90d");
   const [currency,setCurrency]=useState("USD_CCL");
   const [chartData,setChartData]=useState(null);
@@ -617,6 +617,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
     const end=new Date();
     let periodStart;
     if(p.key==="ytd")periodStart=new Date(end.getFullYear()+"-01-01");
+    else if(p.key==="mtd"||p.mtd)periodStart=new Date(end.getFullYear()+"-"+(String(end.getMonth()+1).padStart(2,"0"))+"-01");
     else{periodStart=new Date();periodStart.setDate(periodStart.getDate()-p.days);}
     const firstBuy=trades.filter(t=>t.tipo==="compra").sort((a,b)=>a.date.localeCompare(b.date))[0]?.date;
     const firstBuyDate=firstBuy?new Date(firstBuy):end;
@@ -1350,6 +1351,7 @@ function Modal({h,port=[],onSave,onClose}){
 
 function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxRate,fx,historicos}){
   const PERIODS=[
+    {key:"mtd", label:"MTD",  days:null,mtd:true},
     {key:"30d", label:"30d",  days:30},
     {key:"90d", label:"90d",  days:90},
     {key:"ytd", label:"YTD",  days:null},
@@ -1392,6 +1394,7 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
     const end = new Date();
     let periodStart;
     if(p.key==="ytd")   periodStart = new Date(end.getFullYear()+"-01-01");
+    else if(p.key==="mtd"||p.mtd) periodStart = new Date(end.getFullYear()+"-"+(String(end.getMonth()+1).padStart(2,"0"))+"-01");
     else { periodStart = new Date(); periodStart.setDate(periodStart.getDate()-p.days); }
 
     // La fecha de inicio es el máximo entre el período y la primera compra
@@ -1861,18 +1864,18 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
               </div>
             </div>
             <div style={{overflowX:"auto"}}>
-              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13,minWidth:600}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13,minWidth:600,tableLayout:"fixed"}}>
                 <thead>
                   <tr>
-                    <th style={thS}>Ticker</th>
-                    <th style={thS}>Nombre</th>
-                    <th style={thR}>Nominales</th>
-                    <th style={thR}>PPC</th>
-                    <th style={thR}>Precio actual</th>
-                    {(view==="dual"||view==="ars")&&<><th style={{...thR,background:"transparent"}}>Val. ARS</th><th style={{...thR,background:"transparent"}}>PnL · % ARS</th></>}
-                    {(view==="dual"||view==="usd")&&<><th style={{...thR,background:"transparent"}}>Val. USD</th><th style={{...thR,background:"transparent"}}>PnL · % USD</th></>}
-                    {view==="native"&&<><th style={{...thR,background:"transparent"}}>Val. moneda</th><th style={{...thR,background:"transparent"}}>PnL · % moneda</th></>}
-                    <th style={thR}>{view==="dual"?"Rend %":"Rend %"}</th>
+                    <th style={{...thS,width:70}}>Ticker</th>
+                    <th style={{...thS}}>Nombre</th>
+                    <th style={{...thR,width:100}}>Nominales</th>
+                    <th style={{...thR,width:130}}>PPC</th>
+                    <th style={{...thR,width:150}}>Precio actual</th>
+                    {(view==="dual"||view==="ars")&&<><th style={{...thR,width:140,background:"rgba(96,165,250,0.08)"}}>Val. ARS</th><th style={{...thR,width:130,background:"rgba(96,165,250,0.08)"}}>PnL · % ARS</th></>}
+                    {(view==="dual"||view==="usd")&&<><th style={{...thR,width:120,background:"rgba(52,211,153,0.1)"}}>Val. USD</th><th style={{...thR,width:130,background:"rgba(52,211,153,0.1)"}}>PnL · % USD</th></>}
+                    {view==="native"&&<><th style={{...thR,width:140,background:"rgba(139,92,246,0.08)"}}>Val. moneda</th><th style={{...thR,width:130,background:"rgba(139,92,246,0.08)"}}>PnL · % moneda</th></>}
+                    <th style={{...thR,width:110}}>Rend %</th>
                   </tr>
                 </thead>
                 <tbody>{items.map(renderRow)}</tbody>
@@ -2907,7 +2910,7 @@ export default function App(){
                 );
               })()}
 
-              <div style={{display:"grid",gridTemplateColumns:"270px 1fr",gap:14,alignItems:"stretch"}}>
+              <div style={{display:"grid",gridTemplateColumns:"220px 1fr",gap:14,alignItems:"stretch"}}>
                 <div style={{...card,padding:18,display:"flex",flexDirection:"column"}}>
                   <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:14}}>Asignación por tipo</div>
                   <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
@@ -2932,7 +2935,7 @@ export default function App(){
                       <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M7.5 1.5H10.5V4.5M4.5 10.5H1.5V7.5M10.5 1.5L6.5 5.5M1.5 10.5L5.5 6.5"/></svg>
                     </button>
                   </div>
-                  <div style={{height:280}}>
+                  <div style={{height:320}}>
                     <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} livePricesAll={livePrices}/>
                   </div>
                 </div>

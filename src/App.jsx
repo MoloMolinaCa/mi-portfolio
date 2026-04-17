@@ -1021,7 +1021,7 @@ function Modal({h,port=[],onSave,onClose}){
                     style={{flex:1,padding:"9px 0",border:"none",borderRadius:6,fontSize:14,fontWeight:700,
                       background:f.operacion===op?(op==="compra"?"var(--green)":"var(--red)"):"transparent",
                       color:f.operacion===op?"#fff":"var(--text-muted)",opacity:disabled?0.3:1,cursor:disabled?"not-allowed":"pointer"}}>
-                    {op==="compra"?"↑ Compra":"↓ Venta"}
+                    {op==="compra"?"Compra":"Venta"}
                   </button>
                 );
               })}
@@ -1929,7 +1929,7 @@ function OperacionesTab({trades,port,setTrades,setPort,card,livePrices}){
                       <span style={{padding:"2px 8px",borderRadius:4,fontSize:11,fontWeight:600,
                         background:t.tipo==="compra"?"rgba(52,211,153,0.1)":"rgba(248,113,113,0.1)",
                         color:t.tipo==="compra"?"var(--green)":"var(--red)"}}>
-                        {t.tipo==="compra"?"↑ Compra":"↓ Venta"}
+                        {t.tipo==="compra"?"Compra":"Venta"}
                       </span>
                     </td>
                     <td style={tdR}>
@@ -1988,7 +1988,7 @@ function OperacionesTab({trades,port,setTrades,setPort,card,livePrices}){
                 <span style={{padding:"2px 8px",borderRadius:4,fontSize:11,fontWeight:600,
                   background:confirmDelete.tipo==="compra"?"rgba(52,211,153,0.1)":"rgba(248,113,113,0.1)",
                   color:confirmDelete.tipo==="compra"?"var(--green)":"var(--red)"}}>
-                  {confirmDelete.tipo==="compra"?"↑ Compra":"↓ Venta"}
+                  {confirmDelete.tipo==="compra"?"Compra":"Venta"}
                 </span>
               </div>
               <div style={{fontSize:12,color:"var(--text-muted)"}}>{confirmDelete.date} · {Number(confirmDelete.qty).toLocaleString("es-AR")} nominales · {confirmDelete.currency==="USD"?fmtU(confirmDelete.price,4):fmtA(confirmDelete.price)}</div>
@@ -2253,47 +2253,56 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
 export default function App(){
   // ── State ────────────────────────────────────────────────────────────────
   const SEED_TRADES = [
-    // Posición previa YPFD (antes de 2026)
-    {id:99,ticker:"YPFD",tipo:"compra",qty:78,price:54214.29,currency:"ARS",date:"2026-01-01",ts:99000,name:"YPF Ordinarias D",comision:12686.14},
+    // ── Posiciones al 01/01/26 (tenencia previa) ─────────────────────
+    {id:1, ticker:"YPFD",      tipo:"compra", qty:78,       price:54214.29,  currency:"ARS", date:"2026-01-01", ts:1000,  name:"YPF Ordinarias D",                comision:0},
+    {id:2, ticker:"TZXD6",     tipo:"compra", qty:781503,   price:179,       currency:"ARS", date:"2026-01-01", ts:2000,  name:"BONTES CER V15/12/26",            comision:0},
+    {id:3, ticker:"TLCUD",     tipo:"compra", qty:7000,     price:100.0,     currency:"USD", date:"2026-01-01", ts:3000,  name:"ON Telecom C28 05/03/29",         comision:0},
+    {id:4, ticker:"AO27D",     tipo:"compra", qty:2954,     price:102.0,     currency:"USD", date:"2026-01-01", ts:4000,  name:"Bono Tesoro 6% V29/10/27",        comision:0},
+    {id:5, ticker:"GD38D",     tipo:"compra", qty:1681,     price:78.0,      currency:"USD", date:"2026-01-01", ts:5000,  name:"BONOS REP ARG U\$S V09/01/38",    comision:0},
+    {id:6, ticker:"FIMA-PREM", tipo:"compra", qty:40284.34, price:78.767480, currency:"ARS", date:"2026-01-01", ts:6000,  name:"FIMA Premium Cl A",               comision:0},
+    {id:7, ticker:"FIMA-AHP",  tipo:"compra", qty:9.88,     price:600.718,   currency:"ARS", date:"2026-01-01", ts:7000,  name:"FIMA Ahorro Pesos Cl A",          comision:0},
+    {id:8, ticker:"FIMA-AHPP", tipo:"compra", qty:2.30,     price:147.952,   currency:"ARS", date:"2026-01-01", ts:8000,  name:"FIMA Ahorro Plus Cl A",           comision:0},
+    {id:9, ticker:"FIMA-PREMD",tipo:"compra", qty:140,      price:1.012932,  currency:"USD", date:"2026-01-01", ts:9000,  name:"FIMA Premium Dólares Cl A",       comision:0},
+    // ── Operaciones 2026 ──────────────────────────────────────────────
     // GLD
-    {id:100,ticker:"GLD",tipo:"compra",qty:74,price:13499.19,currency:"ARS",date:"2026-02-05",ts:100000,name:"ETF SPDR Gold Trust",comision:2996.82},
-    {id:101,ticker:"GLD",tipo:"compra",qty:103,price:14470,currency:"ARS",date:"2026-03-03",ts:101000,name:"ETF SPDR Gold Trust",comision:4471.23},
+    {id:100,ticker:"GLD",  tipo:"compra",qty:74,  price:13490.5802,  currency:"ARS",date:"2026-02-05",ts:100000,name:"ETF SPDR Gold Trust",        comision:2994.91},
+    {id:101,ticker:"GLD",  tipo:"compra",qty:103, price:14438.9393, currency:"ARS",date:"2026-03-03",ts:101000,name:"ETF SPDR Gold Trust",        comision:4461.63},
     // SPY
-    {id:102,ticker:"SPY",tipo:"compra",qty:19,price:50225,currency:"ARS",date:"2026-03-03",ts:102000,name:"SPDR S&P 500 ETF",comision:2862.83},
-    // TXAR
-    {id:103,ticker:"TXAR",tipo:"compra",qty:482,price:607,currency:"ARS",date:"2026-03-03",ts:103000,name:"Siderar (Ternium Argentina)",comision:877.72},
-    {id:104,ticker:"TXAR",tipo:"compra",qty:1985,price:607,currency:"ARS",date:"2026-03-03",ts:104000,name:"Siderar (Ternium Argentina)",comision:3614.68},
+    {id:102,ticker:"SPY",  tipo:"compra",qty:19,  price:50117.189,   currency:"ARS",date:"2026-03-03",ts:102000,name:"SPDR S&P 500 ETF",           comision:2856.68},
+    // TXAR (2 lotes al mismo precio, misma fecha)
+    {id:103,ticker:"TXAR", tipo:"compra",qty:482, price:605.697,  currency:"ARS",date:"2026-03-03",ts:103000,name:"Siderar (Ternium Argentina)",comision:875.84},
+    {id:104,ticker:"TXAR", tipo:"compra",qty:1985,price:605.697,currency:"ARS",date:"2026-03-03",ts:104000,name:"Siderar (Ternium Argentina)",comision:3606.93},
     // YPFD compra 2026
-    {id:105,ticker:"YPFD",tipo:"compra",qty:9,price:51000,currency:"ARS",date:"2026-03-04",ts:105000,name:"YPF Ordinarias D",comision:1377.00},
+    {id:105,ticker:"YPFD", tipo:"compra",qty:9,   price:50890.5251,    currency:"ARS",date:"2026-03-04",ts:105000,name:"YPF Ordinarias D",           comision:1374.04},
     // YPFD ventas
-    {id:106,ticker:"YPFD",tipo:"venta",qty:33,price:53500,currency:"ARS",date:"2026-03-11",ts:106000,name:"YPF Ordinarias D",comision:5296.50},
-    {id:107,ticker:"YPFD",tipo:"venta",qty:1,price:53525,currency:"ARS",date:"2026-03-11",ts:107000,name:"YPF Ordinarias D",comision:160.58},
-    {id:108,ticker:"YPFD",tipo:"venta",qty:3,price:53525,currency:"ARS",date:"2026-03-11",ts:108000,name:"YPF Ordinarias D",comision:481.73},
-    {id:109,ticker:"YPFD",tipo:"venta",qty:8,price:70325,currency:"ARS",date:"2026-04-01",ts:109000,name:"YPF Ordinarias D",comision:1687.80},
-    {id:110,ticker:"YPFD",tipo:"venta",qty:7,price:68600,currency:"ARS",date:"2026-04-01",ts:110000,name:"YPF Ordinarias D",comision:1440.60},
-    {id:111,ticker:"YPFD",tipo:"venta",qty:14,price:67200,currency:"ARS",date:"2026-04-06",ts:111000,name:"YPF Ordinarias D",comision:2822.40},
-    {id:112,ticker:"YPFD",tipo:"venta",qty:2,price:64325,currency:"ARS",date:"2026-04-10",ts:112000,name:"YPF Ordinarias D",comision:385.95},
-    {id:113,ticker:"YPFD",tipo:"venta",qty:5,price:64350,currency:"ARS",date:"2026-04-10",ts:113000,name:"YPF Ordinarias D",comision:965.25},
-    {id:114,ticker:"YPFD",tipo:"venta",qty:14,price:62215.01,currency:"ARS",date:"2026-04-15",ts:114000,name:"YPF Ordinarias D",comision:2613.03},
+    {id:106,ticker:"YPFD", tipo:"venta", qty:33,  price:53504.6011, currency:"ARS",date:"2026-03-11",ts:106000,name:"YPF Ordinarias D",comision:5265.27},
+    {id:107,ticker:"YPFD", tipo:"venta", qty:1,   price:53504.6038,    currency:"ARS",date:"2026-03-11",ts:107000,name:"YPF Ordinarias D",comision:159.55},
+    {id:108,ticker:"YPFD", tipo:"venta", qty:3,   price:53504.6005,   currency:"ARS",date:"2026-03-11",ts:108000,name:"YPF Ordinarias D",comision:478.66},
+    {id:109,ticker:"YPFD", tipo:"venta", qty:8,   price:70327.495,   currency:"ARS",date:"2026-04-01",ts:109000,name:"YPF Ordinarias D",comision:1677.76},
+    {id:110,ticker:"YPFD", tipo:"venta", qty:7,   price:68602.4344,   currency:"ARS",date:"2026-04-01",ts:110000,name:"YPF Ordinarias D",comision:1432.03},
+    {id:111,ticker:"YPFD", tipo:"venta", qty:14,  price:67202.385,  currency:"ARS",date:"2026-04-06",ts:111000,name:"YPF Ordinarias D",comision:2805.62},
+    {id:112,ticker:"YPFD", tipo:"venta", qty:2,   price:64345.1404,   currency:"ARS",date:"2026-04-10",ts:112000,name:"YPF Ordinarias D",comision:383.76},
+    {id:113,ticker:"YPFD", tipo:"venta", qty:5,   price:64345.1394,   currency:"ARS",date:"2026-04-10",ts:113000,name:"YPF Ordinarias D",comision:959.4},
+    {id:114,ticker:"YPFD", tipo:"venta", qty:14,  price:62402.2138,  currency:"ARS",date:"2026-04-15",ts:114000,name:"YPF Ordinarias D",comision:2605.21},
     // NU
-    {id:115,ticker:"NU",tipo:"compra",qty:189,price:10850,currency:"ARS",date:"2026-03-12",ts:115000,name:"NU Holdings Cl A",comision:6151.95},
+    {id:115,ticker:"NU",   tipo:"compra",qty:189, price:10849.6173, currency:"ARS",date:"2026-03-12",ts:115000,name:"NU Holdings Cl A",           comision:6151.73},
     // GLOB venta
-    {id:116,ticker:"GLOB",tipo:"venta",qty:80,price:3594.09,currency:"ARS",date:"2026-03-30",ts:116000,name:"Globant S.A.",comision:862.58},
-    // VIST
-    {id:117,ticker:"VIST",tipo:"compra",qty:1,price:35600,currency:"ARS",date:"2026-03-30",ts:117000,name:"Vista Oil & Gas",comision:106.80},
-    {id:118,ticker:"VIST",tipo:"compra",qty:13,price:35600,currency:"ARS",date:"2026-03-30",ts:118000,name:"Vista Oil & Gas",comision:1388.40},
+    {id:116,ticker:"GLOB", tipo:"venta", qty:80,  price:3594.2213,  currency:"ARS",date:"2026-03-30",ts:116000,name:"Globant S.A.",         comision:857.45},
+    // VIST (2 lotes misma fecha y precio)
+    {id:117,ticker:"VIST", tipo:"compra",qty:1,   price:35598.7438,     currency:"ARS",date:"2026-03-30",ts:117000,name:"Vista Oil & Gas",             comision:106.8},
+    {id:118,ticker:"VIST", tipo:"compra",qty:13,  price:35598.7445,   currency:"ARS",date:"2026-03-30",ts:118000,name:"Vista Oil & Gas",             comision:1388.35},
     // META
-    {id:119,ticker:"META",tipo:"compra",qty:17,price:34780,currency:"ARS",date:"2026-04-01",ts:119000,name:"Meta Platforms Inc",comision:1773.78},
-    {id:120,ticker:"META",tipo:"compra",qty:2,price:38940,currency:"ARS",date:"2026-04-10",ts:120000,name:"Meta Platforms Inc",comision:233.64},
-    {id:121,ticker:"META",tipo:"compra",qty:7,price:38940,currency:"ARS",date:"2026-04-10",ts:121000,name:"Meta Platforms Inc",comision:817.74},
-    {id:122,ticker:"META",tipo:"compra",qty:6,price:38920,currency:"ARS",date:"2026-04-10",ts:122000,name:"Meta Platforms Inc",comision:700.56},
-    {id:123,ticker:"META",tipo:"compra",qty:12,price:41181.73,currency:"ARS",date:"2026-04-15",ts:123000,name:"Meta Platforms Inc",comision:1482.54},
+    {id:119,ticker:"META", tipo:"compra",qty:17,  price:34778.7725,   currency:"ARS",date:"2026-04-01",ts:119000,name:"Meta Platforms Inc",          comision:1773.72},
+    {id:120,ticker:"META", tipo:"compra",qty:2,   price:38930.6281,     currency:"ARS",date:"2026-04-10",ts:120000,name:"Meta Platforms Inc",          comision:233.58},
+    {id:121,ticker:"META", tipo:"compra",qty:7,   price:38930.6267,    currency:"ARS",date:"2026-04-10",ts:121000,name:"Meta Platforms Inc",          comision:817.54},
+    {id:122,ticker:"META", tipo:"compra",qty:6,   price:38930.6265,    currency:"ARS",date:"2026-04-10",ts:122000,name:"Meta Platforms Inc",          comision:700.75},
+    {id:123,ticker:"META", tipo:"compra",qty:12,  price:41058.551,   currency:"ARS",date:"2026-04-15",ts:123000,name:"Meta Platforms Inc",          comision:1478.11},
     // MSFT
-    {id:124,ticker:"MSFT",tipo:"compra",qty:27,price:18300,currency:"ARS",date:"2026-04-06",ts:124000,name:"Microsoft Corp",comision:1482.30},
-    {id:125,ticker:"MSFT",tipo:"compra",qty:19,price:19858.70,currency:"ARS",date:"2026-04-15",ts:125000,name:"Microsoft Corp",comision:1131.95},
-    // TZX27
-    {id:126,ticker:"TZX27",tipo:"compra",qty:315634,price:3.55,currency:"ARS",date:"2026-04-06",ts:126000,name:"BONO REP ARG CER V30/06/27",comision:3361.50},
-    {id:127,ticker:"TZX27",tipo:"compra",qty:112815,price:3.56,currency:"ARS",date:"2026-04-06",ts:127000,name:"BONO REP ARG CER V30/06/27",comision:1204.86},
+    {id:124,ticker:"MSFT", tipo:"compra",qty:27,  price:18299.3542,   currency:"ARS",date:"2026-04-06",ts:124000,name:"Microsoft Corp",              comision:1482.25},
+    {id:125,ticker:"MSFT", tipo:"compra",qty:19,  price:19799.3016,   currency:"ARS",date:"2026-04-15",ts:125000,name:"Microsoft Corp",              comision:1128.56},
+    // TZX27 (2 lotes misma fecha)
+    {id:126,ticker:"TZX27",tipo:"compra",qty:315634,price:3.5486,currency:"ARS",date:"2026-04-06",ts:126000,name:"BONO REP ARG CER V30/06/27",comision:3360.14},
+    {id:127,ticker:"TZX27",tipo:"compra",qty:112815,price:3.5486, currency:"ARS",date:"2026-04-06",ts:127000,name:"BONO REP ARG CER V30/06/27",comision:1200.99},
   ];
 
     const [port,setPort]         = useState(GALICIA_PORTFOLIO);

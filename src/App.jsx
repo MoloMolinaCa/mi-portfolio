@@ -2589,21 +2589,96 @@ export default function App(){
           {/* DASHBOARD */}
           {tab==="dashboard"&&(
             <div className="fi" style={{display:"grid",gap:16}}>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(185px,1fr))",gap:12}}>
-                {[
-                  {lbl:"Valor Total USD",val:hideAmounts?"••••••":fmtU(totUSD),sub:hideAmounts?"••••••":fmtA(totUSD*fxRate)+" ARS",col:"var(--accent)"},
-                  {lbl:"PnL Total",val:fmtP(totPct),sub:hideAmounts?"••••••":fmtU(totPnl)+" PnL",col:pc(totPnl)},
-                  {lbl:"Alpha vs T10Y",val:fmtP(alpha),sub:"Benchmark "+fmtP(benchPct),col:pc(alpha)},
-                  {lbl:"Treasury 10Y",val:liveT10Y+"%",sub:"Yield anual USD",col:"var(--yellow)"},
-                  {lbl:"TC "+fx,val:"$"+fxRate.toLocaleString("es-AR"),sub:"ARS/USD · "+liveFX.source,col:"var(--text-secondary)"},
-                ].map(c=>(
-                  <div key={c.lbl} style={{...card,padding:"15px 17px"}}>
-                    <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:5}}>{c.lbl}</div>
-                    <div style={{fontSize:22,fontFamily:"Georgia,serif",fontWeight:700,color:c.col}}>{c.val}</div>
-                    <div style={{fontSize:11,color:"var(--text-muted)",marginTop:3}}>{c.sub}</div>
+              {/* KPI Cards — rediseñados */}
+              {(()=>{
+                // Rendimiento diario: comparar valor actual vs cierre de ayer (usando historicos)
+                const todayKPI=new Date().toISOString().slice(0,10);
+                const findCCLHist=(d)=>{const bars=historicos?.CCL||[];if(!bars.length)return fxRate;const t=new Date(d).getTime();return bars.reduce((b,x)=>Math.abs(new Date(x.date)-t)<Math.abs(new Date(b.date)-t)?x:b,bars[0])?.close||fxRate;};
+                // Calcular valor de ayer
+                let totUSD_ayer=0;
+                for(const h of en){
+                  const bars=historicos?.[h.ticker]||[];
+                  const prevBar=bars.length?bars[bars.length-1]:null;
+                  if(!prevBar)continue;
+                  const isBond=h.type==="bono_usd"||h.type==="bono_ars";
+                  const qtyFactor=isBond?h.qty/100:h.qty;
+                  const cclAyer=findCCLHist(prevBar.date);
+                  if(h.buyCurrency==="USD") totUSD_ayer+=prevBar.close*qtyFactor;
+                  else totUSD_ayer+=prevBar.close*qtyFactor/cclAyer;
+                }
+                const dayPnlUSD=totUSD-totUSD_ayer;
+                const dayPct=totUSD_ayer>0?(dayPnlUSD/totUSD_ayer)*100:0;
+
+                const kpis=[
+                  {
+                    icon:"💼", lbl:"Valor total",
+                    main:hideAmounts?"••••••":fmtU(totUSD),
+                    sub:hideAmounts?"••••":fmtA(totUSD*fxRate),
+                    subLabel:"ARS",
+                    mainColor:"var(--accent)",
+                    trend:null,
+                  },
+                  {
+                    icon:"📈", lbl:"Rendimiento total",
+                    main:fmtP(totPct),
+                    sub:hideAmounts?"••••":fmtU(totPnl),
+                    subLabel:"PnL acumulado",
+                    mainColor:pc(totPct),
+                    trend:totPct,
+                  },
+                  {
+                    icon:"📅", lbl:"Rendimiento del día",
+                    main:fmtP(dayPct),
+                    sub:hideAmounts?"••••":(dayPnlUSD>=0?"+":"")+fmtU(dayPnlUSD),
+                    subLabel:"P&L hoy USD",
+                    mainColor:pc(dayPct),
+                    trend:dayPct,
+                  },
+                  {
+                    icon:"🏛️", lbl:"Treasury 10Y",
+                    main:liveT10Y+"%",
+                    sub:"Alpha: "+fmtP(alpha),
+                    subLabel:"vs benchmark",
+                    mainColor:"var(--yellow)",
+                    trend:null,
+                  },
+                  {
+                    icon:"💱", lbl:"TC "+fx,
+                    main:"$"+fxRate.toLocaleString("es-AR"),
+                    sub:liveFX.source,
+                    subLabel:"",
+                    mainColor:"var(--text-secondary)",
+                    trend:null,
+                  },
+                ];
+                return(
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10}}>
+                    {kpis.map(k=>(
+                      <div key={k.lbl} style={{
+                        ...card,
+                        padding:"14px 16px",
+                        position:"relative",
+                        overflow:"hidden",
+                        borderLeft:`3px solid ${k.mainColor==="var(--text-secondary)"?"var(--border)":k.mainColor}`,
+                      }}>
+                        {/* Background glow */}
+                        {k.trend!=null&&<div style={{position:"absolute",inset:0,background:`${k.trend>=0?"rgba(52,211,153,":"rgba(248,113,113,"}0.03)`,pointerEvents:"none"}}/>}
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                          <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8,fontWeight:500}}>{k.lbl}</span>
+                          <span style={{fontSize:16,lineHeight:1}}>{k.icon}</span>
+                        </div>
+                        <div style={{fontSize:24,fontFamily:"Georgia,serif",fontWeight:700,color:k.mainColor,lineHeight:1,marginBottom:6}}>
+                          {k.main}
+                        </div>
+                        <div style={{display:"flex",alignItems:"baseline",gap:4}}>
+                          <span style={{fontSize:12,color:k.trend!=null?pc(k.trend):"var(--text-muted)",fontWeight:k.trend!=null?600:400}}>{k.sub}</span>
+                          {k.subLabel&&<span style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase"}}>{k.subLabel}</span>}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                );
+              })()}
 
               <div style={{display:"grid",gridTemplateColumns:"270px 1fr",gap:14,alignItems:"stretch"}}>
                 <div style={{...card,padding:18,display:"flex",flexDirection:"column"}}>

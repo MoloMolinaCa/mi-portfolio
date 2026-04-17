@@ -2874,7 +2874,7 @@ export default function App(){
                   },
                 ];
                 return(
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,maxWidth:900}}>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,380px))",gap:12,justifyContent:"start"}}>
                     {kpis.map(k=>(
                       <div key={k.lbl} style={{
                         ...card,

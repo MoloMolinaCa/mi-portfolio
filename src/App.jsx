@@ -807,12 +807,26 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
                 boxShadow:"0 0 0 2px var(--bg-card)",
               }} onMouseDown={e=>onMouseDown(e,'end')}/>
             </div>
-            {/* Date labels - positioned under each handle */}
-            <div style={{position:"relative",height:14,marginTop:2,fontSize:9,color:"var(--text-muted)"}}>
-              <span style={{position:"absolute",left:`${startX}%`,transform:"translateX(-50%)",whiteSpace:"nowrap",textAlign:"center"}}>
+            {/* Date labels centered below each handle */}
+            <div style={{position:"relative",height:16,marginTop:4,fontSize:9,color:"var(--text-muted)"}}>
+              <span style={{
+                position:"absolute",
+                left:`${startX}%`,
+                transform:"translateX(-50%)",
+                whiteSpace:"nowrap",
+                textAlign:"center",
+                display:"block",
+              }}>
                 {(d=>d?d.slice(8)+'/'+d.slice(5,7)+'/'+d.slice(0,4):''  )(scrubStart||cd?.startDate||firstDate)}
               </span>
-              <span style={{position:"absolute",left:`${endX}%`,transform:"translateX(-50%)",whiteSpace:"nowrap",textAlign:"center"}}>
+              <span style={{
+                position:"absolute",
+                left:`${endX}%`,
+                transform:"translateX(-50%)",
+                whiteSpace:"nowrap",
+                textAlign:"center",
+                display:"block",
+              }}>
                 {(d=>d?d.slice(8)+'/'+d.slice(5,7)+'/'+d.slice(0,4):''  )(scrubEnd||lastDate)}
               </span>
             </div>
@@ -2867,45 +2881,28 @@ export default function App(){
                     mainColor:pc(dayPct),
                     trend:dayPct,
                   },
-                  {
-                    icon:"🏛️", lbl:"Treasury 10Y",
-                    main:liveT10Y+"%",
-                    sub:"Alpha: "+fmtP(alpha),
-                    subLabel:"vs benchmark",
-                    mainColor:"var(--yellow)",
-                    trend:null,
-                  },
-                  {
-                    icon:"💱", lbl:"TC "+fx,
-                    main:"$"+fxRate.toLocaleString("es-AR"),
-                    sub:liveFX.source,
-                    subLabel:"",
-                    mainColor:"var(--text-secondary)",
-                    trend:null,
-                  },
                 ];
                 return(
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10}}>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,maxWidth:900}}>
                     {kpis.map(k=>(
                       <div key={k.lbl} style={{
                         ...card,
-                        padding:"14px 16px",
+                        padding:"10px 14px",
                         position:"relative",
                         overflow:"hidden",
                         borderLeft:`3px solid ${k.mainColor==="var(--text-secondary)"?"var(--border)":k.mainColor}`,
                       }}>
-                        {/* Background glow */}
                         {k.trend!=null&&<div style={{position:"absolute",inset:0,background:`${k.trend>=0?"rgba(52,211,153,":"rgba(248,113,113,"}0.03)`,pointerEvents:"none"}}/>}
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
-                          <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8,fontWeight:500}}>{k.lbl}</span>
-                          <span style={{fontSize:16,lineHeight:1}}>{k.icon}</span>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+                          <span style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8,fontWeight:500}}>{k.lbl}</span>
+                          <span style={{fontSize:14,lineHeight:1}}>{k.icon}</span>
                         </div>
-                        <div style={{fontSize:24,fontFamily:"Georgia,serif",fontWeight:700,color:k.mainColor,lineHeight:1,marginBottom:6}}>
+                        <div style={{fontSize:20,fontFamily:"Georgia,serif",fontWeight:700,color:k.mainColor,lineHeight:1,marginBottom:4}}>
                           {k.main}
                         </div>
                         <div style={{display:"flex",alignItems:"baseline",gap:4}}>
-                          <span style={{fontSize:k.bigSub?16:12,color:k.trend!=null?pc(k.trend):"var(--text-secondary)",fontWeight:k.bigSub?700:k.trend!=null?600:400,fontFamily:k.bigSub?"Georgia,serif":"inherit"}}>{k.sub}</span>
-                          {k.subLabel&&<span style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",marginLeft:2}}>{k.subLabel}</span>}
+                          <span style={{fontSize:k.bigSub?14:11,color:k.trend!=null?pc(k.trend):"var(--text-secondary)",fontWeight:k.bigSub?700:k.trend!=null?600:400,fontFamily:k.bigSub?"Georgia,serif":"inherit"}}>{k.sub}</span>
+                          {k.subLabel&&<span style={{fontSize:8,color:"var(--text-muted)",textTransform:"uppercase",marginLeft:2}}>{k.subLabel}</span>}
                         </div>
                       </div>
                     ))}

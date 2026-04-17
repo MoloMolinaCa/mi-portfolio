@@ -543,16 +543,19 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
 
       let spy100=null;
       if(sp500Bars.length>=2&&currency!=="ARS"){
-        // liveSP500 es el precio live del S&P500 en USD
-        const pts=dates.map(d=>({date:d,val:getPriceWithLive(sp500Bars,d,liveSP500)||null})).filter(x=>x.val);
-        if(pts.length>=2){const base=pts[0].val;spy100=pts.map(x=>({date:x.date,val:base>0?100*x.val/base:100}));}
+        // Para hoy: si tenemos liveSP500 lo usamos, si no el último bar disponible
+        const ptsRaw=dates.map(d=>{
+          if(d===todayStr&&liveSP500!=null)return{date:d,val:liveSP500};
+          const v=findPrice(sp500Bars,d);
+          return v?{date:d,val:v}:null;
+        }).filter(Boolean);
+        if(ptsRaw.length>=2){const base=ptsRaw[0].val;spy100=ptsRaw.map(x=>({date:x.date,val:base>0?100*x.val/base:100}));}
       }else if(spyByma.length>=2){
         const tcBars=currency==="USD_MEP"?mepBars:cclBars;
         const pts=dates.map(d=>{
           const pARS=findPrice(spyByma,d);
           if(!pARS)return{date:d,val:null};
           if(currency==="ARS")return{date:d,val:pARS};
-          // Para hoy usar fxRate live en lugar del bar histórico
           const tc=d===todayStr?fxRate:(tcBars.length?(findPrice(tcBars,d)||fxRate):fxRate);
           return{date:d,val:pARS/tc};
         }).filter(x=>x.val!=null);

@@ -2284,19 +2284,15 @@ export default function App(){
       setLiveFX(newFX);
       setLivePrices(newPrices);
       setLiveT10Y(newT10Y);
-      // S&P500 en vivo via Yahoo proxy — usar intervalo 1d con premarket para precio actual
+      // S&P500 en vivo via Yahoo proxy — usar meta.regularMarketPrice que siempre es el precio actual
       try{
-        // Primero intentar con range=1d interval=5m para precio más fresco
         const r=await fetch(YAHOO_PROXY+"?symbol=%5EGSPC&range=1d&interval=5m",{signal:AbortSignal.timeout(6000)});
         if(r.ok){
           const d=await r.json();
-          const closes=(d?.chart?.result?.[0]?.indicators?.quote?.[0]?.close||[]).filter(Boolean);
-          if(closes.length){setLiveSP500(closes[closes.length-1]);}
-          else{
-            // Fallback: cierre del día
-            const r2=await fetch(YAHOO_PROXY+"?symbol=%5EGSPC&range=5d&interval=1d",{signal:AbortSignal.timeout(6000)});
-            if(r2.ok){const d2=await r2.json();const c2=(d2?.chart?.result?.[0]?.indicators?.quote?.[0]?.close||[]).filter(Boolean);if(c2.length)setLiveSP500(c2[c2.length-1]);}
-          }
+          const meta=d?.chart?.result?.[0]?.meta;
+          // Preferir regularMarketPrice del meta — es el precio en tiempo real
+          const price=meta?.regularMarketPrice||meta?.chartPreviousClose||null;
+          if(price&&price>1000)setLiveSP500(price);
         }
       }catch{}
       setLastRefresh(new Date());

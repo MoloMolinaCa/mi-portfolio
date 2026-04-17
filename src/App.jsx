@@ -1776,11 +1776,19 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
         <td style={{...tdL,color:"var(--text-secondary)",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.name}</td>
         <td style={tdR}>{Number(h.qty).toLocaleString("es-AR",{maximumFractionDigits:4})}</td>
         <td style={{...tdR,color:"var(--text-muted)",fontSize:11}}>
-          {isUSD?fmtU(h.ppc||h.buyPrice,4):fmtA(h.ppc||h.buyPrice)}
+          {(()=>{
+            const isBond=h.type==="bono_ars"||h.type==="bono_usd";
+            const ppcVal=(h.ppc||h.buyPrice)*(isBond?100:1);
+            return isUSD?fmtU(ppcVal,2):fmtA(ppcVal);
+          })()}
           <span style={{display:"block",fontSize:9,color:"var(--text-muted)"}}>{h.buyCurrency} · PPC</span>
         </td>
         <td style={{...tdR,fontSize:11}}>
-          {isUSD?fmtU(h.currentPrice,4):fmtA(h.currentPrice)}
+          {(()=>{
+            const isBond=h.type==="bono_ars"||h.type==="bono_usd";
+            const cp=h.currentPrice*(isBond?100:1);
+            return isUSD?fmtU(cp,2):fmtA(cp);
+          })()}
           {h.liveChangePct!=null&&h.isLive&&<span style={{display:"block",fontSize:9,color:pc(h.liveChangePct)}}>{fmtP(h.liveChangePct)} hoy</span>}
           {!h.isLive&&<span style={{display:"block",fontSize:8,color:"var(--text-muted)"}}>guardado</span>}
         </td>

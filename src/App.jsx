@@ -267,23 +267,52 @@ function Spark({pct}){
 }
 
 function Donut({segs, size=120}){
+  const [hovered, setHovered] = useState(null);
   const total=segs.reduce((a,s)=>a+s.v,0);if(!total)return null;
   const half=size/2;
   const r=half*0.8,inn=half*0.45;
   let cur=-Math.PI/2;
+
+  const paths=segs.map(s=>{
+    const ang=(s.v/total)*2*Math.PI;
+    const x1=half+r*Math.cos(cur),y1=half+r*Math.sin(cur);
+    const midAng=cur+ang/2;
+    cur+=ang;
+    const x2=half+r*Math.cos(cur),y2=half+r*Math.sin(cur);
+    const ix1=half+inn*Math.cos(cur),iy1=half+inn*Math.sin(cur);
+    const ix2=half+inn*Math.cos(cur-ang),iy2=half+inn*Math.sin(cur-ang);
+    const lg=ang>Math.PI?1:0;
+    const pct=((s.v/total)*100).toFixed(1);
+    return{...s,d:`M${x1} ${y1}A${r} ${r} 0 ${lg} 1 ${x2} ${y2}L${ix1} ${iy1}A${inn} ${inn} 0 ${lg} 0 ${ix2} ${iy2}Z`,pct,midAng};
+  });
+
+  const hov=hovered!=null?paths.find(p=>p.k===hovered):null;
+
   return(
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      {segs.map(s=>{
-        const ang=(s.v/total)*2*Math.PI;
-        const x1=half+r*Math.cos(cur),y1=half+r*Math.sin(cur);cur+=ang;
-        const x2=half+r*Math.cos(cur),y2=half+r*Math.sin(cur);
-        const ix1=half+inn*Math.cos(cur),iy1=half+inn*Math.sin(cur);
-        const ix2=half+inn*Math.cos(cur-ang),iy2=half+inn*Math.sin(cur-ang);
-        const lg=ang>Math.PI?1:0;
-        return <path key={s.k} d={`M${x1} ${y1}A${r} ${r} 0 ${lg} 1 ${x2} ${y2}L${ix1} ${iy1}A${inn} ${inn} 0 ${lg} 0 ${ix2} ${iy2}Z`} fill={s.color} opacity="0.9"/>;
-      })}
-      <circle cx={half} cy={half} r={inn-1} fill="var(--bg-card)"/>
-    </svg>
+    <div style={{position:"relative",display:"inline-block"}}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{display:"block"}}>
+        {paths.map(p=>(
+          <path key={p.k}
+            d={p.d}
+            fill={p.color}
+            opacity={hovered===null||hovered===p.k?0.92:0.35}
+            style={{cursor:"pointer",transition:"opacity 0.15s,transform 0.15s",
+              transform:hovered===p.k?`translate(${Math.cos(p.midAng)*3}px,${Math.sin(p.midAng)*3}px)`:"none",
+              transformOrigin:`${half}px ${half}px`}}
+            onMouseEnter={()=>setHovered(p.k)}
+            onMouseLeave={()=>setHovered(null)}
+          />
+        ))}
+        <circle cx={half} cy={half} r={inn-1} fill="var(--bg-card)"/>
+        {/* Centro: mostrar % cuando hay hover */}
+        {hov&&(
+          <text x={half} y={half-4} textAnchor="middle" fontSize="13" fontWeight="700" fill={hov.color}>{hov.pct}%</text>
+        )}
+        {hov&&(
+          <text x={half} y={half+10} textAnchor="middle" fontSize="7" fill="var(--text-muted)">{hov.label||hov.k}</text>
+        )}
+      </svg>
+    </div>
   );
 }
 
@@ -2591,23 +2620,42 @@ export default function App(){
             <div className="fi" style={{display:"grid",gap:16}}>
               {/* KPI Cards — rediseñados */}
               {(()=>{
-                // Rendimiento diario: comparar valor actual vs cierre de ayer (usando historicos)
+                // Rendimiento diario: precio actual vs último cierre histórico
+                // Excluir activos cuya PRIMERA compra fue hoy (no tienen referencia de ayer)
                 const todayKPI=new Date().toISOString().slice(0,10);
-                const findCCLHist=(d)=>{const bars=historicos?.CCL||[];if(!bars.length)return fxRate;const t=new Date(d).getTime();return bars.reduce((b,x)=>Math.abs(new Date(x.date)-t)<Math.abs(new Date(b.date)-t)?x:b,bars[0])?.close||fxRate;};
-                // Calcular valor de ayer
-                let totUSD_ayer=0;
+                const cclBarsKPI=historicos?.CCL||[];
+                const cclAyer=cclBarsKPI.length?cclBarsKPI[cclBarsKPI.length-1]?.close||fxRate:fxRate;
+
+                let valHoy=0, valAyer=0;
                 for(const h of en){
-                  const bars=historicos?.[h.ticker]||[];
-                  const prevBar=bars.length?bars[bars.length-1]:null;
-                  if(!prevBar)continue;
                   const isBond=h.type==="bono_usd"||h.type==="bono_ars";
                   const qtyFactor=isBond?h.qty/100:h.qty;
-                  const cclAyer=findCCLHist(prevBar.date);
-                  if(h.buyCurrency==="USD") totUSD_ayer+=prevBar.close*qtyFactor;
-                  else totUSD_ayer+=prevBar.close*qtyFactor/cclAyer;
+                  const bars=historicos?.[h.ticker]||[];
+                  const prevClose=bars.length?bars[bars.length-1]?.close:null;
+
+                  // Sin histórico → activo nuevo, no tiene referencia de ayer → skip
+                  if(!prevClose||!h.currentPrice)continue;
+
+                  // Calcular qty que tenía AYER (excluir compras de hoy)
+                  const buysTotales=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra");
+                  const buysAyer=buysTotales.filter(t=>t.date<todayKPI);
+                  const ventasAyer=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="venta"&&t.date<todayKPI);
+                  const qtyAyer=Math.max(0,buysAyer.reduce((a,t)=>a+t.qty,0)-ventasAyer.reduce((a,t)=>a+t.qty,0));
+
+                  // Si no tenía posición ayer (todo fue comprado hoy) → skip
+                  if(qtyAyer<=0)continue;
+
+                  const qtyFactorAyer=isBond?qtyAyer/100:qtyAyer;
+
+                  // Valor hoy con qty de AYER al precio de HOY (para no inflar por nuevas compras)
+                  const vHoy=h.buyCurrency==="USD"?h.currentPrice*qtyFactorAyer:h.currentPrice*qtyFactorAyer/fxRate;
+                  const vAyer=h.buyCurrency==="USD"?prevClose*qtyFactorAyer:prevClose*qtyFactorAyer/cclAyer;
+
+                  valHoy+=vHoy;
+                  valAyer+=vAyer;
                 }
-                const dayPnlUSD=totUSD-totUSD_ayer;
-                const dayPct=totUSD_ayer>0?(dayPnlUSD/totUSD_ayer)*100:0;
+                const dayPnlUSD=valHoy-valAyer;
+                const dayPct=valAyer>0?(dayPnlUSD/valAyer)*100:0;
 
                 const kpis=[
                   {
@@ -2684,7 +2732,7 @@ export default function App(){
                 <div style={{...card,padding:18,display:"flex",flexDirection:"column"}}>
                   <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:14}}>Asignación por tipo</div>
                   <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
-                    <Donut segs={byType.map(t=>({k:t.key,v:t.val,color:t.color}))} size={150}/>
+                    <Donut segs={byType.map(t=>({k:t.key,v:t.val,color:t.color,label:t.label}))} size={150}/>
                     <div style={{width:"100%",display:"grid",gap:8}}>
                       {byType.map(t=>(
                         <div key={t.key} style={{display:"flex",alignItems:"center",gap:7}}>

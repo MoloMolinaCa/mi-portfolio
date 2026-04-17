@@ -571,43 +571,41 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
       };
 
       let spy100=null;
-      // liveSPYars: precio live del CEDEAR SPY en ARS (ya disponible en livePricesMap)
-      const liveSPYars=livePricesMap["SPY"]||livePricesAll["SPY"]?.price||null;
+      // Precio live CEDEAR SPY en ARS — solo para modo ARS
+      const liveSPYars=livePricesAll["SPY"]?.price||livePricesMap["SPY"]||null;
 
-      if(sp500Bars.length>=2&&currency!=="ARS"){
-        // S&P500 en USD: usar historicos + liveSP500 para hoy
-        const ptsRaw=dates.map(d=>{
-          if(d===todayStr&&liveSP500!=null)return{date:d,val:liveSP500};
-          const v=findPrice(sp500Bars,d);
-          return v?{date:d,val:v}:null;
-        }).filter(Boolean);
-        if(ptsRaw.length>=2){const base=ptsRaw[0].val;spy100=ptsRaw.map(x=>({date:x.date,val:base>0?100*x.val/base:100}));}
-      }
-
-      // Si no hubo S&P en USD o estamos en ARS: usar CEDEAR SPY.BA con precio live para hoy
-      if(!spy100&&spyByma.length>=2){
-        const tcBars=currency==="USD_MEP"?mepBars:cclBars;
-        const pts=dates.map(d=>{
-          // Para hoy usar precio live del CEDEAR SPY si está disponible
-          const pARS=d===todayStr&&liveSPYars!=null?liveSPYars:findPrice(spyByma,d);
-          if(!pARS)return{date:d,val:null};
-          if(currency==="ARS")return{date:d,val:pARS};
-          const tc=d===todayStr?fxRate:(tcBars.length?(findPrice(tcBars,d)||fxRate):fxRate);
-          return{date:d,val:pARS/tc};
-        }).filter(x=>x.val!=null);
-        if(pts.length>=2){const base=pts[0].val;spy100=pts.map(x=>({date:x.date,val:base>0?100*x.val/base:100}));}
-      }
-
-      // Si en USD y no hay historicos sp500 pero sí CEDEAR SPY: convertir a USD con TC
-      if(!spy100&&spyByma.length>=2&&currency!=="ARS"){
-        const tcBars=currency==="USD_MEP"?mepBars:cclBars;
-        const pts=dates.map(d=>{
-          const pARS=d===todayStr&&liveSPYars!=null?liveSPYars:findPrice(spyByma,d);
-          if(!pARS)return{date:d,val:null};
-          const tc=d===todayStr?fxRate:(tcBars.length?(findPrice(tcBars,d)||fxRate):fxRate);
-          return{date:d,val:pARS/tc};
-        }).filter(x=>x.val!=null);
-        if(pts.length>=2){const base=pts[0].val;spy100=pts.map(x=>({date:x.date,val:base>0?100*x.val/base:100}));}
+      if(currency!=="ARS"){
+        // USD CCL / USD MEP: usar índice S&P real en USD (historicos.sp500)
+        // Para hoy: liveSP500 si está disponible, sino último bar (no inventar con CEDEAR)
+        if(sp500Bars.length>=2){
+          const ptsRaw=dates.map(d=>{
+            if(d===todayStr&&liveSP500!=null&&liveSP500>1000)return{date:d,val:liveSP500};
+            const v=findPrice(sp500Bars,d);
+            return v?{date:d,val:v}:null;
+          }).filter(Boolean);
+          if(ptsRaw.length>=2){const base=ptsRaw[0].val;spy100=ptsRaw.map(x=>({date:x.date,val:base>0?100*x.val/base:100}));}
+        }
+        // Fallback si no hay historicos S&P: CEDEAR SPY ÷ TC (mismo TC para todos los días)
+        if(!spy100&&spyByma.length>=2){
+          const tcBars=currency==="USD_MEP"?mepBars:cclBars;
+          const pts=dates.map(d=>{
+            const pARS=d===todayStr&&liveSPYars?liveSPYars:findPrice(spyByma,d);
+            if(!pARS)return null;
+            const tc=d===todayStr?fxRate:(tcBars.length?(findPrice(tcBars,d)||fxRate):fxRate);
+            return{date:d,val:pARS/tc};
+          }).filter(Boolean);
+          if(pts.length>=2){const base=pts[0].val;spy100=pts.map(x=>({date:x.date,val:base>0?100*x.val/base:100}));}
+        }
+      } else {
+        // ARS: CEDEAR SPY en pesos — puro ARS, sin conversión
+        // Para hoy usar precio live del CEDEAR
+        if(spyByma.length>=2){
+          const pts=dates.map(d=>{
+            const pARS=d===todayStr&&liveSPYars?liveSPYars:findPrice(spyByma,d);
+            return pARS?{date:d,val:pARS}:null;
+          }).filter(Boolean);
+          if(pts.length>=2){const base=pts[0].val;spy100=pts.map(x=>({date:x.date,val:base>0?100*x.val/base:100}));}
+        }
       }
 
       let ccl100=null,mep100=null;

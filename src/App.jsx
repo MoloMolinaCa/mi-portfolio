@@ -644,16 +644,19 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
         for(const h of en){if(h.isLive)livePricesMap[h.ticker]=h.currentPrice;}
       }
 
-      // TWR — Time Weighted Return con punto de hoy en vivo
-      const today=new Date().toISOString().slice(0,10);
+      // TWR — Time Weighted Return
+      // Solo agregar "hoy" al final si no hay customEnd (o customEnd es hoy)
+      const realToday2=new Date().toISOString().slice(0,10);
       const datesWithToday=[...dates];
-      if(datesWithToday[datesWithToday.length-1]!==today)datesWithToday.push(today);
+      if(!customEnd||customEnd>=realToday2){
+        if(datesWithToday[datesWithToday.length-1]!==realToday2)datesWithToday.push(realToday2);
+      }
 
       const port100=calcTWR(datesWithToday,trades,en,tickerBars,cclBars,mepBars,currency,fxRate,livePricesMap,customEnd);
 
       setChartData({
         port100,t10y100,spy100,ccl100,mep100,currency,
-        portBase:null, // TWR no necesita portBase para normalizar
+        portBase:null,
         startDate:dates[0],endDate:datesWithToday[datesWithToday.length-1],
         portRet:port100.length>0?(port100[port100.length-1].val-100).toFixed(2):"0.00",
         spyRet:spy100?(spy100[spy100.length-1].val-100).toFixed(2):null,

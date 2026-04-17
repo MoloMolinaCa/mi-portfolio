@@ -317,9 +317,9 @@ function Donut({segs, size=120}){
 
 function Chart100({series}){
   const [hover,setHover]=useState(null);
-  const [rangeStart,setRangeStart]=useState(0);   // 0-100 %
-  const [rangeEnd,setRangeEnd]=useState(100);     // 0-100 %
-  const [dragging,setDragging]=useState(null);    // 'start'|'end'|'window'
+  const [rangeStart,setRangeStart]=useState(0);   // 0-100% — inicio del período (base 100)
+  const [rangeEnd,setRangeEnd]=useState(100);     // 0-100% — fin del período
+  const [dragging,setDragging]=useState(null);
   const [dragAnchor,setDragAnchor]=useState(null);
 
   if(!series?.length)return null;
@@ -374,8 +374,6 @@ function Chart100({series}){
   const onMouseMove2=(e)=>{
     if(!dragging||!dragAnchor)return;
     const rect=e.currentTarget.getBoundingClientRect();
-    const dx=(e.clientX-dragAnchor.x)/(rect.width)*(W/rect.width)*100*(rect.width/W);
-    // pct delta
     const pctDx=(e.clientX-dragAnchor.x)/rect.width*100;
     if(dragging==='start'){
       const ns2=Math.max(0,Math.min(dragAnchor.re-5,dragAnchor.rs+pctDx));
@@ -396,7 +394,7 @@ function Chart100({series}){
       onMouseMove={e=>{onMove(e);onMouseMove2(e);}}
       onMouseUp={()=>setDragging(null)}
       onMouseLeave={()=>{setHover(null);setDragging(null);}}>
-      <svg viewBox={`0 0 ${W} ${H+SH+10}`} style={{width:"100%",height:"100%",display:"block",cursor:dragging?"grabbing":"crosshair"}}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:"100%",display:"block",cursor:dragging?"grabbing":"crosshair"}}>
         {/* Grid */}
         {yTicks.map((v,i)=>(
           <g key={i}>
@@ -441,28 +439,51 @@ function Chart100({series}){
             {sliced.map(s=>{const v=s.data[hover]?.val;if(v==null)return null;return <circle key={s.key} cx={xS(hover)} cy={yS(v)} r={s.bold?4.5:3} fill={s.color} stroke="var(--bg-card)" strokeWidth="1.5"/>;  })}
           </>
         )}
-        {/* ── Scrubber ── */}
-        {/* Background track */}
-        <rect x={PL} y={H+6} width={SW} height={SH-4} rx="4" fill="var(--bg-input)" stroke="var(--border)" strokeWidth="0.5"/>
-        {/* Mini sparkline */}
-        <path d={miniPath} fill="none" stroke="var(--text-muted)" strokeWidth="1" opacity="0.4"/>
-        {/* Selected window */}
-        <rect x={sxS(rangeStart)} y={H+6} width={Math.max(4,sxS(rangeEnd)-sxS(rangeStart))} height={SH-4} rx="3"
-          fill="rgba(37,99,235,0.2)" stroke="var(--accent)" strokeWidth="1"
-          style={{cursor:"grab"}}
-          onMouseDown={e=>onScrubberMouseDown(e,'window')}/>
-        {/* Start handle */}
-        <rect x={sxS(rangeStart)-HANDLE/2} y={H+7} width={HANDLE} height={SH-6} rx="3"
-          fill="var(--accent)" style={{cursor:"ew-resize"}}
-          onMouseDown={e=>onScrubberMouseDown(e,'start')}/>
-        {/* End handle */}
-        <rect x={sxS(rangeEnd)-HANDLE/2} y={H+7} width={HANDLE} height={SH-6} rx="3"
-          fill="var(--accent)" style={{cursor:"ew-resize"}}
-          onMouseDown={e=>onScrubberMouseDown(e,'end')}/>
-        {/* Date labels on scrubber */}
-        <text x={sxS(rangeStart)+2} y={H+SH+8} fontSize="8" fill="var(--text-muted)">{fmtD(series[0].data[iStart]?.date)}</text>
-        <text x={sxS(rangeEnd)-2} y={H+SH+8} fontSize="8" fill="var(--text-muted)" textAnchor="end">{fmtD(series[0].data[iEnd]?.date)}</text>
+
       </svg>
+      {/* HTML Scrubber */}
+      <div style={{padding:"4px 0 2px",userSelect:"none"}}
+        onMouseMove={onMouseMove2} onMouseUp={()=>setDragging(null)}>
+        <div style={{position:"relative",height:32,margin:"0 4px",cursor:"default"}}
+          ref={el=>{if(el&&!el._scrubW)el._scrubW=el.offsetWidth;}}>
+          {/* Track */}
+          <div style={{position:"absolute",inset:"6px 0",background:"var(--bg-input)",borderRadius:4,border:"1px solid var(--border)",overflow:"hidden"}}>
+            {/* Mini sparkline via canvas-like div */}
+            <svg style={{width:"100%",height:"100%",display:"block"}} viewBox={`0 0 ${n} 20`} preserveAspectRatio="none">
+              <path d={series[0].data.map((d,i)=>{
+                const my=18-(d.val-miniMin)/miniRange*16;
+                return `${i===0?"M":"L"}${i},${my.toFixed(1)}`;
+              }).join(" ")} fill="none" stroke="var(--text-muted)" strokeWidth="0.8" opacity="0.4"/>
+            </svg>
+          </div>
+          {/* Window */}
+          <div style={{
+            position:"absolute",top:4,bottom:4,
+            left:`${rangeStart}%`,width:`${rangeEnd-rangeStart}%`,
+            background:"rgba(37,99,235,0.15)",border:"1px solid var(--accent)",
+            borderRadius:3,cursor:"grab",boxSizing:"border-box",
+          }} onMouseDown={e=>onScrubberMouseDown(e,'window')}/>
+          {/* Left handle */}
+          <div style={{
+            position:"absolute",top:3,bottom:3,width:8,
+            left:`calc(${rangeStart}% - 4px)`,
+            background:"var(--accent)",borderRadius:3,cursor:"ew-resize",
+          }} onMouseDown={e=>onScrubberMouseDown(e,'start')}/>
+          {/* Right handle */}
+          <div style={{
+            position:"absolute",top:3,bottom:3,width:8,
+            left:`calc(${rangeEnd}% - 4px)`,
+            background:"var(--accent)",borderRadius:3,cursor:"ew-resize",
+          }} onMouseDown={e=>onScrubberMouseDown(e,'end')}/>
+        </div>
+        {/* Date labels */}
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"var(--text-muted)",padding:"0 4px",marginTop:1}}>
+          <span>{fmtD(series[0].data[iStart]?.date)}</span>
+          <span style={{opacity:0.4}}>← deslizá para ajustar el período →</span>
+          <span>{fmtD(series[0].data[iEnd]?.date)}</span>
+        </div>
+      </div>
+
       {/* Tooltip */}
       {hover!=null&&hover<ns&&(
         <div style={{
@@ -2783,7 +2804,7 @@ export default function App(){
           ))}
         </div>
 
-        <div style={{padding:"22px 28px",maxWidth:1200,margin:"0 auto"}}>
+        <div style={{padding:"22px 32px",maxWidth:1600,margin:"0 auto"}}>
 
           {/* DASHBOARD */}
           {tab==="dashboard"&&(

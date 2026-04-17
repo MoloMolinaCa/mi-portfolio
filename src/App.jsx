@@ -317,85 +317,30 @@ function Donut({segs, size=120}){
 
 function Chart100({series}){
   const [hover,setHover]=useState(null);
-  const [rangeStart,setRangeStart]=useState(0);   // 0-100% — inicio del período (base 100)
-  const [rangeEnd,setRangeEnd]=useState(100);     // 0-100% — fin del período
-  const [dragging,setDragging]=useState(null);
-  const [dragAnchor,setDragAnchor]=useState(null);
-
   if(!series?.length)return null;
-  const allData=series[0].data;
-  const n=allData.length;
-  if(n<2)return null;
-
-  // Slice data based on range
-  const iStart=Math.max(0,Math.min(n-2,Math.round(rangeStart/100*(n-1))));
-  const iEnd=Math.max(iStart+1,Math.min(n-1,Math.round(rangeEnd/100*(n-1))));
-  const sliced=series.map(s=>({...s,data:s.data.slice(iStart,iEnd+1)}));
-
-  const W=560,H=260,PL=52,PT=14,PR=80,PB=30;
-  const SH=28; // scrubber height
-  const allV=sliced.flatMap(s=>s.data.map(d=>d.val));
+  const W=560,H=280,PL=52,PT=14,PR=80,PB=30;
+  const allV=series.flatMap(s=>s.data.map(d=>d.val));
   const minV=Math.min(...allV)*0.997,maxV=Math.max(...allV)*1.003;
-  const ns=sliced[0].data.length;
-  const xS=i=>PL+(i/(Math.max(ns-1,1)))*(W-PL-PR);
+  const n=series[0].data.length;
+  const xS=i=>PL+(i/(Math.max(n-1,1)))*(W-PL-PR);
   const yS=v=>PT+(1-(v-minV)/(maxV-minV))*(H-PT-PB);
   const makePath=data=>data.map((d,i)=>`${i===0?"M":"L"}${xS(i).toFixed(1)},${yS(d.val).toFixed(1)}`).join(" ");
   const yTicks=Array.from({length:6},(_,i)=>minV+(maxV-minV)*i/5);
-  const xLabels=[0,Math.floor(ns/4),Math.floor(ns/2),Math.floor(3*ns/4),ns-1].filter((v,i,a)=>a.indexOf(v)===i&&v<ns);
+  const xLabels=[0,Math.floor(n/4),Math.floor(n/2),Math.floor(3*n/4),n-1].filter((v,i,a)=>a.indexOf(v)===i&&v<n);
   const fmtD=s=>s?s.slice(8)+'/'+s.slice(5,7):'';
+  const LABELS={port:"Portfolio",spy:"S&P 500",ccl:"CCL",mep:"MEP",t10y:"T10Y"};
   const onMove=(e)=>{
     const rect=e.currentTarget.getBoundingClientRect();
     const svgX=(e.clientX-rect.left)*(W/rect.width);
-    setHover(Math.max(0,Math.min(ns-1,Math.round((svgX-PL)/(W-PL-PR)*(ns-1)))));
+    setHover(Math.max(0,Math.min(n-1,Math.round((svgX-PL)/(W-PL-PR)*(n-1)))));
   };
-  const LABELS={port:"Portfolio",spy:"S&P 500",ccl:"CCL",mep:"MEP",t10y:"T10Y"};
   const ttRight=hover!=null&&xS(hover)>W*0.65;
-
-  // Scrubber calculations
-  const SW=W-PL-PR;
-  const sxS=pct=>PL+pct/100*SW;
-  const sxPct=x=>(x-PL)/SW*100;
-  const HANDLE=8;
-
-  // Mini sparkline for scrubber background
-  const miniAllV=series[0].data.map(d=>d.val);
-  const miniMin=Math.min(...miniAllV),miniMax=Math.max(...miniAllV),miniRange=miniMax-miniMin||1;
-  const miniPath=series[0].data.map((d,i)=>{
-    const mx=PL+i/(n-1)*SW;
-    const my=H+8+(1-(d.val-miniMin)/miniRange)*(SH-12);
-    return `${i===0?"M":"L"}${mx.toFixed(1)},${my.toFixed(1)}`;
-  }).join(" ");
-
-  const onScrubberMouseDown=(e,type)=>{
-    e.preventDefault();
-    setDragging(type);
-    setDragAnchor({x:e.clientX,rs:rangeStart,re:rangeEnd});
-  };
-  const onMouseMove2=(e)=>{
-    if(!dragging||!dragAnchor)return;
-    const rect=e.currentTarget.getBoundingClientRect();
-    const pctDx=(e.clientX-dragAnchor.x)/rect.width*100;
-    if(dragging==='start'){
-      const ns2=Math.max(0,Math.min(dragAnchor.re-5,dragAnchor.rs+pctDx));
-      setRangeStart(Math.round(ns2*10)/10);
-    } else if(dragging==='end'){
-      const ne=Math.max(dragAnchor.rs+5,Math.min(100,dragAnchor.re+pctDx));
-      setRangeEnd(Math.round(ne*10)/10);
-    } else if(dragging==='window'){
-      const span=dragAnchor.re-dragAnchor.rs;
-      const ns2=Math.max(0,Math.min(100-span,dragAnchor.rs+pctDx));
-      setRangeStart(Math.round(ns2*10)/10);
-      setRangeEnd(Math.round((ns2+span)*10)/10);
-    }
-  };
-
+  const sortedByLastVal=[...series].filter(s=>s.data[n-1]?.val!=null).sort((a,b)=>(b.data[n-1]?.val||0)-(a.data[n-1]?.val||0));
+  const labelY=[];
   return(
-    <div style={{position:"relative",width:"100%",height:"100%",userSelect:"none"}}
-      onMouseMove={e=>{onMove(e);onMouseMove2(e);}}
-      onMouseUp={()=>setDragging(null)}
-      onMouseLeave={()=>{setHover(null);setDragging(null);}}>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:"100%",display:"block",cursor:dragging?"grabbing":"crosshair"}}>
-        {/* Grid */}
+    <div style={{position:"relative",width:"100%",height:"100%"}}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:"100%",display:"block",cursor:"crosshair"}}
+        onMouseMove={onMove} onMouseLeave={()=>setHover(null)}>
         {yTicks.map((v,i)=>(
           <g key={i}>
             <line x1={PL} x2={W-PR} y1={yS(v)} y2={yS(v)} stroke="var(--border)" strokeWidth="0.5"/>
@@ -403,92 +348,37 @@ function Chart100({series}){
           </g>
         ))}
         <line x1={PL} x2={W-PR} y1={yS(100)} y2={yS(100)} stroke="rgba(255,255,255,0.12)" strokeWidth="1" strokeDasharray="4,4"/>
-        {/* Series */}
-        {sliced.map(s=>(
+        {series.map(s=>(
           <path key={s.key} d={makePath(s.data)} fill="none" stroke={s.color} strokeWidth={s.bold?2.5:1.5} strokeLinejoin="round" opacity={s.bold?1:0.75}/>
         ))}
-        {/* End labels */}
-        {(()=>{
-          const sortedByLastVal=[...sliced].filter(s=>s.data[ns-1]?.val!=null).sort((a,b)=>(b.data[ns-1]?.val||0)-(a.data[ns-1]?.val||0));
-          const labelY=[];
-          return sortedByLastVal.map((s,i)=>{
-            const v=s.data[ns-1]?.val;
-            if(v==null)return null;
-            const rawY=yS(v),minGap=13;
-            let cy=rawY;
-            for(const py of labelY){if(Math.abs(cy-py)<minGap)cy=py+minGap;}
-            labelY.push(cy);
-            const pct=(v-100).toFixed(2);
-            return(
-              <g key={`lbl-${s.key}`}>
-                {Math.abs(cy-rawY)>2&&<line x1={xS(ns-1)} y1={rawY} x2={xS(ns-1)+6} y2={cy} stroke={s.color} strokeWidth="0.8" opacity="0.4"/>}
-                <circle cx={xS(ns-1)} cy={rawY} r={s.bold?4:3} fill={s.color}/>
-                <text x={xS(ns-1)+8} y={cy+5} fontSize="14" fill={s.color} fontWeight="700">{pct>=0?"+":""}{pct}%</text>
-              </g>
-            );
-          });
-        })()}
-        {/* X labels */}
+        {sortedByLastVal.map((s,i)=>{
+          const v=s.data[n-1]?.val;if(v==null)return null;
+          const rawY=yS(v),minGap=13;
+          let cy=rawY;for(const py of labelY){if(Math.abs(cy-py)<minGap)cy=py+minGap;}
+          labelY.push(cy);
+          const pct=(v-100).toFixed(2);
+          return(
+            <g key={`lbl-${s.key}`}>
+              {Math.abs(cy-rawY)>2&&<line x1={xS(n-1)} y1={rawY} x2={xS(n-1)+6} y2={cy} stroke={s.color} strokeWidth="0.8" opacity="0.4"/>}
+              <circle cx={xS(n-1)} cy={rawY} r={s.bold?4:3} fill={s.color}/>
+              <text x={xS(n-1)+8} y={cy+5} fontSize="14" fill={s.color} fontWeight="700">{pct>=0?"+":""}{pct}%</text>
+            </g>
+          );
+        })}
         {xLabels.map(i=>(
-          <text key={i} x={xS(i)} y={H-6} textAnchor="middle" fontSize="10" fill="var(--text-muted)">{fmtD(sliced[0].data[i]?.date)}</text>
+          <text key={i} x={xS(i)} y={H-6} textAnchor="middle" fontSize="10" fill="var(--text-muted)">{fmtD(series[0].data[i]?.date)}</text>
         ))}
-        {/* Crosshair */}
-        {hover!=null&&hover<ns&&(
+        {hover!=null&&(
           <>
             <line x1={xS(hover)} x2={xS(hover)} y1={PT} y2={H-PB} stroke="rgba(255,255,255,0.2)" strokeWidth="1" strokeDasharray="3,3"/>
-            {sliced.map(s=>{const v=s.data[hover]?.val;if(v==null)return null;return <circle key={s.key} cx={xS(hover)} cy={yS(v)} r={s.bold?4.5:3} fill={s.color} stroke="var(--bg-card)" strokeWidth="1.5"/>;  })}
+            {series.map(s=>{const v=s.data[hover]?.val;if(v==null)return null;return <circle key={s.key} cx={xS(hover)} cy={yS(v)} r={s.bold?4.5:3} fill={s.color} stroke="var(--bg-card)" strokeWidth="1.5"/>;  })}
           </>
         )}
-
       </svg>
-      {/* HTML Scrubber */}
-      <div style={{padding:"4px 0 2px",userSelect:"none"}}
-        onMouseMove={onMouseMove2} onMouseUp={()=>setDragging(null)}>
-        <div style={{position:"relative",height:32,margin:"0 4px",cursor:"default"}}
-          ref={el=>{if(el&&!el._scrubW)el._scrubW=el.offsetWidth;}}>
-          {/* Track */}
-          <div style={{position:"absolute",inset:"6px 0",background:"var(--bg-input)",borderRadius:4,border:"1px solid var(--border)",overflow:"hidden"}}>
-            {/* Mini sparkline via canvas-like div */}
-            <svg style={{width:"100%",height:"100%",display:"block"}} viewBox={`0 0 ${n} 20`} preserveAspectRatio="none">
-              <path d={series[0].data.map((d,i)=>{
-                const my=18-(d.val-miniMin)/miniRange*16;
-                return `${i===0?"M":"L"}${i},${my.toFixed(1)}`;
-              }).join(" ")} fill="none" stroke="var(--text-muted)" strokeWidth="0.8" opacity="0.4"/>
-            </svg>
-          </div>
-          {/* Window */}
-          <div style={{
-            position:"absolute",top:4,bottom:4,
-            left:`${rangeStart}%`,width:`${rangeEnd-rangeStart}%`,
-            background:"rgba(37,99,235,0.15)",border:"1px solid var(--accent)",
-            borderRadius:3,cursor:"grab",boxSizing:"border-box",
-          }} onMouseDown={e=>onScrubberMouseDown(e,'window')}/>
-          {/* Left handle */}
-          <div style={{
-            position:"absolute",top:3,bottom:3,width:8,
-            left:`calc(${rangeStart}% - 4px)`,
-            background:"var(--accent)",borderRadius:3,cursor:"ew-resize",
-          }} onMouseDown={e=>onScrubberMouseDown(e,'start')}/>
-          {/* Right handle */}
-          <div style={{
-            position:"absolute",top:3,bottom:3,width:8,
-            left:`calc(${rangeEnd}% - 4px)`,
-            background:"var(--accent)",borderRadius:3,cursor:"ew-resize",
-          }} onMouseDown={e=>onScrubberMouseDown(e,'end')}/>
-        </div>
-        {/* Date labels */}
-        <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"var(--text-muted)",padding:"0 4px",marginTop:1}}>
-          <span>{fmtD(series[0].data[iStart]?.date)}</span>
-          <span style={{opacity:0.4}}>← deslizá para ajustar el período →</span>
-          <span>{fmtD(series[0].data[iEnd]?.date)}</span>
-        </div>
-      </div>
-
-      {/* Tooltip */}
-      {hover!=null&&hover<ns&&(
+      {hover!=null&&(
         <div style={{
           position:"absolute",top:10,
-          left:ttRight?undefined:(xS(hover)/(W)*100)+"%",
+          left:ttRight?undefined:(xS(hover)/W*100)+"%",
           right:ttRight?((1-xS(hover)/W)*100)+"%":undefined,
           transform:ttRight?"translateX(10px)":"translateX(-50%)",
           background:"var(--bg-card)",border:"1px solid var(--border)",
@@ -496,11 +386,10 @@ function Chart100({series}){
           fontSize:12,minWidth:152,boxShadow:"0 6px 20px rgba(0,0,0,0.45)",zIndex:10,
         }}>
           <div style={{fontSize:10,color:"var(--text-muted)",marginBottom:7,fontWeight:700,letterSpacing:1}}>
-            {(()=>{const d=sliced[0].data[hover]?.date;return d?d.slice(8)+'/'+d.slice(5,7)+'/'+d.slice(0,4):''})()}
+            {(()=>{const d=series[0].data[hover]?.date;return d?d.slice(8)+'/'+d.slice(5,7)+'/'+d.slice(0,4):''})()}
           </div>
-          {sliced.map(s=>{
-            const v=s.data[hover]?.val;
-            if(v==null)return null;
+          {series.map(s=>{
+            const v=s.data[hover]?.val;if(v==null)return null;
             const pct=(v-100).toFixed(2);
             return(
               <div key={s.key} style={{display:"flex",justifyContent:"space-between",gap:14,marginBottom:4,alignItems:"center"}}>
@@ -609,16 +498,22 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
   const [currency,setCurrency]=useState("USD_CCL");
   const [chartData,setChartData]=useState(null);
   const [loading,setLoading]=useState(false);
+  const [scrubStart,setScrubStart]=useState(null); // ISO date string or null
+  const [scrubEnd,setScrubEnd]=useState(null);
+  const [scrubDrag,setScrubDrag]=useState(null);   // {type,anchorX,anchorPct}
+  const scrubRef=React.useRef(null);
   const fmtP=n=>`${n>=0?"+":""}${n.toFixed(2)}%`;
   const pc=n=>n>=0?"var(--green)":"var(--red)";
+  const fmtD=s=>s?s.slice(8)+'/'+s.slice(5,7):'';
 
-  const getDates=(p,hist)=>{
-    const today=new Date().toISOString().slice(0,10);
-    const end=new Date();
+  const getDates=(p,hist,customStart=null,customEnd=null)=>{
+    const today=customEnd||new Date().toISOString().slice(0,10);
+    const end=new Date(today);
     let periodStart;
-    if(p.key==="ytd")periodStart=new Date(end.getFullYear()+"-01-01");
+    if(customStart){periodStart=new Date(customStart);}
+    else if(p.key==="ytd")periodStart=new Date(end.getFullYear()+"-01-01");
     else if(p.key==="mtd"||p.mtd)periodStart=new Date(end.getFullYear()+"-"+(String(end.getMonth()+1).padStart(2,"0"))+"-01");
-    else{periodStart=new Date();periodStart.setDate(periodStart.getDate()-p.days);}
+    else{periodStart=new Date(today);periodStart.setDate(periodStart.getDate()-p.days);}
     const firstBuy=trades.filter(t=>t.tipo==="compra").sort((a,b)=>a.date.localeCompare(b.date))[0]?.date;
     const firstBuyDate=firstBuy?new Date(firstBuy):end;
     const start=firstBuyDate>periodStart?firstBuyDate:periodStart;
@@ -649,7 +544,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
     return bars.reduce((b,x)=>Math.abs(new Date(x.date)-t)<Math.abs(new Date(b.date)-t)?x:b,bars[0])?.close||null;
   };
 
-  const load=async(p,hist)=>{
+  const load=async(p,hist,customStart=null,customEnd=null)=>{
     setLoading(true);setChartData(null);
     const _hist=hist||historicos||{};
     const _getCCL=()=>_hist.CCL||[];
@@ -657,7 +552,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
     const _getSPY=()=>_hist.sp500||[];
     const _getTicker=t=>{const b=_hist[t];return b?.length?b:null;};
     try{
-      const dates=getDates(p,_hist);
+      const dates=getDates(p,_hist,customStart,customEnd);
       const cclBars=_getCCL(),mepBars=_getMEP(),sp500Bars=_getSPY(),spyByma=_getTicker("SPY")||[];
 
       const todayStr=new Date().toISOString().slice(0,10);
@@ -764,14 +659,13 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
   useEffect(()=>{
     if(!historicos||Object.keys(historicos).length===0)return;
     const p=PERIODS.find(x=>x.key===period);
-    if(p)load(p,historicos);
-  },[period,currency,historicos,trades]);
+    if(p)load(p,historicos,scrubStart,scrubEnd);
+  },[period,currency,historicos,trades,scrubStart,scrubEnd]);
 
-  // Cuando cambian liveFX o liveSP500, disparar recarga del gráfico con precios frescos
   useEffect(()=>{
     if(!historicos||Object.keys(historicos).length===0)return;
     const p=PERIODS.find(x=>x.key===period);
-    if(p)load(p,historicos);
+    if(p)load(p,historicos,scrubStart,scrubEnd);
   },[liveFX,liveSP500,historicos,trades]);
 
   const cd=chartData;
@@ -817,6 +711,88 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
         {loading&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--text-muted)",fontSize:12}}><span style={{animation:"spin 0.8s linear infinite",display:"inline-block",marginRight:6}}>⟳</span>Cargando...</div>}
         {cd&&!loading&&series.length>0&&<Chart100 series={series}/>}
       </div>
+      {/* ── Scrubber: línea con handles para elegir período ── */}
+      {historicos&&(()=>{
+        // Todas las fechas disponibles para el scrubber background
+        const today=new Date().toISOString().slice(0,10);
+        const allBars=historicos?.CCL||[];
+        if(allBars.length<2)return null;
+        const firstDate=allBars[0].date;
+        const lastDate=today;
+        const totalDays=(new Date(lastDate)-new Date(firstDate))/(1000*60*60*24);
+
+        const dateToX=d=>Math.max(0,Math.min(100,(new Date(d)-new Date(firstDate))/(new Date(lastDate)-new Date(firstDate))*100));
+        const xToDate=x=>{
+          const ms=new Date(firstDate).getTime()+x/100*(new Date(lastDate)-new Date(firstDate));
+          return new Date(ms).toISOString().slice(0,10);
+        };
+
+        const startX=dateToX(scrubStart||cd?.startDate||firstDate);
+        const endX=dateToX(scrubEnd||lastDate);
+
+        const onMouseDown=(e,type)=>{
+          e.preventDefault();
+          const rect=scrubRef.current?.getBoundingClientRect();
+          if(!rect)return;
+          setScrubDrag({type,anchorX:e.clientX,anchorPct:(e.clientX-rect.left)/rect.width*100,startX,endX});
+        };
+        const onMouseMove=e=>{
+          if(!scrubDrag||!scrubRef.current)return;
+          const rect=scrubRef.current.getBoundingClientRect();
+          const pct=(e.clientX-rect.left)/rect.width*100;
+          const delta=pct-scrubDrag.anchorPct;
+          if(scrubDrag.type==='start'){
+            const nx=Math.max(0,Math.min(scrubDrag.endX-2,scrubDrag.startX+delta));
+            setScrubStart(xToDate(nx));
+          } else if(scrubDrag.type==='end'){
+            const nx=Math.max(scrubDrag.startX+2,Math.min(100,scrubDrag.endX+delta));
+            setScrubEnd(xToDate(nx));
+          } else {
+            const span=scrubDrag.endX-scrubDrag.startX;
+            const ns=Math.max(0,Math.min(100-span,scrubDrag.startX+delta));
+            setScrubStart(xToDate(ns));
+            setScrubEnd(xToDate(ns+span));
+          }
+        };
+        const onMouseUp=()=>setScrubDrag(null);
+
+        return(
+          <div style={{paddingTop:8,paddingBottom:2,userSelect:"none"}}
+            onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}>
+            <div ref={scrubRef} style={{position:"relative",height:18,cursor:"default"}}>
+              {/* Track line */}
+              <div style={{position:"absolute",top:"50%",left:0,right:0,height:2,background:"var(--border)",borderRadius:1,transform:"translateY(-50%)"}}/>
+              {/* Active segment */}
+              <div style={{
+                position:"absolute",top:"50%",
+                left:`${startX}%`,width:`${endX-startX}%`,
+                height:3,background:"var(--accent)",borderRadius:1,
+                transform:"translateY(-50%)",cursor:"grab",
+              }} onMouseDown={e=>onMouseDown(e,'window')}/>
+              {/* Start handle */}
+              <div style={{
+                position:"absolute",top:"50%",transform:"translate(-50%,-50%)",
+                left:`${startX}%`,width:12,height:12,
+                background:"var(--accent)",borderRadius:"50%",cursor:"ew-resize",
+                boxShadow:"0 0 0 2px var(--bg-card)",
+              }} onMouseDown={e=>onMouseDown(e,'start')}/>
+              {/* End handle */}
+              <div style={{
+                position:"absolute",top:"50%",transform:"translate(-50%,-50%)",
+                left:`${endX}%`,width:12,height:12,
+                background:"var(--accent)",borderRadius:"50%",cursor:"ew-resize",
+                boxShadow:"0 0 0 2px var(--bg-card)",
+              }} onMouseDown={e=>onMouseDown(e,'end')}/>
+            </div>
+            {/* Date labels */}
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"var(--text-muted)",marginTop:3}}>
+              <span style={{position:"relative",left:`${startX}%`,transform:"translateX(-50%)"}}>{fmtD(scrubStart||cd?.startDate||firstDate)}</span>
+              <span style={{position:"absolute",left:"50%",transform:"translateX(-50%)",opacity:0.35,fontSize:8}}>← deslizá →</span>
+              <span style={{position:"relative",right:`${100-endX}%`,transform:"translateX(50%)"}}>{fmtD(scrubEnd||lastDate)}</span>
+            </div>
+          </div>
+        );
+      })()}
       {cd&&!loading&&(()=>{
         const port100=cd.port100;
         let sharpe=null,spySharpe=null;

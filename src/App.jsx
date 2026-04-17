@@ -317,40 +317,87 @@ function Donut({segs, size=120}){
 
 function Chart100({series}){
   const [hover,setHover]=useState(null);
+  const [rangeStart,setRangeStart]=useState(0);   // 0-100 %
+  const [rangeEnd,setRangeEnd]=useState(100);     // 0-100 %
+  const [dragging,setDragging]=useState(null);    // 'start'|'end'|'window'
+  const [dragAnchor,setDragAnchor]=useState(null);
+
   if(!series?.length)return null;
-  const W=560,H=280,PL=52,PT=14,PR=80,PB=30;
-  const allV=series.flatMap(s=>s.data.map(d=>d.val));
+  const allData=series[0].data;
+  const n=allData.length;
+  if(n<2)return null;
+
+  // Slice data based on range
+  const iStart=Math.max(0,Math.min(n-2,Math.round(rangeStart/100*(n-1))));
+  const iEnd=Math.max(iStart+1,Math.min(n-1,Math.round(rangeEnd/100*(n-1))));
+  const sliced=series.map(s=>({...s,data:s.data.slice(iStart,iEnd+1)}));
+
+  const W=560,H=260,PL=52,PT=14,PR=80,PB=30;
+  const SH=28; // scrubber height
+  const allV=sliced.flatMap(s=>s.data.map(d=>d.val));
   const minV=Math.min(...allV)*0.997,maxV=Math.max(...allV)*1.003;
-  const n=series[0].data.length;
-  const xS=i=>PL+(i/(Math.max(n-1,1)))*(W-PL-PR);
+  const ns=sliced[0].data.length;
+  const xS=i=>PL+(i/(Math.max(ns-1,1)))*(W-PL-PR);
   const yS=v=>PT+(1-(v-minV)/(maxV-minV))*(H-PT-PB);
   const makePath=data=>data.map((d,i)=>`${i===0?"M":"L"}${xS(i).toFixed(1)},${yS(d.val).toFixed(1)}`).join(" ");
   const yTicks=Array.from({length:6},(_,i)=>minV+(maxV-minV)*i/5);
-  const xLabels=[0,Math.floor(n/4),Math.floor(n/2),Math.floor(3*n/4),n-1].filter((v,i,a)=>a.indexOf(v)===i&&v<n);
+  const xLabels=[0,Math.floor(ns/4),Math.floor(ns/2),Math.floor(3*ns/4),ns-1].filter((v,i,a)=>a.indexOf(v)===i&&v<ns);
+  const fmtD=s=>s?s.slice(8)+'/'+s.slice(5,7):'';
   const onMove=(e)=>{
     const rect=e.currentTarget.getBoundingClientRect();
     const svgX=(e.clientX-rect.left)*(W/rect.width);
-    setHover(Math.max(0,Math.min(n-1,Math.round((svgX-PL)/(W-PL-PR)*(n-1)))));
+    setHover(Math.max(0,Math.min(ns-1,Math.round((svgX-PL)/(W-PL-PR)*(ns-1)))));
   };
-  const ttRight=hover!=null&&xS(hover)>W*0.65;
-  const ttPct=hover!=null?(xS(hover)/W*100):0;
   const LABELS={port:"Portfolio",spy:"S&P 500",ccl:"CCL",mep:"MEP",t10y:"T10Y"};
-  // Ordenar series por valor final para evitar solapamiento de labels
-  const lastX=xS(n-1)+8;
-  const sortedByLastVal=[...series].filter(s=>s.data[n-1]?.val!=null).sort((a,b)=>(b.data[n-1]?.val||0)-(a.data[n-1]?.val||0));
-  // Separar labels que se solapan
-  const labelY=[];
-  sortedByLastVal.forEach(s=>{
-    const rawY=yS(s.data[n-1].val);
-    const minGap=13;
-    let y=rawY;
-    for(const prev of labelY){if(Math.abs(y-prev)<minGap)y=prev+minGap;}
-    labelY.push(y);
-  });
+  const ttRight=hover!=null&&xS(hover)>W*0.65;
+
+  // Scrubber calculations
+  const SW=W-PL-PR;
+  const sxS=pct=>PL+pct/100*SW;
+  const sxPct=x=>(x-PL)/SW*100;
+  const HANDLE=8;
+
+  // Mini sparkline for scrubber background
+  const miniAllV=series[0].data.map(d=>d.val);
+  const miniMin=Math.min(...miniAllV),miniMax=Math.max(...miniAllV),miniRange=miniMax-miniMin||1;
+  const miniPath=series[0].data.map((d,i)=>{
+    const mx=PL+i/(n-1)*SW;
+    const my=H+8+(1-(d.val-miniMin)/miniRange)*(SH-12);
+    return `${i===0?"M":"L"}${mx.toFixed(1)},${my.toFixed(1)}`;
+  }).join(" ");
+
+  const onScrubberMouseDown=(e,type)=>{
+    e.preventDefault();
+    setDragging(type);
+    setDragAnchor({x:e.clientX,rs:rangeStart,re:rangeEnd});
+  };
+  const onMouseMove2=(e)=>{
+    if(!dragging||!dragAnchor)return;
+    const rect=e.currentTarget.getBoundingClientRect();
+    const dx=(e.clientX-dragAnchor.x)/(rect.width)*(W/rect.width)*100*(rect.width/W);
+    // pct delta
+    const pctDx=(e.clientX-dragAnchor.x)/rect.width*100;
+    if(dragging==='start'){
+      const ns2=Math.max(0,Math.min(dragAnchor.re-5,dragAnchor.rs+pctDx));
+      setRangeStart(Math.round(ns2*10)/10);
+    } else if(dragging==='end'){
+      const ne=Math.max(dragAnchor.rs+5,Math.min(100,dragAnchor.re+pctDx));
+      setRangeEnd(Math.round(ne*10)/10);
+    } else if(dragging==='window'){
+      const span=dragAnchor.re-dragAnchor.rs;
+      const ns2=Math.max(0,Math.min(100-span,dragAnchor.rs+pctDx));
+      setRangeStart(Math.round(ns2*10)/10);
+      setRangeEnd(Math.round((ns2+span)*10)/10);
+    }
+  };
+
   return(
-    <div style={{position:"relative",width:"100%",height:"100%"}}>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:"100%",display:"block",cursor:"crosshair"}}
-        onMouseMove={onMove} onMouseLeave={()=>setHover(null)}>
+    <div style={{position:"relative",width:"100%",height:"100%",userSelect:"none"}}
+      onMouseMove={e=>{onMove(e);onMouseMove2(e);}}
+      onMouseUp={()=>setDragging(null)}
+      onMouseLeave={()=>{setHover(null);setDragging(null);}}>
+      <svg viewBox={`0 0 ${W} ${H+SH+10}`} style={{width:"100%",height:"100%",display:"block",cursor:dragging?"grabbing":"crosshair"}}>
+        {/* Grid */}
         {yTicks.map((v,i)=>(
           <g key={i}>
             <line x1={PL} x2={W-PR} y1={yS(v)} y2={yS(v)} stroke="var(--border)" strokeWidth="0.5"/>
@@ -358,50 +405,79 @@ function Chart100({series}){
           </g>
         ))}
         <line x1={PL} x2={W-PR} y1={yS(100)} y2={yS(100)} stroke="rgba(255,255,255,0.12)" strokeWidth="1" strokeDasharray="4,4"/>
-        {series.map(s=>(
+        {/* Series */}
+        {sliced.map(s=>(
           <path key={s.key} d={makePath(s.data)} fill="none" stroke={s.color} strokeWidth={s.bold?2.5:1.5} strokeLinejoin="round" opacity={s.bold?1:0.75}/>
         ))}
-        {/* End-of-line labels */}
-        {sortedByLastVal.map((s,i)=>{
-          const v=s.data[n-1]?.val;
-          if(v==null)return null;
-          const pct=(v-100).toFixed(2);
-          const cy=labelY[i];
-          const origY=yS(v);
-          return(
-            <g key={`lbl-${s.key}`}>
-              {Math.abs(cy-origY)>2&&<line x1={xS(n-1)} y1={origY} x2={lastX-2} y2={cy} stroke={s.color} strokeWidth="0.8" opacity="0.4"/>}
-              <circle cx={xS(n-1)} cy={origY} r={s.bold?4:3} fill={s.color}/>
-              <text x={lastX+4} y={cy+5} fontSize="14" fill={s.color} fontWeight="700">
-                {pct>=0?"+":""}{pct}%
-              </text>
-            </g>
-          );
-        })}
+        {/* End labels */}
+        {(()=>{
+          const sortedByLastVal=[...sliced].filter(s=>s.data[ns-1]?.val!=null).sort((a,b)=>(b.data[ns-1]?.val||0)-(a.data[ns-1]?.val||0));
+          const labelY=[];
+          return sortedByLastVal.map((s,i)=>{
+            const v=s.data[ns-1]?.val;
+            if(v==null)return null;
+            const rawY=yS(v),minGap=13;
+            let cy=rawY;
+            for(const py of labelY){if(Math.abs(cy-py)<minGap)cy=py+minGap;}
+            labelY.push(cy);
+            const pct=(v-100).toFixed(2);
+            return(
+              <g key={`lbl-${s.key}`}>
+                {Math.abs(cy-rawY)>2&&<line x1={xS(ns-1)} y1={rawY} x2={xS(ns-1)+6} y2={cy} stroke={s.color} strokeWidth="0.8" opacity="0.4"/>}
+                <circle cx={xS(ns-1)} cy={rawY} r={s.bold?4:3} fill={s.color}/>
+                <text x={xS(ns-1)+8} y={cy+5} fontSize="14" fill={s.color} fontWeight="700">{pct>=0?"+":""}{pct}%</text>
+              </g>
+            );
+          });
+        })()}
+        {/* X labels */}
         {xLabels.map(i=>(
-          <text key={i} x={xS(i)} y={H-8} textAnchor="middle" fontSize="10" fill="var(--text-muted)">{series[0].data[i]?.date?.slice(5)}</text>
+          <text key={i} x={xS(i)} y={H-6} textAnchor="middle" fontSize="10" fill="var(--text-muted)">{fmtD(sliced[0].data[i]?.date)}</text>
         ))}
-        {hover!=null&&(
+        {/* Crosshair */}
+        {hover!=null&&hover<ns&&(
           <>
             <line x1={xS(hover)} x2={xS(hover)} y1={PT} y2={H-PB} stroke="rgba(255,255,255,0.2)" strokeWidth="1" strokeDasharray="3,3"/>
-            {series.map(s=>{const v=s.data[hover]?.val;if(v==null)return null;return <circle key={s.key} cx={xS(hover)} cy={yS(v)} r={s.bold?4.5:3} fill={s.color} stroke="var(--bg-card)" strokeWidth="1.5"/>;  })}
+            {sliced.map(s=>{const v=s.data[hover]?.val;if(v==null)return null;return <circle key={s.key} cx={xS(hover)} cy={yS(v)} r={s.bold?4.5:3} fill={s.color} stroke="var(--bg-card)" strokeWidth="1.5"/>;  })}
           </>
         )}
+        {/* ── Scrubber ── */}
+        {/* Background track */}
+        <rect x={PL} y={H+6} width={SW} height={SH-4} rx="4" fill="var(--bg-input)" stroke="var(--border)" strokeWidth="0.5"/>
+        {/* Mini sparkline */}
+        <path d={miniPath} fill="none" stroke="var(--text-muted)" strokeWidth="1" opacity="0.4"/>
+        {/* Selected window */}
+        <rect x={sxS(rangeStart)} y={H+6} width={Math.max(4,sxS(rangeEnd)-sxS(rangeStart))} height={SH-4} rx="3"
+          fill="rgba(37,99,235,0.2)" stroke="var(--accent)" strokeWidth="1"
+          style={{cursor:"grab"}}
+          onMouseDown={e=>onScrubberMouseDown(e,'window')}/>
+        {/* Start handle */}
+        <rect x={sxS(rangeStart)-HANDLE/2} y={H+7} width={HANDLE} height={SH-6} rx="3"
+          fill="var(--accent)" style={{cursor:"ew-resize"}}
+          onMouseDown={e=>onScrubberMouseDown(e,'start')}/>
+        {/* End handle */}
+        <rect x={sxS(rangeEnd)-HANDLE/2} y={H+7} width={HANDLE} height={SH-6} rx="3"
+          fill="var(--accent)" style={{cursor:"ew-resize"}}
+          onMouseDown={e=>onScrubberMouseDown(e,'end')}/>
+        {/* Date labels on scrubber */}
+        <text x={sxS(rangeStart)+2} y={H+SH+8} fontSize="8" fill="var(--text-muted)">{fmtD(series[0].data[iStart]?.date)}</text>
+        <text x={sxS(rangeEnd)-2} y={H+SH+8} fontSize="8" fill="var(--text-muted)" textAnchor="end">{fmtD(series[0].data[iEnd]?.date)}</text>
       </svg>
-      {hover!=null&&(
+      {/* Tooltip */}
+      {hover!=null&&hover<ns&&(
         <div style={{
           position:"absolute",top:10,
-          left:ttRight?undefined:ttPct+"%",
-          right:ttRight?(100-ttPct)+"%":undefined,
+          left:ttRight?undefined:(xS(hover)/(W)*100)+"%",
+          right:ttRight?((1-xS(hover)/W)*100)+"%":undefined,
           transform:ttRight?"translateX(10px)":"translateX(-50%)",
           background:"var(--bg-card)",border:"1px solid var(--border)",
           borderRadius:9,padding:"9px 13px",pointerEvents:"none",
           fontSize:12,minWidth:152,boxShadow:"0 6px 20px rgba(0,0,0,0.45)",zIndex:10,
         }}>
           <div style={{fontSize:10,color:"var(--text-muted)",marginBottom:7,fontWeight:700,letterSpacing:1}}>
-            {series[0].data[hover]?.date?.slice(5).replace("-","/")}
+            {(()=>{const d=sliced[0].data[hover]?.date;return d?d.slice(8)+'/'+d.slice(5,7)+'/'+d.slice(0,4):''})()}
           </div>
-          {series.map(s=>{
+          {sliced.map(s=>{
             const v=s.data[hover]?.val;
             if(v==null)return null;
             const pct=(v-100).toFixed(2);
@@ -419,6 +495,7 @@ function Chart100({series}){
     </div>
   );
 }
+
 
 // ── Time-Weighted Return (TWR) ────────────────────────────────────────────────
 // Para cada sub-período entre flujos, el retorno es valor_fin / valor_inicio.
@@ -740,7 +817,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
             <span style={{fontSize:isModal?11:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,fontWeight:600}}>Sharpe</span>
             <span style={{fontSize:isModal?15:11,color:"var(--text-muted)"}}>Portfolio: <b style={{color:sc,fontSize:isModal?18:13}}>{sharpe.toFixed(2)}</b></span>
             {spySharpe!=null&&<span style={{fontSize:isModal?15:11,color:"var(--text-muted)"}}>S&amp;P 500: <b style={{color:"#60A5FA",fontSize:isModal?18:13}}>{spySharpe.toFixed(2)}</b></span>}
-            <span style={{fontSize:isModal?11:9,color:"var(--text-muted)",marginLeft:"auto"}}>rf {liveT10Y}% anualizado · {cd.startDate?.slice(5)} → {cd.endDate?.slice(5)}</span>
+            <span style={{fontSize:isModal?11:9,color:"var(--text-muted)",marginLeft:"auto"}}>rf {liveT10Y}% anualizado · {(()=>{const f=s=>s?s.slice(8)+'/'+s.slice(5,7)+'/'+s.slice(0,4):'';return f(cd.startDate)+' → '+f(cd.endDate)})()}</span>
           </div>
         ):null;
       })()}

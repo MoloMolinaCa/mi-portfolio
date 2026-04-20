@@ -2387,7 +2387,269 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
   );
 }
 
-export default function App(){
+export default 
+// ── FlujoTab ─────────────────────────────────────────────────────────────────
+async function fetchBondFlows(ticker) {
+  try {
+    const url = `https://api.argenfunds.com/api/v1/bonds/${ticker.toLowerCase()}/cashflows`;
+    const r = await fetch(url, {signal: AbortSignal.timeout(6000)});
+    if(!r.ok) return null;
+    const d = await r.json();
+    if(!d||!d.length) return null;
+    return d.map((f,i) => ({
+      id: Date.now()+i,
+      date: f.date||f.fecha||f.paymentDate,
+      tipo: (f.type||f.tipo||'').toLowerCase().includes('amort') ? 'amortizacion' : 'cupon',
+      monto: parseFloat(f.amount||f.monto||f.value||0),
+      cobrado: false,
+      fechaCobro: null,
+      fuente: 'auto'
+    })).filter(f=>f.date&&f.monto>0);
+  } catch { return null; }
+}
+
+function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
+  const [selected, setSelected] = useState(null);
+  const [loadingTicker, setLoadingTicker] = useState(null);
+  const [editFlow, setEditFlow] = useState(null); // {ticker, flow}
+  const [addingFlow, setAddingFlow] = useState(null); // ticker
+  const [newFlow, setNewFlow] = useState({date:'',tipo:'cupon',monto:''});
+
+  const fmtD = s => s ? s.slice(8)+'/'+s.slice(5,7)+'/'+s.slice(0,4) : '';
+  const fmtN = n => Number(n).toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
+  const today = todayAR();
+
+  // Solo bonos y ONs
+  const bonds = port.filter(h => h.type==='bono_ars'||h.type==='bono_usd');
+
+  const fetchFlows = async (ticker) => {
+    setLoadingTicker(ticker);
+    const flows = await fetchBondFlows(ticker);
+    setLoadingTicker(null);
+    if(flows&&flows.length) {
+      setBondFlows(prev => ({...prev, [ticker]: flows}));
+      setSelected(ticker);
+    } else {
+      setAddingFlow(ticker);
+      setBondFlows(prev => ({...prev, [ticker]: prev[ticker]||[]}));
+      setSelected(ticker);
+    }
+  };
+
+  const saveEdit = () => {
+    if(!editFlow) return;
+    setBondFlows(prev => ({
+      ...prev,
+      [editFlow.ticker]: (prev[editFlow.ticker]||[]).map(f => f.id===editFlow.flow.id ? editFlow.flow : f)
+    }));
+    setEditFlow(null);
+  };
+
+  const confirmCobro = (ticker, flowId) => {
+    setBondFlows(prev => ({
+      ...prev,
+      [ticker]: (prev[ticker]||[]).map(f => f.id===flowId ? {...f, cobrado:true, fechaCobro:today} : f)
+    }));
+  };
+
+  const deleteFlow = (ticker, flowId) => {
+    setBondFlows(prev => ({...prev, [ticker]: (prev[ticker]||[]).filter(f=>f.id!==flowId)}));
+  };
+
+  const addNewFlow = () => {
+    if(!newFlow.date||!newFlow.monto) return;
+    const flow = {id:Date.now(), date:newFlow.date, tipo:newFlow.tipo, monto:parseFloat(newFlow.monto), cobrado:false, fechaCobro:null, fuente:'manual'};
+    setBondFlows(prev => ({...prev, [addingFlow]: [...(prev[addingFlow]||[]), flow].sort((a,b)=>a.date.localeCompare(b.date))}));
+    setNewFlow({date:'',tipo:'cupon',monto:''});
+  };
+
+  // Próximos pagos por ticker
+  const proximosPagos = bonds.map(b => {
+    const flows = bondFlows[b.ticker]||[];
+    const next = flows.filter(f=>!f.cobrado&&f.date>=today).sort((a,b)=>a.date.localeCompare(b.date))[0];
+    if(!next) return null;
+    const isBond = b.type==='bono_ars'||b.type==='bono_usd';
+    const qty = b.qty;
+    const total = next.monto * (isBond?qty/100:qty);
+    return {ticker:b.ticker, name:b.name, flow:next, total, currency:b.buyCurrency};
+  }).filter(Boolean).sort((a,b)=>a.flow.date.localeCompare(b.flow.date));
+
+  const selBond = bonds.find(b=>b.ticker===selected);
+  const selFlows = selected ? (bondFlows[selected]||[]).sort((a,b)=>a.date.localeCompare(b.date)) : [];
+
+  const inp = {background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:8,padding:'6px 10px',color:'var(--text-primary)',fontSize:13,width:'100%'};
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:16}}>
+
+      {/* Próximos pagos */}
+      <div style={{...card,padding:'16px 20px'}}>
+        <div style={{fontSize:10,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:1.2,fontWeight:600,marginBottom:12}}>📅 Próximos pagos</div>
+        {proximosPagos.length===0
+          ? <div style={{color:'var(--text-muted)',fontSize:13}}>No hay flujos cargados aún. Seleccioná un bono abajo para cargar sus flujos.</div>
+          : <div style={{display:'flex',gap:12,flexWrap:'wrap'}}>
+              {proximosPagos.map(p=>(
+                <div key={p.ticker} onClick={()=>setSelected(p.ticker)}
+                  style={{...card,padding:'12px 16px',cursor:'pointer',minWidth:160,borderLeft:`3px solid ${p.flow.tipo==='amortizacion'?'var(--yellow)':'var(--accent)'}`}}>
+                  <div style={{fontSize:11,fontWeight:700,color:'var(--accent)',marginBottom:4}}>{p.ticker}</div>
+                  <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:6}}>{fmtD(p.flow.date)}</div>
+                  <div style={{fontSize:11,color:'var(--text-secondary)',marginBottom:4}}>
+                    {p.flow.tipo==='amortizacion'?'💰 Amortización':'🎫 Cupón'}
+                  </div>
+                  <div style={{fontSize:14,fontWeight:700,color:'var(--text-primary)',fontFamily:"'DM Mono',monospace"}}>
+                    {p.currency==='USD'?'US$':'$'}{fmtN(p.total)}
+                  </div>
+                </div>
+              ))}
+            </div>
+        }
+      </div>
+
+      {/* Lista de bonos */}
+      <div style={{...card,padding:'16px 20px'}}>
+        <div style={{fontSize:10,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:1.2,fontWeight:600,marginBottom:12}}>Bonos y ONs en cartera</div>
+        <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:16}}>
+          {bonds.map(b=>{
+            const hasFlows = (bondFlows[b.ticker]||[]).length>0;
+            const isActive = selected===b.ticker;
+            return(
+              <button key={b.ticker}
+                onClick={()=>{ if(hasFlows){setSelected(b.ticker);}else{fetchFlows(b.ticker);} }}
+                style={{padding:'6px 14px',borderRadius:8,border:`1px solid ${isActive?'var(--accent)':'var(--border)'}`,
+                  background:isActive?'var(--accent)':'var(--bg-input)',
+                  color:isActive?'#fff':'var(--text-secondary)',cursor:'pointer',fontSize:12,fontWeight:isActive?700:400,
+                  display:'flex',alignItems:'center',gap:6}}>
+                {loadingTicker===b.ticker?'⟳ ':hasFlows?'✓ ':'+ '}
+                {b.ticker}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Tabla de flujos del bono seleccionado */}
+        {selected&&selBond&&(
+          <div>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+              <div>
+                <span style={{fontWeight:700,color:'var(--text-primary)',fontSize:14}}>{selBond.ticker}</span>
+                <span style={{color:'var(--text-muted)',fontSize:12,marginLeft:8}}>{selBond.name}</span>
+                <span style={{color:'var(--text-muted)',fontSize:11,marginLeft:8}}>{selBond.qty.toLocaleString('es-AR')} nominales</span>
+              </div>
+              <button onClick={()=>setAddingFlow(selected)}
+                style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:6,padding:'5px 12px',cursor:'pointer',color:'var(--text-secondary)',fontSize:12}}>
+                + Agregar pago
+              </button>
+            </div>
+
+            {/* Add flow form */}
+            {addingFlow===selected&&(
+              <div style={{background:'rgba(59,130,246,0.06)',border:'1px solid rgba(59,130,246,0.15)',borderRadius:10,padding:'14px 16px',marginBottom:12,display:'flex',gap:10,alignItems:'flex-end',flexWrap:'wrap'}}>
+                <div style={{flex:1,minWidth:130}}>
+                  <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:4}}>Fecha</div>
+                  <input type="date" value={newFlow.date} onChange={e=>setNewFlow(p=>({...p,date:e.target.value}))} style={{...inp}}/>
+                </div>
+                <div style={{flex:1,minWidth:130}}>
+                  <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:4}}>Tipo</div>
+                  <select value={newFlow.tipo} onChange={e=>setNewFlow(p=>({...p,tipo:e.target.value}))} style={{...inp}}>
+                    <option value="cupon">Cupón</option>
+                    <option value="amortizacion">Amortización</option>
+                  </select>
+                </div>
+                <div style={{flex:1,minWidth:130}}>
+                  <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:4}}>Monto / 100 láminas</div>
+                  <input type="number" value={newFlow.monto} onChange={e=>setNewFlow(p=>({...p,monto:e.target.value}))} placeholder="0,00" style={{...inp}}/>
+                </div>
+                <button onClick={addNewFlow}
+                  style={{background:'var(--accent)',border:'none',borderRadius:8,padding:'7px 16px',color:'#fff',cursor:'pointer',fontSize:13,fontWeight:600}}>
+                  Guardar
+                </button>
+                <button onClick={()=>setAddingFlow(null)}
+                  style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:8,padding:'7px 12px',color:'var(--text-muted)',cursor:'pointer',fontSize:13}}>
+                  Cancelar
+                </button>
+              </div>
+            )}
+
+            {selFlows.length===0
+              ? <div style={{color:'var(--text-muted)',fontSize:13,padding:'20px 0'}}>No hay flujos cargados para este bono. Usá "+ Agregar pago" para cargarlos manualmente.</div>
+              : <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
+                  <thead>
+                    <tr>
+                      {['Fecha','Tipo','Monto / 100 lám.','Total estimado','Estado',''].map(h=>(
+                        <th key={h} style={{padding:'8px 12px',textAlign:'left',fontSize:10,color:'var(--text-muted)',fontWeight:600,textTransform:'uppercase',letterSpacing:0.8,borderBottom:'1px solid var(--border)'}}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selFlows.map(f=>{
+                      const isFuture=f.date>today;
+                      const isBond=selBond.type==='bono_ars'||selBond.type==='bono_usd';
+                      const totalFlow=f.monto*(isBond?selBond.qty/100:selBond.qty);
+                      const isEditing=editFlow?.flow?.id===f.id;
+                      return(
+                        <tr key={f.id} style={{borderBottom:'1px solid var(--border)',background:f.cobrado?'rgba(52,211,153,0.03)':isFuture?'transparent':'rgba(251,191,36,0.04)'}}>
+                          <td style={{padding:'10px 12px',fontFamily:"'DM Mono',monospace"}}>
+                            {isEditing
+                              ? <input type="date" value={editFlow.flow.date} onChange={e=>setEditFlow(p=>({...p,flow:{...p.flow,date:e.target.value}}))} style={{...inp,width:130}}/>
+                              : fmtD(f.date)}
+                          </td>
+                          <td style={{padding:'10px 12px'}}>
+                            {isEditing
+                              ? <select value={editFlow.flow.tipo} onChange={e=>setEditFlow(p=>({...p,flow:{...p.flow,tipo:e.target.value}}))} style={{...inp,width:140}}>
+                                  <option value="cupon">🎫 Cupón</option>
+                                  <option value="amortizacion">💰 Amortización</option>
+                                </select>
+                              : <span style={{color:f.tipo==='amortizacion'?'var(--yellow)':'var(--accent)'}}>
+                                  {f.tipo==='amortizacion'?'💰 Amortización':'🎫 Cupón'}
+                                </span>
+                            }
+                          </td>
+                          <td style={{padding:'10px 12px',fontFamily:"'DM Mono',monospace"}}>
+                            {isEditing
+                              ? <input type="number" value={editFlow.flow.monto} onChange={e=>setEditFlow(p=>({...p,flow:{...p.flow,monto:parseFloat(e.target.value)}}))} style={{...inp,width:100}}/>
+                              : <>{selBond.buyCurrency==='USD'?'US$':'$'}{fmtN(f.monto)}{f.fuente==='manual'&&<span style={{fontSize:9,color:'var(--text-muted)',marginLeft:4}}>manual</span>}</>
+                            }
+                          </td>
+                          <td style={{padding:'10px 12px',fontFamily:"'DM Mono',monospace",fontWeight:600}}>
+                            {selBond.buyCurrency==='USD'?'US$':'$'}{fmtN(totalFlow)}
+                          </td>
+                          <td style={{padding:'10px 12px'}}>
+                            {f.cobrado
+                              ? <span style={{color:'var(--green)',fontSize:12}}>✅ Cobrado {fmtD(f.fechaCobro)}</span>
+                              : f.date<=today
+                                ? <button onClick={()=>confirmCobro(selected,f.id)}
+                                    style={{background:'rgba(52,211,153,0.1)',border:'1px solid rgba(52,211,153,0.3)',borderRadius:6,padding:'3px 10px',color:'var(--green)',cursor:'pointer',fontSize:11}}>
+                                    Confirmar cobro
+                                  </button>
+                                : <span style={{color:'var(--text-muted)',fontSize:11}}>🟡 Pendiente</span>
+                            }
+                          </td>
+                          <td style={{padding:'10px 12px',display:'flex',gap:6}}>
+                            {isEditing
+                              ? <>
+                                  <button onClick={saveEdit} style={{background:'var(--accent)',border:'none',borderRadius:6,padding:'3px 10px',color:'#fff',cursor:'pointer',fontSize:11}}>✓</button>
+                                  <button onClick={()=>setEditFlow(null)} style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:6,padding:'3px 10px',color:'var(--text-muted)',cursor:'pointer',fontSize:11}}>✕</button>
+                                </>
+                              : <>
+                                  <button onClick={()=>setEditFlow({ticker:selected,flow:{...f}})} style={{background:'transparent',border:'none',cursor:'pointer',color:'var(--text-muted)',fontSize:13}}>✏️</button>
+                                  <button onClick={()=>deleteFlow(selected,f.id)} style={{background:'transparent',border:'none',cursor:'pointer',color:'var(--red)',fontSize:13}}>🗑</button>
+                                </>
+                            }
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+            }
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function App(){
   // ── State ────────────────────────────────────────────────────────────────
   const SEED_TRADES = [
     // ── Posiciones al 01/01/26 (tenencia previa) ─────────────────────
@@ -2444,6 +2706,7 @@ export default function App(){
 
     const [port,setPort]         = useState(GALICIA_PORTFOLIO);
   const [trades,setTrades]     = useState(SEED_TRADES);
+  const [bondFlows,setBondFlows] = useState({}); // {ticker: [{id,date,tipo,monto,cobrado,fechaCobro}]}
   const [storageReady,setStorageReady] = useState(false);
   const [historicos,setHistoricos] = useState(null);
 
@@ -2480,6 +2743,8 @@ export default function App(){
       const st=localStorage.getItem("gal_trades_v3");
       if(sp) setPort(JSON.parse(sp));
       if(st) setTrades(JSON.parse(st));
+      const bf=localStorage.getItem('gal_bond_flows_v1');
+      if(bf) setBondFlows(JSON.parse(bf));
     }catch{}
     setStorageReady(true);
   },[]);
@@ -2696,7 +2961,7 @@ export default function App(){
       // Auto-descarga portfolio_tickers.json para subir al repo
       setTimeout(()=>downloadPortfolioTickers(newTrades),300);
     } else if(h.operacion==="venta"){
-      const sellQty=+h.qty; const sellPrice=isBondSave?+h.buyPrice/100:+h.buyPrice;
+      const sellQty=+h.qty; const sellPrice=+h.buyPrice;
       const buyLots=trades.filter(t=>t.ticker===h.ticker.toUpperCase()&&t.tipo==="compra").sort((a,b)=>a.ts-b.ts);
       let remaining=sellQty,costFIFO=0;
       for(const lot of buyLots){ if(remaining<=0)break; const used=Math.min(lot.qty,remaining); costFIFO+=used*lot.price+(lot.comision?(+lot.comision*used/lot.qty):0); remaining-=used; }
@@ -2852,7 +3117,7 @@ export default function App(){
 
         {/* Nav */}
         <div style={{background:"var(--bg-card)",borderBottom:"1px solid var(--border)",padding:"0 20px",display:"flex",gap:0}}>
-          {[["dashboard","📊 Dashboard"],["portfolio","💼 Portfolio"],["analisis","🔍 Análisis"],["operaciones","📋 Operaciones"]].map(([id,lbl])=>(
+          {[["dashboard","📊 Dashboard"],["portfolio","💼 Portfolio"],["analisis","🔍 Análisis"],["operaciones","📋 Operaciones"],["flujos","💸 Flujos"]].map(([id,lbl])=>(
             <button key={id} onClick={()=>setTab(id)} className="nav-btn" style={{padding:"13px 18px",background:"transparent",border:"none",borderBottom:tab===id?"2px solid var(--accent)":"2px solid transparent",color:tab===id?"var(--text-primary)":"var(--text-muted)",cursor:"pointer",fontSize:13,fontWeight:tab===id?600:400,letterSpacing:tab===id?"-0.1px":0}}>
               {lbl}
             </button>
@@ -2860,6 +3125,42 @@ export default function App(){
         </div>
 
         <div style={{padding:"22px 60px",maxWidth:"100%",boxSizing:"border-box"}}>
+          {/* Notificación flujos pendientes */}
+          {(()=>{
+            const todayN=todayAR();
+            const bonos=port.filter(h=>h.type==='bono_ars'||h.type==='bono_usd');
+            const pending=bonos.flatMap(b=>{
+              const flows=bondFlows[b.ticker]||[];
+              return flows.filter(f=>!f.cobrado&&f.date<=todayN).map(f=>({...f,ticker:b.ticker,name:b.name,currency:b.buyCurrency,qty:b.qty}));
+            });
+            if(!pending.length)return null;
+            return(
+              <div style={{marginBottom:16,display:'flex',flexDirection:'column',gap:8}}>
+                {pending.map(f=>{
+                  const total=f.monto*(f.qty/100);
+                  return(
+                    <div key={f.id} style={{background:'rgba(251,191,36,0.08)',border:'1px solid rgba(251,191,36,0.25)',borderRadius:10,padding:'12px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
+                      <div style={{display:'flex',alignItems:'center',gap:10}}>
+                        <span style={{fontSize:18}}>💰</span>
+                        <div>
+                          <span style={{fontWeight:700,color:'var(--yellow)',fontSize:13}}>{f.ticker}</span>
+                          <span style={{color:'var(--text-secondary)',fontSize:12,marginLeft:8}}>{f.tipo==='amortizacion'?'Amortización':'Cupón'} · {f.date?.slice(8)+'/'+f.date?.slice(5,7)+'/'+f.date?.slice(0,4)}</span>
+                          <span style={{color:'var(--text-primary)',fontWeight:700,fontSize:13,marginLeft:8,fontFamily:"'DM Mono',monospace"}}>
+                            {f.currency==='USD'?'US$':'$'}{total.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})}
+                          </span>
+                        </div>
+                      </div>
+                      <button onClick={()=>{
+                        setBondFlows(prev=>({...prev,[f.ticker]:(prev[f.ticker]||[]).map(x=>x.id===f.id?{...x,cobrado:true,fechaCobro:todayN}:x)}));
+                      }} style={{background:'rgba(251,191,36,0.15)',border:'1px solid rgba(251,191,36,0.4)',borderRadius:6,padding:'5px 14px',color:'var(--yellow)',cursor:'pointer',fontSize:12,fontWeight:600,whiteSpace:'nowrap'}}>
+                        ✓ Confirmar cobro
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
 
           {/* DASHBOARD */}
           {tab==="dashboard"&&(
@@ -3008,6 +3309,9 @@ export default function App(){
           {/* OPERACIONES */}
           {tab==="operaciones"&&(
             <OperacionesTab trades={trades} port={port} setTrades={setTrades} setPort={setPort} card={card} livePrices={livePrices}/>
+          )}
+          {tab==="flujos"&&(
+            <FlujoTab port={port} trades={trades} bondFlows={bondFlows} setBondFlows={setBondFlows} card={card} fxRate={fxRate}/>
           )}
 
         </div>

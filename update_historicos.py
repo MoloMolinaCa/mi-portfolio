@@ -8,6 +8,7 @@ Fuentes:
   - BYMA open data: acciones AR, bonos, CEDEARs
   - yfinance: benchmarks (^GSPC, ^TNX)
   - ArgentinaDatos: CCL y MEP histórico
+  - estadisticasbcra.com: CER histórico
 """
 import json, os, time
 from datetime import datetime, timedelta
@@ -18,6 +19,10 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 DAYS_HISTORY    = 365 * 3
 OUTPUT_FILE     = "public/historicos.json"
 TICKERS_FILE    = "public/portfolio_tickers.json"
+
+# Token estadisticasbcra.com — se lee desde variable de entorno CER_TOKEN
+# En GitHub Actions: Settings → Secrets → Actions → agregar CER_TOKEN
+CER_TOKEN = os.environ.get("CER_TOKEN", "")
 
 # Tickers fijos que siempre se descargan (benchmarks y FX no vienen del portfolio)
 YAHOO_TICKERS = {
@@ -119,6 +124,38 @@ def argentinadatos_get_fx(tipo, start, end):
         print(f"  ✗ {tipo}: {e}")
         return []
 
+def estadisticasbcra_get_cer():
+    """
+    Descarga la serie completa del CER desde estadisticasbcra.com.
+    Respuesta: [{d: "YYYY-MM-DD", v: valor}, ...]
+    Se guarda en historicos["cer"] como [{date, close}] igual que el resto.
+    """
+    if not CER_TOKEN:
+        print("  ⚠ CER: CER_TOKEN no configurado — saltando")
+        return []
+    try:
+        r = requests.get(
+            "https://api.estadisticasbcra.com/cer",
+            headers={"Authorization": f"Bearer {CER_TOKEN}"},
+            timeout=15
+        )
+        if not r.ok:
+            print(f"  ✗ CER: status {r.status_code}")
+            return []
+        arr = r.json()
+        bars = []
+        for x in arr:
+            date  = str(x.get("d", "")).strip()
+            valor = float(x.get("v", 0))
+            if date and valor > 0:
+                bars.append({"date": date, "close": round(valor, 6)})
+        bars.sort(key=lambda x: x["date"])
+        print(f"  ✓ CER (estadisticasbcra): {len(bars)} pts, último: {bars[-1] if bars else '—'}")
+        return bars
+    except Exception as e:
+        print(f"  ✗ CER: {e}")
+        return []
+
 def merge_bars(existing, new_bars):
     """Combina barras existentes con nuevas, sin duplicar fechas. Gana la nueva."""
     if not existing:
@@ -175,6 +212,12 @@ def main():
     mep = argentinadatos_get_fx("bolsa", start, end)
     if mep:
         result["MEP"] = merge_bars(result.get("MEP", []), mep)
+
+    # CER histórico completo
+    print("\n── CER (estadisticasbcra.com) ────────")
+    cer = estadisticasbcra_get_cer()
+    if cer:
+        result["cer"] = merge_bars(result.get("cer", []), cer)
 
     # Guardar
     os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)

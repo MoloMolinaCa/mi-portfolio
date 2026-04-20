@@ -21,6 +21,8 @@ jobs:
         run: pip install requests yfinance pandas urllib3
       - name: Correr script
         run: python update_historicos.py
+        env:
+          CER_TOKEN: ${{ secrets.CER_TOKEN }}
       - name: Commit y push si hay cambios
         run: |
           git config user.name "github-actions[bot]"

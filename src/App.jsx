@@ -44,11 +44,11 @@ const fmtA = (n) => new Intl.NumberFormat("es-AR",{style:"currency",currency:"AR
 const fmtP = (n) => `${n>=0?"+":""}${n.toFixed(2)}%`;
 const pc   = (n) => n>=0?"var(--green)":"var(--red)";
 // Fecha de hoy en horario Argentina (UTC-3)
-const todayAR = () => {
+function todayAR() {
   const d = new Date();
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset() - 180); // forzar UTC-3
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset() - 180);
   return d.toISOString().slice(0,10);
-};
+}
 
 // ── Mapeo de tickers ─────────────────────────────────────────────────────────
 // data912: bonos, ONs, CEDEARs, acciones AR — precios en vivo (2h cache)

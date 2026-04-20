@@ -2731,84 +2731,223 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
                       ))}
                     </div>
 
-                    <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
-                      <thead>
-                        <tr>
-                          {(viewMode==='prospecto'
-                            ? ['Fecha','Tipo','% VN (prospecto)','Nota','']
-                            : ['Fecha','Tipo','% VN','Nominales','Cobro estimado','Estado','']
-                          ).map(h=>(
-                            <th key={h} style={{padding:'8px 12px',textAlign:'left',fontSize:10,color:'var(--text-muted)',fontWeight:600,textTransform:'uppercase',letterSpacing:0.8,borderBottom:'1px solid var(--border)'}}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selFlows.map(f=>{
-                          const isFuture=f.date>today;
-                          const montoBase=f.monto;
-                          const montoAjustado=adjustsBy?montoBase*coef:montoBase;
-                          const totalFlow=montoAjustado*(selBond.qty/100);
-                          const isEditing=editFlow?.flow?.id===f.id;
-                          return(
-                            <tr key={f.id} style={{borderBottom:'1px solid var(--border)',background:f.cobrado?'rgba(52,211,153,0.03)':isFuture?'transparent':'rgba(251,191,36,0.03)'}}>
-                              <td style={{padding:'10px 12px',fontFamily:"'DM Mono',monospace",fontSize:12}}>
-                                {isEditing?<input type="date" value={editFlow.flow.date} onChange={e=>setEditFlow(p=>({...p,flow:{...p.flow,date:e.target.value}}))} style={{...inp,width:130}}/>:fmtD(f.date)}
-                              </td>
-                              <td style={{padding:'10px 12px'}}>
-                                {isEditing
-                                  ?<select value={editFlow.flow.tipo} onChange={e=>setEditFlow(p=>({...p,flow:{...p.flow,tipo:e.target.value}}))} style={{...inp,width:140}}>
-                                    <option value="cupon">🎫 Cupón</option>
-                                    <option value="amortizacion">💰 Amortización</option>
-                                  </select>
-                                  :<span style={{color:f.tipo==='amortizacion'?'var(--yellow)':'var(--accent)',fontSize:12}}>
-                                    {f.tipo==='amortizacion'?'💰 Amort.':'🎫 Cupón'}
-                                  </span>
-                                }
-                              </td>
-                              <td style={{padding:'10px 12px',fontFamily:"'DM Mono',monospace",fontSize:12}}>
-                                {isEditing
-                                  ?<input type="number" value={editFlow.flow.monto} onChange={e=>setEditFlow(p=>({...p,flow:{...p.flow,monto:parseFloat(e.target.value)}}))} style={{...inp,width:90}}/>
-                                  :<>{fmtN(montoBase)}%{adjustsBy&&<span style={{fontSize:9,color:'var(--yellow)',marginLeft:4}}>{adjustsBy}</span>}</>
-                                }
-                              </td>
-                              {viewMode==='miobro'&&<>
-                                <td style={{padding:'10px 12px',fontFamily:"'DM Mono',monospace",fontSize:12,color:'var(--text-muted)'}}>
-                                  {selBond.qty.toLocaleString('es-AR')}
+                    {viewMode==='prospecto'?(()=>{
+                      // Agrupar flows por fecha: fusionar cupon + amortizacion de la misma fecha en una sola fila
+                      const byDate = {};
+                      selFlows.forEach(f=>{
+                        if(!byDate[f.date]) byDate[f.date]={date:f.date,cupon:null,amort:null,ids:[]};
+                        if(f.tipo==='amortizacion') byDate[f.date].amort=f;
+                        else byDate[f.date].cupon=f;
+                        byDate[f.date].ids.push(f.id);
+                      });
+                      const rows = Object.values(byDate).sort((a,b)=>a.date.localeCompare(b.date));
+
+                      // Calcular VN residual acumulado
+                      let vnResidual = 100;
+                      const rowsWithResidual = rows.map(row=>{
+                        const amortPct = row.amort ? row.amort.monto : 0;
+                        const interestPct = row.cupon ? row.cupon.monto : 0;
+                        const totalPct = amortPct + interestPct;
+                        const vnAntes = vnResidual;
+                        vnResidual = Math.max(0, vnResidual - amortPct);
+                        return {...row, amortPct, interestPct, totalPct, vnAntes, vnDespues: vnResidual};
+                      });
+
+                      // Número de cupón secuencial
+                      let cuponNum = 0;
+
+                      const thP = {padding:'7px 10px',fontSize:10,fontWeight:700,textTransform:'uppercase',letterSpacing:0.7,
+                        background:'var(--bg-input)',borderBottom:'2px solid var(--border)',textAlign:'right',whiteSpace:'nowrap',color:'var(--text-muted)'};
+                      const thPL = {...thP, textAlign:'left'};
+                      const tdP = {padding:'7px 10px',fontFamily:"'DM Mono',monospace",fontSize:12,textAlign:'right',borderBottom:'1px solid var(--border)',color:'var(--text-secondary)'};
+                      const tdPL = {...tdP, textAlign:'left'};
+
+                      return(
+                        <div style={{overflowX:'auto',borderRadius:10,border:'1px solid var(--border)'}}>
+                          <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+                            <thead>
+                              <tr>
+                                <th style={{...thPL,width:30}}>#</th>
+                                <th style={{...thPL}}>Fecha</th>
+                                <th style={thP}>Días</th>
+                                <th style={thP}>Base</th>
+                                <th style={thP}>Amort. % VN</th>
+                                <th style={thP}>VN Residual</th>
+                                <th style={thP}>Tasa</th>
+                                <th style={thP}>Interés % VN</th>
+                                <th style={{...thP,background:'rgba(251,191,36,0.08)',color:'var(--yellow)'}}>Amort.</th>
+                                <th style={{...thP,background:'rgba(59,130,246,0.08)',color:'var(--accent)'}}>Interés</th>
+                                <th style={{...thP,background:'rgba(52,211,153,0.08)',color:'var(--green)',borderRight:'none'}}>Total</th>
+                                <th style={{...thP,textAlign:'center',width:60}}>Acc.</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {rowsWithResidual.map((row,i)=>{
+                                cuponNum++;
+                                const isPast = row.date < today;
+                                const isCobrado = (row.cupon?.cobrado||false) && (row.amort?row.amort.cobrado:true);
+                                // Días: diferencia con fila anterior (approx 180 para semestrales)
+                                const dias = i===0 ? '—' : Math.round((new Date(row.date)-new Date(rowsWithResidual[i-1].date))/(1000*60*60*24));
+                                // Tasa implícita: interés / vnAntes * 2 (semestral → anual), redondeado
+                                const tasaAnual = row.vnAntes>0 ? (row.interestPct / row.vnAntes)*200 : 0;
+
+                                const rowBg = isCobrado ? 'rgba(52,211,153,0.04)'
+                                           : isPast    ? 'rgba(251,191,36,0.04)'
+                                           : 'transparent';
+                                return(
+                                  <tr key={row.date} style={{background:rowBg}}>
+                                    <td style={{...tdPL,color:'var(--text-muted)',fontSize:11}}>{cuponNum}</td>
+                                    <td style={{...tdPL,fontWeight:600,color:isCobrado?'var(--green)':isPast?'var(--yellow)':'var(--text-primary)'}}>
+                                      {fmtD(row.date)}
+                                      {isCobrado&&<span style={{fontSize:9,marginLeft:6,color:'var(--green)'}}>✓</span>}
+                                    </td>
+                                    <td style={{...tdP,color:'var(--text-muted)'}}>{dias}</td>
+                                    <td style={{...tdP,color:'var(--text-muted)'}}>360</td>
+                                    <td style={{...tdP,color:row.amortPct>0?'var(--yellow)':'var(--text-muted)'}}>
+                                      {row.amortPct>0 ? fmtN(row.amortPct)+'%' : '0,00%'}
+                                    </td>
+                                    <td style={{...tdP}}>
+                                      {fmtN(row.vnDespues)}%
+                                    </td>
+                                    <td style={{...tdP,color:'var(--text-muted)'}}>
+                                      {tasaAnual>0 ? fmtN(tasaAnual)+'%' : '—'}
+                                      {adjustsBy&&<span style={{fontSize:9,color:'var(--yellow)',display:'block'}}>{adjustsBy}</span>}
+                                    </td>
+                                    <td style={{...tdP,color:'var(--accent)'}}>
+                                      {row.interestPct>0 ? fmtN(row.interestPct)+'%' : '—'}
+                                    </td>
+                                    <td style={{...tdP,background:'rgba(251,191,36,0.04)',color:'var(--yellow)',fontWeight:row.amortPct>0?700:400}}>
+                                      {row.amortPct>0 ? fmtN(row.amortPct) : '—'}
+                                    </td>
+                                    <td style={{...tdP,background:'rgba(59,130,246,0.04)',color:'var(--accent)'}}>
+                                      {row.interestPct>0 ? fmtN(row.interestPct) : '—'}
+                                    </td>
+                                    <td style={{...tdP,background:'rgba(52,211,153,0.04)',color:'var(--green)',fontWeight:700}}>
+                                      {fmtN(row.totalPct)}
+                                    </td>
+                                    <td style={{...tdP,textAlign:'center'}}>
+                                      <div style={{display:'flex',gap:3,justifyContent:'center'}}>
+                                        {row.cupon&&<button onClick={()=>setEditFlow({ticker:selected,flow:{...row.cupon}})}
+                                          style={{background:'transparent',border:'none',cursor:'pointer',color:'var(--text-muted)',fontSize:12,padding:'0 2px'}}>✏️</button>}
+                                        {row.ids.map(id=>(
+                                          <button key={id} onClick={()=>deleteFlow(selected,id)}
+                                            style={{background:'transparent',border:'none',cursor:'pointer',color:'var(--red)',fontSize:12,padding:'0 2px'}}>🗑</button>
+                                        ))}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                            {/* Totales */}
+                            <tfoot>
+                              <tr style={{borderTop:'2px solid var(--border)',background:'var(--bg-input)'}}>
+                                <td colSpan={8} style={{...tdPL,fontWeight:700,fontSize:11,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:0.8}}>Total flujos</td>
+                                <td style={{...tdP,background:'rgba(251,191,36,0.08)',color:'var(--yellow)',fontWeight:700}}>
+                                  {fmtN(rowsWithResidual.reduce((a,r)=>a+r.amortPct,0))}
                                 </td>
-                                <td style={{padding:'10px 12px',fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:13}}>
-                                  {adjustsBy&&coef!==1&&<span style={{fontSize:9,color:'var(--yellow)',display:'block'}}>×{coef} {adjustsBy}</span>}
-                                  {currency}{fmtN(totalFlow)}
+                                <td style={{...tdP,background:'rgba(59,130,246,0.08)',color:'var(--accent)',fontWeight:700}}>
+                                  {fmtN(rowsWithResidual.reduce((a,r)=>a+r.interestPct,0))}
                                 </td>
-                                <td style={{padding:'10px 12px',fontSize:12}}>
-                                  {f.cobrado
-                                    ?<span style={{color:'var(--green)'}}>✅ {fmtD(f.fechaCobro)}</span>
-                                    :f.date<=today
-                                      ?<button onClick={()=>confirmCobro(selected,f.id)}
+                                <td style={{...tdP,background:'rgba(52,211,153,0.08)',color:'var(--green)',fontWeight:700}}>
+                                  {fmtN(rowsWithResidual.reduce((a,r)=>a+r.totalPct,0))}
+                                </td>
+                                <td style={tdP}/>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      );
+                    })() : (
+                    // ── Vista Mi Cobro ──────────────────────────────────────
+                    (()=>{
+                      // Agrupar por fecha también en Mi Cobro
+                      const byDate = {};
+                      selFlows.forEach(f=>{
+                        if(!byDate[f.date]) byDate[f.date]={date:f.date,cupon:null,amort:null};
+                        if(f.tipo==='amortizacion') byDate[f.date].amort=f;
+                        else byDate[f.date].cupon=f;
+                      });
+                      const rows = Object.values(byDate).sort((a,b)=>a.date.localeCompare(b.date));
+
+                      const thM = {padding:'8px 12px',textAlign:'left',fontSize:10,color:'var(--text-muted)',fontWeight:600,textTransform:'uppercase',letterSpacing:0.8,borderBottom:'1px solid var(--border)'};
+                      const thMR = {...thM, textAlign:'right'};
+                      const tdM = {padding:'10px 12px',fontSize:13,color:'var(--text-secondary)'};
+                      const tdMR = {...tdM, textAlign:'right', fontFamily:"'DM Mono',monospace"};
+
+                      return(
+                        <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
+                          <thead>
+                            <tr>
+                              <th style={thM}>Fecha</th>
+                              <th style={thM}>Tipo</th>
+                              <th style={thMR}>% VN</th>
+                              <th style={thMR}>Nominales</th>
+                              <th style={thMR}>Cobro estimado</th>
+                              <th style={thM}>Estado</th>
+                              <th style={thM}/>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rows.map(row=>{
+                              // Fila unificada: si tiene amort, mostrar amort+cupon juntos
+                              const f = row.amort || row.cupon;
+                              const hasAmort = !!row.amort;
+                              const hasCupon = !!row.cupon;
+                              const isFuture = row.date > today;
+                              const montoAmort = hasAmort ? (adjustsBy ? row.amort.monto*coef : row.amort.monto) : 0;
+                              const montoInt   = hasCupon ? (adjustsBy ? row.cupon.monto*coef : row.cupon.monto) : 0;
+                              const montoTotal = montoAmort + montoInt;
+                              const totalCobro = montoTotal * (selBond.qty/100);
+                              const cobrado = (row.cupon?.cobrado||!hasCupon) && (row.amort?.cobrado||!hasAmort);
+                              const tipoLabel = hasAmort&&hasCupon ? '💰+🎫 Amort.+Cupón' : hasAmort ? '💰 Amort.' : '🎫 Cupón';
+                              const tipoColor = hasAmort ? 'var(--yellow)' : 'var(--accent)';
+
+                              return(
+                                <tr key={row.date} style={{borderBottom:'1px solid var(--border)',
+                                  background:cobrado?'rgba(52,211,153,0.03)':!isFuture?'rgba(251,191,36,0.03)':'transparent'}}>
+                                  <td style={{...tdM,fontFamily:"'DM Mono',monospace",fontSize:12}}>{fmtD(row.date)}</td>
+                                  <td style={{...tdM}}>
+                                    <span style={{color:tipoColor,fontSize:12}}>{tipoLabel}</span>
+                                  </td>
+                                  <td style={{...tdMR,fontSize:12}}>
+                                    {fmtN(montoTotal)}%
+                                    {adjustsBy&&coef!==1&&<span style={{fontSize:9,color:'var(--yellow)',display:'block'}}>×{coef} {adjustsBy}</span>}
+                                  </td>
+                                  <td style={{...tdMR,fontSize:12,color:'var(--text-muted)'}}>{selBond.qty.toLocaleString('es-AR')}</td>
+                                  <td style={{...tdMR,fontWeight:700,fontSize:13}}>
+                                    {currency}{fmtN(totalCobro)}
+                                  </td>
+                                  <td style={{...tdM,fontSize:12}}>
+                                    {cobrado
+                                      ?<span style={{color:'var(--green)'}}>✅ {fmtD(row.cupon?.fechaCobro||row.amort?.fechaCobro)}</span>
+                                      :!isFuture
+                                        ?<button onClick={()=>{
+                                            if(row.cupon) confirmCobro(selected,row.cupon.id);
+                                            if(row.amort) confirmCobro(selected,row.amort.id);
+                                          }}
                                           style={{background:'rgba(52,211,153,0.1)',border:'1px solid rgba(52,211,153,0.3)',borderRadius:6,padding:'3px 10px',color:'var(--green)',cursor:'pointer',fontSize:11}}>
                                           Confirmar cobro
                                         </button>
-                                      :<span style={{color:'var(--text-muted)',fontSize:11}}>🟡 Pendiente</span>
-                                  }
-                                </td>
-                              </>}
-                              {viewMode==='prospecto'&&(
-                                <td style={{padding:'10px 12px',fontSize:11,color:'var(--text-muted)'}}>{f.nota||'—'}</td>
-                              )}
-                              <td style={{padding:'10px 12px'}}>
-                                <div style={{display:'flex',gap:4}}>
-                                  {isEditing
-                                    ?<><button onClick={saveEdit} style={{background:'var(--accent)',border:'none',borderRadius:6,padding:'3px 8px',color:'#fff',cursor:'pointer',fontSize:11}}>✓</button>
-                                      <button onClick={()=>setEditFlow(null)} style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:6,padding:'3px 8px',color:'var(--text-muted)',cursor:'pointer',fontSize:11}}>✕</button></>
-                                    :<><button onClick={()=>setEditFlow({ticker:selected,flow:{...f}})} style={{background:'transparent',border:'none',cursor:'pointer',color:'var(--text-muted)',fontSize:13}}>✏️</button>
-                                      <button onClick={()=>deleteFlow(selected,f.id)} style={{background:'transparent',border:'none',cursor:'pointer',color:'var(--red)',fontSize:13}}>🗑</button></>
-                                  }
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                                        :<span style={{color:'var(--text-muted)',fontSize:11}}>🟡 Pendiente</span>
+                                    }
+                                  </td>
+                                  <td style={{...tdM}}>
+                                    <div style={{display:'flex',gap:4}}>
+                                      {[row.cupon,row.amort].filter(Boolean).map(fl=>(
+                                        <button key={fl.id} onClick={()=>deleteFlow(selected,fl.id)}
+                                          style={{background:'transparent',border:'none',cursor:'pointer',color:'var(--red)',fontSize:13}}>🗑</button>
+                                      ))}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      );
+                    })()
+                    )}
                   </>);
                 })()
             }

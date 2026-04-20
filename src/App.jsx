@@ -2541,25 +2541,38 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
   });
   const [metaDraft, setMetaDraft] = useState({tna:'', base:'30/360', emisionDate:''});
   // CER: serie histórica {date:string, valor:number}[], cacheada en memoria
-  const [cerSerie, setCerSerie] = useState(null); // null=no cargado, []=cargando, [{date,valor}]=listo
+  const [cerSerie, setCerSerie] = useState(null); // null=no cargado, []=[]=vacío, [{date,valor}]=listo
   const [cerLoading, setCerLoading] = useState(false);
+  const cerFetchedRef = React.useRef(false); // evita doble fetch en StrictMode
 
-  // Fetch serie CER desde argentinadatos — solo una vez
+  // Fetch serie CER desde argentinadatos — llamar directamente, sin guards de estado
   const fetchCER = async () => {
-    if(cerLoading||(cerSerie&&cerSerie.length>0)) return;
+    if(cerFetchedRef.current) return;
+    cerFetchedRef.current = true;
     setCerLoading(true);
     try {
-      const r = await fetch('https://api.argentinadatos.com/v1/finanzas/indices/cer', {signal:AbortSignal.timeout(10000)});
+      const r = await fetch('https://api.argentinadatos.com/v1/finanzas/indices/cer', {signal:AbortSignal.timeout(12000)});
       if(r.ok){
         const data = await r.json();
-        // data: [{fecha:"2023-01-02", valor:3.5678}, ...]
         const serie = (Array.isArray(data)?data:[])
           .map(x=>({date:(x.fecha||x.date||'').slice(0,10), valor:parseFloat(x.valor||x.value||0)}))
           .filter(x=>x.date&&x.valor>0)
           .sort((a,b)=>a.date.localeCompare(b.date));
-        setCerSerie(serie);
+        if(serie.length>0){
+          setCerSerie(serie);
+        } else {
+          console.warn('CER: serie vacía');
+          setCerSerie([]);
+          cerFetchedRef.current = false; // permitir reintento
+        }
+      } else {
+        console.warn('CER: respuesta no ok', r.status);
+        cerFetchedRef.current = false;
       }
-    } catch(e){ console.warn('CER fetch error',e); setCerSerie([]); }
+    } catch(e){
+      console.warn('CER fetch error',e);
+      cerFetchedRef.current = false;
+    }
     setCerLoading(false);
   };
 
@@ -2651,14 +2664,14 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
     });
   };
 
-  // Auto-fetch CER cuando se selecciona un bono CER
+  // Auto-fetch CER: dispara al montar FlujoTab y cuando selected cambia a bono CER
   useEffect(()=>{
-    if(!selected) return;
-    const meta = SEED_BOND_META[selected]||{};
-    if(meta.adjustsBy==='CER' && cerSerie===null && !cerLoading){
+    // Intentar fetch si hay algún bono CER en cartera, no solo al seleccionar
+    const hasCERBond = Object.values(SEED_BOND_META).some(m=>m.adjustsBy==='CER');
+    if(hasCERBond && !cerFetchedRef.current && !cerLoading){
       fetchCER();
     }
-  },[selected]);
+  },[]); // solo al montar
 
   // ── Handlers ─────────────────────────────────────────────────────────────
   const fetchFlows = async (ticker) => {

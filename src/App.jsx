@@ -2545,34 +2545,71 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
   const [cerLoading, setCerLoading] = useState(false);
   const cerFetchedRef = React.useRef(false); // evita doble fetch en StrictMode
 
-  // Fetch serie CER desde argentinadatos — llamar directamente, sin guards de estado
+  // Fetch serie CER — intenta argentinadatos primero, luego BCRA API
   const fetchCER = async () => {
     if(cerFetchedRef.current) return;
     cerFetchedRef.current = true;
     setCerLoading(true);
-    try {
-      const r = await fetch('https://api.argentinadatos.com/v1/finanzas/indices/cer', {signal:AbortSignal.timeout(12000)});
+
+    const parseSerie = (data) => {
+      if(!Array.isArray(data)||!data.length) return null;
+      const serie = data
+        .map(x=>({
+          date:(x.fecha||x.date||x.d||'').slice(0,10),
+          valor:parseFloat(x.valor||x.value||x.v||0)
+        }))
+        .filter(x=>x.date&&x.valor>0)
+        .sort((a,b)=>a.date.localeCompare(b.date));
+      return serie.length>0 ? serie : null;
+    };
+
+    // 1. argentinadatos — endpoint CER
+    const ENDPOINTS = [
+      'https://api.argentinadatos.com/v1/finanzas/indices/cer',
+      'https://api.argentinadatos.com/v1/finanzas/indices/cer/ultimo', // por si es solo el último
+    ];
+
+    for(const url of ENDPOINTS){
+      try{
+        const r = await fetch(url, {signal:AbortSignal.timeout(8000)});
+        if(r.ok){
+          const data = await r.json();
+          // Si es objeto único (ultimo), wrapearlo
+          const arr = Array.isArray(data) ? data : [data];
+          const serie = parseSerie(arr);
+          if(serie){
+            console.log('CER cargado desde', url, serie.length, 'registros');
+            setCerSerie(serie);
+            setCerLoading(false);
+            return;
+          }
+        }
+      } catch(e){ console.warn('CER endpoint falló:', url, e.message); }
+    }
+
+    // 2. BCRA Open Data — variable 28 = CER
+    try{
+      const today = todayAR();
+      const desde = '2020-01-01';
+      const url = `https://api.bcra.gob.ar/estadisticas/v3.0/datosvariable/28/${desde}/${today}`;
+      const r = await fetch(url, {signal:AbortSignal.timeout(10000), headers:{'Accept':'application/json'}});
       if(r.ok){
         const data = await r.json();
-        const serie = (Array.isArray(data)?data:[])
-          .map(x=>({date:(x.fecha||x.date||'').slice(0,10), valor:parseFloat(x.valor||x.value||0)}))
-          .filter(x=>x.date&&x.valor>0)
-          .sort((a,b)=>a.date.localeCompare(b.date));
-        if(serie.length>0){
+        // BCRA: {results:[{fecha,valor},...]}
+        const arr = data?.results||data?.datos||[];
+        const serie = parseSerie(arr);
+        if(serie){
+          console.log('CER cargado desde BCRA', serie.length, 'registros');
           setCerSerie(serie);
-        } else {
-          console.warn('CER: serie vacía');
-          setCerSerie([]);
-          cerFetchedRef.current = false; // permitir reintento
+          setCerLoading(false);
+          return;
         }
-      } else {
-        console.warn('CER: respuesta no ok', r.status);
-        cerFetchedRef.current = false;
       }
-    } catch(e){
-      console.warn('CER fetch error',e);
-      cerFetchedRef.current = false;
-    }
+    } catch(e){ console.warn('BCRA CER falló:', e.message); }
+
+    console.warn('CER: todos los endpoints fallaron');
+    setCerSerie([]);
+    cerFetchedRef.current = false; // permitir reintento manual
     setCerLoading(false);
   };
 
@@ -3152,6 +3189,12 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
                   {cerHoy&&<span style={{color:'var(--text-muted)'}}>CER hoy: <b style={{color:'var(--text-secondary)',fontFamily:"'DM Mono',monospace"}}>{cerHoy.toFixed(4)}</b></span>}
                   {coefHoy&&<span style={{color:'var(--text-muted)'}}>Coef. actual: <b style={{color:'var(--yellow)',fontFamily:"'DM Mono',monospace"}}>{coefHoy.toFixed(4)}</b></span>}
                   {cerSerie&&cerSerie.length>0&&!cerLoading&&<span style={{color:'var(--green)',marginLeft:'auto',fontSize:10}}>✓ {cerSerie.length} registros</span>}
+                  {cerSerie&&cerSerie.length===0&&!cerLoading&&(
+                    <button onClick={()=>{cerFetchedRef.current=false;fetchCER();}}
+                      style={{marginLeft:'auto',background:'rgba(251,191,36,0.15)',border:'1px solid rgba(251,191,36,0.4)',borderRadius:5,padding:'2px 10px',color:'var(--yellow)',cursor:'pointer',fontSize:10}}>
+                      ↻ Reintentar
+                    </button>
+                  )}
                 </div>
               );
             })()}

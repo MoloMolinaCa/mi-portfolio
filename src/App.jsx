@@ -67,39 +67,97 @@ const FCI_IDS = {
 };
 
 // ── Flujos de bonos preconfigurados ─────────────────────────────────────────
+// monto = % del VN según prospecto (por cada 100 VN nominales)
+// adjustsBy: variable que ajusta el capital/cupón ('CER', 'CER+TNA', null)
+const SEED_BOND_META = {
+  "TZXD6": {adjustsBy:"CER", desc:"BONTES a Descuento CER V15/12/26 · Cupón 0% + ajuste CER · Ley Argentina"},
+  "TZX27": {adjustsBy:"CER", desc:"BONO CER V30/06/27 · Cupón 2% s/VN ajustado · Ley Argentina"},
+  "AO27D": {adjustsBy:null,  desc:"Bono Tesoro 6% V29/10/27 · Cupón 3% semestral s/VN · Ley Nueva York"},
+  "GD38D": {adjustsBy:null,  desc:"Global 2038 · Cupón 3.625% anual (1.8125% semestral) · Ley Nueva York"},
+  "TLCUD": {adjustsBy:null,  desc:"ON Telecom Argentina C28 05/03/29 · Cupón 7% anual (3.5% semestral) · Ley Argentina"},
+};
+
 const SEED_BOND_FLOWS = {
   "TZXD6": [
-    {id:1001,date:"2026-06-15",tipo:"cupon",        monto:2.5,   cobrado:false,fechaCobro:null,fuente:"auto",nota:"Est. CER"},
-    {id:1002,date:"2026-12-15",tipo:"amortizacion", monto:100.0, cobrado:false,fechaCobro:null,fuente:"auto",nota:"Vencimiento"},
+    // BONTES a Descuento CER: no paga cupones, ajusta capital por CER y paga todo al vencimiento
+    {id:1001,date:"2026-12-15",tipo:"amortizacion",monto:100.0,cobrado:false,fechaCobro:null,fuente:"auto",nota:"100% VN ajustado CER"},
   ],
   "TZX27": [
-    {id:1003,date:"2026-06-30",tipo:"cupon",        monto:2.0,   cobrado:false,fechaCobro:null,fuente:"auto",nota:"Est. CER"},
-    {id:1004,date:"2026-12-31",tipo:"cupon",        monto:2.0,   cobrado:false,fechaCobro:null,fuente:"auto",nota:"Est. CER"},
-    {id:1005,date:"2027-06-30",tipo:"amortizacion", monto:100.0, cobrado:false,fechaCobro:null,fuente:"auto",nota:"Vencimiento"},
+    // Cupón 2% sobre VN ajustado por CER, semestral
+    {id:1002,date:"2026-06-30",tipo:"cupon",        monto:1.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"1% s/VN ajustado CER"},
+    {id:1003,date:"2026-12-31",tipo:"cupon",        monto:1.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"1% s/VN ajustado CER"},
+    {id:1004,date:"2027-06-30",tipo:"cupon",        monto:1.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"1% s/VN ajustado CER"},
+    {id:1005,date:"2027-06-30",tipo:"amortizacion", monto:100.0,cobrado:false,fechaCobro:null,fuente:"auto",nota:"Amort. 100% VN ajustado"},
   ],
   "AO27D": [
-    {id:1006,date:"2026-10-29",tipo:"cupon",        monto:3.0,   cobrado:false,fechaCobro:null,fuente:"auto",nota:"6% anual"},
-    {id:1007,date:"2027-10-29",tipo:"cupon",        monto:3.0,   cobrado:false,fechaCobro:null,fuente:"auto",nota:"6% anual"},
-    {id:1008,date:"2027-10-29",tipo:"amortizacion", monto:100.0, cobrado:false,fechaCobro:null,fuente:"auto",nota:"Vencimiento"},
+    // Bono Tesoro 6% V29/10/27: cupón 3% semestral, pagos 29/04 y 29/10
+    // Ya pasó el 29/04/2026 - marcado como cobrado
+    {id:1006,date:"2026-04-29",tipo:"cupon",        monto:3.0,  cobrado:true, fechaCobro:"2026-04-29",fuente:"auto",nota:"3% s/VN · 6% anual"},
+    {id:1007,date:"2026-10-29",tipo:"cupon",        monto:3.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"3% s/VN · 6% anual"},
+    {id:1008,date:"2027-04-29",tipo:"cupon",        monto:3.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"3% s/VN · 6% anual"},
+    {id:1009,date:"2027-10-29",tipo:"cupon",        monto:3.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"3% s/VN · 6% anual"},
+    {id:1010,date:"2027-10-29",tipo:"amortizacion", monto:100.0,cobrado:false,fechaCobro:null,fuente:"auto",nota:"Amort. 100% VN"},
   ],
   "GD38D": [
-    {id:1009,date:"2026-07-09",tipo:"cupon",        monto:1.8125,cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.625% anual"},
-    {id:1010,date:"2027-01-09",tipo:"cupon",        monto:1.8125,cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.625% anual"},
-    {id:1011,date:"2027-07-09",tipo:"cupon",        monto:1.8125,cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.625% anual"},
-    {id:1012,date:"2028-01-09",tipo:"cupon",        monto:1.8125,cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.625% anual"},
-    {id:1013,date:"2028-07-09",tipo:"cupon",        monto:1.8125,cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.625% anual"},
-    {id:1014,date:"2029-01-09",tipo:"cupon",        monto:1.8125,cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.625% anual"},
-    {id:1015,date:"2029-07-09",tipo:"cupon",        monto:1.8125,cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.625% anual"},
-    {id:1016,date:"2029-07-09",tipo:"amortizacion", monto:4.0,   cobrado:false,fechaCobro:null,fuente:"auto",nota:"Amort. parcial"},
+    // Global 2038: cupón 3.625% anual (1.8125% semestral sobre VN original)
+    // Amort: 20 cuotas de 5% VN c/semestre 09/07/2029 → 09/01/2038
+    {id:1011,date:"2026-07-09",tipo:"cupon",        monto:1.8125,cobrado:false,fechaCobro:null,fuente:"auto",nota:"1.8125% s/VN"},
+    {id:1012,date:"2027-01-09",tipo:"cupon",        monto:1.8125,cobrado:false,fechaCobro:null,fuente:"auto",nota:"1.8125% s/VN"},
+    {id:1013,date:"2027-07-09",tipo:"cupon",        monto:1.8125,cobrado:false,fechaCobro:null,fuente:"auto",nota:"1.8125% s/VN"},
+    {id:1014,date:"2028-01-09",tipo:"cupon",        monto:1.8125,cobrado:false,fechaCobro:null,fuente:"auto",nota:"1.8125% s/VN"},
+    {id:1015,date:"2028-07-09",tipo:"cupon",        monto:1.8125,cobrado:false,fechaCobro:null,fuente:"auto",nota:"1.8125% s/VN"},
+    {id:1016,date:"2029-01-09",tipo:"cupon",        monto:1.8125,cobrado:false,fechaCobro:null,fuente:"auto",nota:"1.8125% s/VN"},
+    // Desde 09/07/2029: amort 5% VN c/semestre + cupón s/VN residual
+    {id:1017,date:"2029-07-09",tipo:"cupon",        monto:1.8125,cobrado:false,fechaCobro:null,fuente:"auto",nota:"1.8125% s/VN"},
+    {id:1018,date:"2029-07-09",tipo:"amortizacion", monto:5.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% VN · cuota 1/20"},
+    {id:1019,date:"2030-01-09",tipo:"cupon",        monto:1.72, cobrado:false,fechaCobro:null,fuente:"auto",nota:"s/VN residual 95%"},
+    {id:1020,date:"2030-01-09",tipo:"amortizacion", monto:5.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% VN · cuota 2/20"},
+    {id:1021,date:"2030-07-09",tipo:"cupon",        monto:1.63, cobrado:false,fechaCobro:null,fuente:"auto",nota:"s/VN residual 90%"},
+    {id:1022,date:"2030-07-09",tipo:"amortizacion", monto:5.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% VN · cuota 3/20"},
+    {id:1023,date:"2031-01-09",tipo:"cupon",        monto:1.54, cobrado:false,fechaCobro:null,fuente:"auto",nota:"s/VN residual 85%"},
+    {id:1024,date:"2031-01-09",tipo:"amortizacion", monto:5.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% VN · cuota 4/20"},
+    {id:1025,date:"2031-07-09",tipo:"cupon",        monto:1.45, cobrado:false,fechaCobro:null,fuente:"auto",nota:"s/VN residual 80%"},
+    {id:1026,date:"2031-07-09",tipo:"amortizacion", monto:5.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% VN · cuota 5/20"},
+    {id:1027,date:"2032-01-09",tipo:"cupon",        monto:1.36, cobrado:false,fechaCobro:null,fuente:"auto",nota:"s/VN residual 75%"},
+    {id:1028,date:"2032-01-09",tipo:"amortizacion", monto:5.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% VN · cuota 6/20"},
+    {id:1029,date:"2032-07-09",tipo:"cupon",        monto:1.27, cobrado:false,fechaCobro:null,fuente:"auto",nota:"s/VN residual 70%"},
+    {id:1030,date:"2032-07-09",tipo:"amortizacion", monto:5.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% VN · cuota 7/20"},
+    {id:1031,date:"2033-01-09",tipo:"cupon",        monto:1.18, cobrado:false,fechaCobro:null,fuente:"auto",nota:"s/VN residual 65%"},
+    {id:1032,date:"2033-01-09",tipo:"amortizacion", monto:5.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% VN · cuota 8/20"},
+    {id:1033,date:"2033-07-09",tipo:"cupon",        monto:1.09, cobrado:false,fechaCobro:null,fuente:"auto",nota:"s/VN residual 60%"},
+    {id:1034,date:"2033-07-09",tipo:"amortizacion", monto:5.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% VN · cuota 9/20"},
+    {id:1035,date:"2034-01-09",tipo:"cupon",        monto:1.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"s/VN residual 55%"},
+    {id:1036,date:"2034-01-09",tipo:"amortizacion", monto:5.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% VN · cuota 10/20"},
+    {id:1037,date:"2034-07-09",tipo:"cupon",        monto:0.91, cobrado:false,fechaCobro:null,fuente:"auto",nota:"s/VN residual 50%"},
+    {id:1038,date:"2034-07-09",tipo:"amortizacion", monto:5.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% VN · cuota 11/20"},
+    {id:1039,date:"2035-01-09",tipo:"cupon",        monto:0.82, cobrado:false,fechaCobro:null,fuente:"auto",nota:"s/VN residual 45%"},
+    {id:1040,date:"2035-01-09",tipo:"amortizacion", monto:5.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% VN · cuota 12/20"},
+    {id:1041,date:"2035-07-09",tipo:"cupon",        monto:0.73, cobrado:false,fechaCobro:null,fuente:"auto",nota:"s/VN residual 40%"},
+    {id:1042,date:"2035-07-09",tipo:"amortizacion", monto:5.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% VN · cuota 13/20"},
+    {id:1043,date:"2036-01-09",tipo:"cupon",        monto:0.64, cobrado:false,fechaCobro:null,fuente:"auto",nota:"s/VN residual 35%"},
+    {id:1044,date:"2036-01-09",tipo:"amortizacion", monto:5.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% VN · cuota 14/20"},
+    {id:1045,date:"2036-07-09",tipo:"cupon",        monto:0.54, cobrado:false,fechaCobro:null,fuente:"auto",nota:"s/VN residual 30%"},
+    {id:1046,date:"2036-07-09",tipo:"amortizacion", monto:5.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% VN · cuota 15/20"},
+    {id:1047,date:"2037-01-09",tipo:"cupon",        monto:0.45, cobrado:false,fechaCobro:null,fuente:"auto",nota:"s/VN residual 25%"},
+    {id:1048,date:"2037-01-09",tipo:"amortizacion", monto:5.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% VN · cuota 16/20"},
+    {id:1049,date:"2037-07-09",tipo:"cupon",        monto:0.36, cobrado:false,fechaCobro:null,fuente:"auto",nota:"s/VN residual 20%"},
+    {id:1050,date:"2037-07-09",tipo:"amortizacion", monto:5.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% VN · cuota 17/20"},
+    {id:1051,date:"2038-01-09",tipo:"cupon",        monto:0.27, cobrado:false,fechaCobro:null,fuente:"auto",nota:"s/VN residual 15%"},
+    {id:1052,date:"2038-01-09",tipo:"amortizacion", monto:5.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% VN · cuota 18/20"},
+    {id:1053,date:"2038-07-09",tipo:"cupon",        monto:0.18, cobrado:false,fechaCobro:null,fuente:"auto",nota:"s/VN residual 10%"},
+    {id:1054,date:"2038-07-09",tipo:"amortizacion", monto:5.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% VN · cuota 19/20"},
+    {id:1055,date:"2039-01-09",tipo:"cupon",        monto:0.09, cobrado:false,fechaCobro:null,fuente:"auto",nota:"s/VN residual 5%"},
+    {id:1056,date:"2039-01-09",tipo:"amortizacion", monto:5.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% VN · cuota 20/20"},
   ],
   "TLCUD": [
-    {id:1017,date:"2026-09-05",tipo:"cupon",        monto:3.5,   cobrado:false,fechaCobro:null,fuente:"auto",nota:"7% anual"},
-    {id:1018,date:"2027-03-05",tipo:"cupon",        monto:3.5,   cobrado:false,fechaCobro:null,fuente:"auto",nota:"7% anual"},
-    {id:1019,date:"2027-09-05",tipo:"cupon",        monto:3.5,   cobrado:false,fechaCobro:null,fuente:"auto",nota:"7% anual"},
-    {id:1020,date:"2028-03-05",tipo:"cupon",        monto:3.5,   cobrado:false,fechaCobro:null,fuente:"auto",nota:"7% anual"},
-    {id:1021,date:"2028-09-05",tipo:"cupon",        monto:3.5,   cobrado:false,fechaCobro:null,fuente:"auto",nota:"7% anual"},
-    {id:1022,date:"2029-03-05",tipo:"cupon",        monto:3.5,   cobrado:false,fechaCobro:null,fuente:"auto",nota:"7% anual"},
-    {id:1023,date:"2029-03-05",tipo:"amortizacion", monto:100.0, cobrado:false,fechaCobro:null,fuente:"auto",nota:"Vencimiento"},
+    // ON Telecom 7% anual semestral
+    {id:1030,date:"2026-09-05",tipo:"cupon",        monto:3.5,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.5% s/VN · 7% anual"},
+    {id:1031,date:"2027-03-05",tipo:"cupon",        monto:3.5,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.5% s/VN · 7% anual"},
+    {id:1032,date:"2027-09-05",tipo:"cupon",        monto:3.5,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.5% s/VN · 7% anual"},
+    {id:1033,date:"2028-03-05",tipo:"cupon",        monto:3.5,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.5% s/VN · 7% anual"},
+    {id:1034,date:"2028-09-05",tipo:"cupon",        monto:3.5,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.5% s/VN · 7% anual"},
+    {id:1035,date:"2029-03-05",tipo:"cupon",        monto:3.5,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.5% s/VN · 7% anual"},
+    {id:1036,date:"2029-03-05",tipo:"amortizacion", monto:100.0,cobrado:false,fechaCobro:null,fuente:"auto",nota:"Amort. 100% VN"},
   ],
 };
 
@@ -2447,9 +2505,11 @@ async function fetchBondFlows(ticker) {
 function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
   const [selected, setSelected] = useState(null);
   const [loadingTicker, setLoadingTicker] = useState(null);
-  const [editFlow, setEditFlow] = useState(null); // {ticker, flow}
-  const [addingFlow, setAddingFlow] = useState(null); // ticker
+  const [editFlow, setEditFlow] = useState(null);
+  const [addingFlow, setAddingFlow] = useState(null);
   const [newFlow, setNewFlow] = useState({date:'',tipo:'cupon',monto:''});
+  const [viewMode, setViewMode] = useState('micobro'); // 'prospecto' | 'miobro'
+  const [cerCoef, setCerCoef] = useState({}); // {ticker: coeficiente}
 
   const fmtD = s => s ? s.slice(8)+'/'+s.slice(5,7)+'/'+s.slice(0,4) : '';
   const fmtN = n => Number(n).toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -2607,76 +2667,130 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
             )}
 
             {selFlows.length===0
-              ? <div style={{color:'var(--text-muted)',fontSize:13,padding:'20px 0'}}>No hay flujos cargados para este bono. Usá "+ Agregar pago" para cargarlos manualmente.</div>
-              : <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
-                  <thead>
-                    <tr>
-                      {['Fecha','Tipo','Monto / 100 lám.','Total estimado','Estado',''].map(h=>(
-                        <th key={h} style={{padding:'8px 12px',textAlign:'left',fontSize:10,color:'var(--text-muted)',fontWeight:600,textTransform:'uppercase',letterSpacing:0.8,borderBottom:'1px solid var(--border)'}}>{h}</th>
+              ? <div style={{color:'var(--text-muted)',fontSize:13,padding:'20px 0'}}>No hay flujos cargados. Usá "+ Agregar pago" para cargarlos manualmente.</div>
+              : (()=>{
+                  const meta=SEED_BOND_META[selected]||{};
+                  const adjustsBy=meta.adjustsBy||null;
+                  const coef=parseFloat(cerCoef[selected])||1;
+                  const currency=selBond.buyCurrency==='USD'?'US$':'$';
+
+                  return(<>
+                    {/* Descripción del papel */}
+                    {meta.desc&&(
+                      <div style={{background:'rgba(59,130,246,0.06)',border:'1px solid rgba(59,130,246,0.12)',borderRadius:8,padding:'10px 14px',marginBottom:12,fontSize:12,color:'var(--text-secondary)'}}>
+                        📋 {meta.desc}
+                      </div>
+                    )}
+
+                    {/* Alerta variable */}
+                    {adjustsBy&&(
+                      <div style={{background:'rgba(251,191,36,0.08)',border:'1px solid rgba(251,191,36,0.25)',borderRadius:8,padding:'10px 14px',marginBottom:12,display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}>
+                        <div style={{fontSize:12,color:'var(--yellow)'}}>
+                          ⚠️ Este bono ajusta por <b>{adjustsBy}</b>. Los montos del prospecto son sobre VN original — el cobro real depende del coeficiente vigente.
+                        </div>
+                        <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
+                          <span style={{fontSize:11,color:'var(--text-muted)'}}>Coef. {adjustsBy}:</span>
+                          <input type="number" step="0.01"
+                            value={cerCoef[selected]||''}
+                            onChange={e=>setCerCoef(p=>({...p,[selected]:e.target.value}))}
+                            placeholder="ej: 45.23"
+                            style={{...inp,width:90,padding:'4px 8px',fontSize:12}}/>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Toggle vista */}
+                    <div style={{display:'flex',gap:8,marginBottom:12}}>
+                      {[['prospecto','📋 Prospecto'],['miobro','💰 Mi cobro']].map(([k,lbl])=>(
+                        <button key={k} onClick={()=>setViewMode(k)}
+                          style={{padding:'5px 14px',borderRadius:6,border:`1px solid ${viewMode===k?'var(--accent)':'var(--border)'}`,
+                            background:viewMode===k?'var(--accent)':'var(--bg-input)',
+                            color:viewMode===k?'#fff':'var(--text-secondary)',cursor:'pointer',fontSize:12,fontWeight:viewMode===k?700:400}}>
+                          {lbl}
+                        </button>
                       ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selFlows.map(f=>{
-                      const isFuture=f.date>today;
-                      const isBond=selBond.type==='bono_ars'||selBond.type==='bono_usd';
-                      const totalFlow=f.monto*(isBond?selBond.qty/100:selBond.qty);
-                      const isEditing=editFlow?.flow?.id===f.id;
-                      return(
-                        <tr key={f.id} style={{borderBottom:'1px solid var(--border)',background:f.cobrado?'rgba(52,211,153,0.03)':isFuture?'transparent':'rgba(251,191,36,0.04)'}}>
-                          <td style={{padding:'10px 12px',fontFamily:"'DM Mono',monospace"}}>
-                            {isEditing
-                              ? <input type="date" value={editFlow.flow.date} onChange={e=>setEditFlow(p=>({...p,flow:{...p.flow,date:e.target.value}}))} style={{...inp,width:130}}/>
-                              : fmtD(f.date)}
-                          </td>
-                          <td style={{padding:'10px 12px'}}>
-                            {isEditing
-                              ? <select value={editFlow.flow.tipo} onChange={e=>setEditFlow(p=>({...p,flow:{...p.flow,tipo:e.target.value}}))} style={{...inp,width:140}}>
-                                  <option value="cupon">🎫 Cupón</option>
-                                  <option value="amortizacion">💰 Amortización</option>
-                                </select>
-                              : <span style={{color:f.tipo==='amortizacion'?'var(--yellow)':'var(--accent)'}}>
-                                  {f.tipo==='amortizacion'?'💰 Amortización':'🎫 Cupón'}
-                                </span>
-                            }
-                          </td>
-                          <td style={{padding:'10px 12px',fontFamily:"'DM Mono',monospace"}}>
-                            {isEditing
-                              ? <input type="number" value={editFlow.flow.monto} onChange={e=>setEditFlow(p=>({...p,flow:{...p.flow,monto:parseFloat(e.target.value)}}))} style={{...inp,width:100}}/>
-                              : <>{selBond.buyCurrency==='USD'?'US$':'$'}{fmtN(f.monto)}{f.fuente==='manual'&&<span style={{fontSize:9,color:'var(--text-muted)',marginLeft:4}}>manual</span>}</>
-                            }
-                          </td>
-                          <td style={{padding:'10px 12px',fontFamily:"'DM Mono',monospace",fontWeight:600}}>
-                            {selBond.buyCurrency==='USD'?'US$':'$'}{fmtN(totalFlow)}
-                          </td>
-                          <td style={{padding:'10px 12px'}}>
-                            {f.cobrado
-                              ? <span style={{color:'var(--green)',fontSize:12}}>✅ Cobrado {fmtD(f.fechaCobro)}</span>
-                              : f.date<=today
-                                ? <button onClick={()=>confirmCobro(selected,f.id)}
-                                    style={{background:'rgba(52,211,153,0.1)',border:'1px solid rgba(52,211,153,0.3)',borderRadius:6,padding:'3px 10px',color:'var(--green)',cursor:'pointer',fontSize:11}}>
-                                    Confirmar cobro
-                                  </button>
-                                : <span style={{color:'var(--text-muted)',fontSize:11}}>🟡 Pendiente</span>
-                            }
-                          </td>
-                          <td style={{padding:'10px 12px',display:'flex',gap:6}}>
-                            {isEditing
-                              ? <>
-                                  <button onClick={saveEdit} style={{background:'var(--accent)',border:'none',borderRadius:6,padding:'3px 10px',color:'#fff',cursor:'pointer',fontSize:11}}>✓</button>
-                                  <button onClick={()=>setEditFlow(null)} style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:6,padding:'3px 10px',color:'var(--text-muted)',cursor:'pointer',fontSize:11}}>✕</button>
-                                </>
-                              : <>
-                                  <button onClick={()=>setEditFlow({ticker:selected,flow:{...f}})} style={{background:'transparent',border:'none',cursor:'pointer',color:'var(--text-muted)',fontSize:13}}>✏️</button>
-                                  <button onClick={()=>deleteFlow(selected,f.id)} style={{background:'transparent',border:'none',cursor:'pointer',color:'var(--red)',fontSize:13}}>🗑</button>
-                                </>
-                            }
-                          </td>
+                    </div>
+
+                    <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
+                      <thead>
+                        <tr>
+                          {(viewMode==='prospecto'
+                            ? ['Fecha','Tipo','% VN (prospecto)','Nota','']
+                            : ['Fecha','Tipo','% VN','Nominales','Cobro estimado','Estado','']
+                          ).map(h=>(
+                            <th key={h} style={{padding:'8px 12px',textAlign:'left',fontSize:10,color:'var(--text-muted)',fontWeight:600,textTransform:'uppercase',letterSpacing:0.8,borderBottom:'1px solid var(--border)'}}>{h}</th>
+                          ))}
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                      </thead>
+                      <tbody>
+                        {selFlows.map(f=>{
+                          const isFuture=f.date>today;
+                          const montoBase=f.monto;
+                          const montoAjustado=adjustsBy?montoBase*coef:montoBase;
+                          const totalFlow=montoAjustado*(selBond.qty/100);
+                          const isEditing=editFlow?.flow?.id===f.id;
+                          return(
+                            <tr key={f.id} style={{borderBottom:'1px solid var(--border)',background:f.cobrado?'rgba(52,211,153,0.03)':isFuture?'transparent':'rgba(251,191,36,0.03)'}}>
+                              <td style={{padding:'10px 12px',fontFamily:"'DM Mono',monospace",fontSize:12}}>
+                                {isEditing?<input type="date" value={editFlow.flow.date} onChange={e=>setEditFlow(p=>({...p,flow:{...p.flow,date:e.target.value}}))} style={{...inp,width:130}}/>:fmtD(f.date)}
+                              </td>
+                              <td style={{padding:'10px 12px'}}>
+                                {isEditing
+                                  ?<select value={editFlow.flow.tipo} onChange={e=>setEditFlow(p=>({...p,flow:{...p.flow,tipo:e.target.value}}))} style={{...inp,width:140}}>
+                                    <option value="cupon">🎫 Cupón</option>
+                                    <option value="amortizacion">💰 Amortización</option>
+                                  </select>
+                                  :<span style={{color:f.tipo==='amortizacion'?'var(--yellow)':'var(--accent)',fontSize:12}}>
+                                    {f.tipo==='amortizacion'?'💰 Amort.':'🎫 Cupón'}
+                                  </span>
+                                }
+                              </td>
+                              <td style={{padding:'10px 12px',fontFamily:"'DM Mono',monospace",fontSize:12}}>
+                                {isEditing
+                                  ?<input type="number" value={editFlow.flow.monto} onChange={e=>setEditFlow(p=>({...p,flow:{...p.flow,monto:parseFloat(e.target.value)}}))} style={{...inp,width:90}}/>
+                                  :<>{fmtN(montoBase)}%{adjustsBy&&<span style={{fontSize:9,color:'var(--yellow)',marginLeft:4}}>{adjustsBy}</span>}</>
+                                }
+                              </td>
+                              {viewMode==='miobro'&&<>
+                                <td style={{padding:'10px 12px',fontFamily:"'DM Mono',monospace",fontSize:12,color:'var(--text-muted)'}}>
+                                  {selBond.qty.toLocaleString('es-AR')}
+                                </td>
+                                <td style={{padding:'10px 12px',fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:13}}>
+                                  {adjustsBy&&coef!==1&&<span style={{fontSize:9,color:'var(--yellow)',display:'block'}}>×{coef} {adjustsBy}</span>}
+                                  {currency}{fmtN(totalFlow)}
+                                </td>
+                                <td style={{padding:'10px 12px',fontSize:12}}>
+                                  {f.cobrado
+                                    ?<span style={{color:'var(--green)'}}>✅ {fmtD(f.fechaCobro)}</span>
+                                    :f.date<=today
+                                      ?<button onClick={()=>confirmCobro(selected,f.id)}
+                                          style={{background:'rgba(52,211,153,0.1)',border:'1px solid rgba(52,211,153,0.3)',borderRadius:6,padding:'3px 10px',color:'var(--green)',cursor:'pointer',fontSize:11}}>
+                                          Confirmar cobro
+                                        </button>
+                                      :<span style={{color:'var(--text-muted)',fontSize:11}}>🟡 Pendiente</span>
+                                  }
+                                </td>
+                              </>}
+                              {viewMode==='prospecto'&&(
+                                <td style={{padding:'10px 12px',fontSize:11,color:'var(--text-muted)'}}>{f.nota||'—'}</td>
+                              )}
+                              <td style={{padding:'10px 12px'}}>
+                                <div style={{display:'flex',gap:4}}>
+                                  {isEditing
+                                    ?<><button onClick={saveEdit} style={{background:'var(--accent)',border:'none',borderRadius:6,padding:'3px 8px',color:'#fff',cursor:'pointer',fontSize:11}}>✓</button>
+                                      <button onClick={()=>setEditFlow(null)} style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:6,padding:'3px 8px',color:'var(--text-muted)',cursor:'pointer',fontSize:11}}>✕</button></>
+                                    :<><button onClick={()=>setEditFlow({ticker:selected,flow:{...f}})} style={{background:'transparent',border:'none',cursor:'pointer',color:'var(--text-muted)',fontSize:13}}>✏️</button>
+                                      <button onClick={()=>deleteFlow(selected,f.id)} style={{background:'transparent',border:'none',cursor:'pointer',color:'var(--red)',fontSize:13}}>🗑</button></>
+                                  }
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </>);
+                })()
             }
           </div>
         )}

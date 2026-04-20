@@ -649,8 +649,8 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
           if(h.isLive){
             // historicos.json stores per-unit prices, liveMap must match
             // data912 returns per-100-laminas for bonds → divide by 100
-            const isBondLive=h.type==="bono_ars"||h.type==="bono_usd";
-            livePricesMap[h.ticker]=isBondLive?h.currentPrice/100:h.currentPrice;
+            // bono_ars: live price from data912 per 100 laminas, historicos per unit → /100
+            livePricesMap[h.ticker]=h.type==="bono_ars"?h.currentPrice/100:h.currentPrice;
           }
         }
       }
@@ -1792,16 +1792,14 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
         <td style={tdR}>{Number(h.qty).toLocaleString("es-AR",{maximumFractionDigits:4})}</td>
         <td style={{...tdR,color:"var(--text-muted)",fontSize:11}}>
           {(()=>{
-            const isBondDisp=h.type==="bono_ars"||h.type==="bono_usd";
-            const ppcVal=(h.ppc||h.buyPrice)*(isBondDisp?100:1);
+            const ppcVal=(h.ppc||h.buyPrice)*(h.type==="bono_ars"?100:1);
             return isUSD?fmtU(ppcVal,2):fmtA(ppcVal);
           })()}
           <span style={{display:"block",fontSize:9,color:"var(--text-muted)"}}>{h.buyCurrency} · PPC</span>
         </td>
         <td style={{...tdR,fontSize:11}}>
           {(()=>{
-            const isBondDisp2=h.type==="bono_ars"||h.type==="bono_usd";
-            const cp=h.currentPrice*(isBondDisp2?100:1);
+            const cp=h.currentPrice*(h.type==="bono_ars"?100:1);
             return isUSD?fmtU(cp,2):fmtA(cp);
           })()}
           {h.liveChangePct!=null&&h.isLive&&<span style={{display:"block",fontSize:9,color:pc(h.liveChangePct)}}>{fmtP(h.liveChangePct)} hoy</span>}
@@ -2072,8 +2070,8 @@ function OperacionesTab({trades,port,setTrades,setPort,card,livePrices}){
                       {isEditing
                         ?<input type="number" value={editData.price} onChange={e=>setEditData(p=>({...p,price:e.target.value}))} style={{...inp,width:110,textAlign:"right"}}/>
                         :<span>{(()=>{
-                          const isBondOp=t.type==="bono_ars"||t.type==="bono_usd"||["TZX27","TZXD6","TZX28","TZXD7","AO27D","GD38D","GD30D","GD35D","GD41D","AL30D","AL29D","TLCUD"].includes(t.ticker);
-                          const dp=isBondOp?t.price*100:t.price;
+                          const isBondARS=t.type==="bono_ars"||["TZX27","TZXD6","TZX28","TZXD7"].includes(t.ticker);
+                          const dp=isBondARS?t.price*100:t.price;
                           return t.currency==="USD"?fmtU(dp,2):fmtA(dp);
                         })()}<span style={{display:"block",fontSize:9,color:"var(--text-muted)"}}>{t.currency||"ARS"}</span></span>}
                     </td>
@@ -2538,14 +2536,15 @@ export default function App(){
   const today = new Date().toISOString().slice(0,10);
   const en=port.map(h=>{
     const live=livePrices[h.ticker];
-    const isBondH=h.type==="bono_ars"||h.type==="bono_usd";
-    const livePrice=live?live.price:null; // data912 ya devuelve precio por 100 láminas
+    const isBondH=h.type==="bono_ars"; // solo ARS cotiza por 100 laminas diferente al historico
+    const livePrice=live?live.price:null;
     const currentPrice=livePrice??h.currentPrice;
     const ppc=ppcByTicker[h.ticker]||h.buyPrice;
     let liveChangePct = live?.changePct ?? null;
     if(livePrice && historicos){
       const bars = historicos[h.ticker];
       if(bars && bars.length>=1){
+        // bono_ars: historicos per unit, live per 100 laminas
         const prevClose = bars[bars.length-1].close*(isBondH?100:1);
         if(prevClose>0){
           liveChangePct = parseFloat(((livePrice-prevClose)/prevClose*100).toFixed(2));
@@ -2679,8 +2678,8 @@ export default function App(){
     const ts=Date.now();
     const comision=h.comision?+h.comision:undefined;
     const tradeBase={ticker:h.ticker.toUpperCase(),currency:h.buyCurrency,date:h.buyDate||new Date().toISOString().slice(0,10),ts,name:h.name,...(comision?{comision}:{})};
-    // Bonos: usuario ingresa precio por 100 láminas → guardar por unidad (÷100)
-    const isBondSave=h.type==="bono_ars"||h.type==="bono_usd";
+    // Solo bonos ARS: usuario ingresa precio por 100 láminas → guardar por unidad (÷100)
+    const isBondSave=h.type==="bono_ars";
     const priceToSave=isBondSave?+h.buyPrice/100:+h.buyPrice;
     if(!existing){
       const newTicker=h.ticker.toUpperCase();

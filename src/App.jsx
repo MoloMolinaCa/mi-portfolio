@@ -2964,9 +2964,13 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
                                       const val=parseFloat(e.target.value)||0;
                                       e.target.style.color=val>0?'var(--yellow)':'var(--text-muted)';
                                       if(row.amort){
-                                        // Editar amort existente
-                                        saveCellEdit(selected,row.amort.id,'monto',e.target.value);
-                                      } else if(val>0) {
+                                        if(val===0){
+                                          // Eliminar amort si se pone 0
+                                          setBondFlows(prev=>({...prev,[selected]:(prev[selected]||[]).filter(f=>f.id!==row.amort.id)}));
+                                        } else {
+                                          saveCellEdit(selected,row.amort.id,'monto',e.target.value);
+                                        }
+                                      } else if(val>0){
                                         // Crear amort nueva en esta fecha
                                         const newId=Date.now()+Math.random();
                                         setBondFlows(prev=>({...prev,[selected]:[...(prev[selected]||[]),{id:newId,date:row.date,tipo:'amortizacion',monto:val,cobrado:false,fechaCobro:null,fuente:'manual',nota:''}].sort((a,b)=>a.date.localeCompare(b.date))}));

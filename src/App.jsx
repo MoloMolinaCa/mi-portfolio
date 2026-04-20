@@ -2946,8 +2946,6 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
                           const isCobrado = (row.cupon?.cobrado??!row.cupon) && (row.amort?.cobrado??!row.amort);
                           const dias      = i===0 ? '—' : (selMeta.base==='30/360' ? row.dias30360 : row.diasReales);
                           const rowBg = isCobrado?'rgba(52,211,153,0.04)':isPast?'rgba(251,191,36,0.03)':'transparent';
-                          const editAmort = editingCell?.id===row.amort?.id;
-                          const editInt   = editingCell?.id===row.cupon?.id;
                           return(
                             <tr key={row.date} style={{background:rowBg}}>
                               <td style={{...tdPL,color:'var(--text-muted)',fontSize:11}}>{i+1}</td>
@@ -2955,32 +2953,32 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
                                 {fmtD(row.date)}{isCobrado&&<span style={{fontSize:9,marginLeft:5,color:'var(--green)'}}>✓</span>}
                               </td>
                               <td style={{...tdP,color:'var(--text-muted)'}}>{dias}</td>
-                              {/* Amort — editable inline */}
-                              <td style={{...tdP,color:row.amortPct>0?'var(--yellow)':'var(--text-muted)',cursor:row.amort?'pointer':'default'}}
-                                onClick={()=>row.amort&&!editAmort&&setEditingCell({id:row.amort.id,value:String(row.amortPct)})}>
-                                {editAmort
-                                  ?<input autoFocus type="number" step="0.0001"
-                                      value={editingCell.value}
-                                      onChange={e=>setEditingCell(p=>({...p,value:e.target.value}))}
-                                      onBlur={e=>saveCellEdit(selected,row.amort.id,'monto',e.target.value)}
-                                      onKeyDown={e=>{if(e.key==='Enter')e.target.blur();if(e.key==='Escape')setEditingCell(null);}}
-                                      style={{...inp,width:80,textAlign:'right',padding:'2px 6px'}}/>
-                                  :<span>{row.amortPct>0?fmtN(row.amortPct)+'%':'0,00%'}{row.amort&&<span style={{fontSize:8,color:'var(--text-muted)',marginLeft:3}}>✎</span>}</span>
+                              {/* Amort — input siempre visible, estilo texto hasta focus */}
+                              <td style={{...tdP,color:row.amortPct>0?'var(--yellow)':'var(--text-muted)',padding:'4px 6px'}}>
+                                {row.amort
+                                  ?<input type="number" step="0.0001"
+                                      defaultValue={row.amortPct}
+                                      key={row.amort.id+'-a-'+row.amortPct}
+                                      onFocus={e=>{e.target.select();e.target.style.background='var(--bg-input)';e.target.style.color='var(--yellow)';e.target.style.border='1px solid var(--accent)';}}
+                                      onBlur={e=>{e.target.style.background='transparent';e.target.style.border='none';e.target.style.color=row.amortPct>0?'var(--yellow)':'var(--text-muted)';saveCellEdit(selected,row.amort.id,'monto',e.target.value);}}
+                                      onKeyDown={e=>{if(e.key==='Enter')e.target.blur();if(e.key==='Escape'){e.target.value=row.amortPct;e.target.blur();}}}
+                                      style={{background:'transparent',border:'none',color:'inherit',fontFamily:"'DM Mono',monospace",fontSize:12,textAlign:'right',width:'100%',outline:'none',cursor:'pointer',borderRadius:4,padding:'2px 4px'}}/>
+                                  :<span style={{color:'var(--text-muted)'}}>—</span>
                                 }
                               </td>
                               <td style={tdP}>{fmtN2(row.vnDespues)}%</td>
                               <td style={{...tdP,color:'var(--text-muted)'}}>{selMeta.tna}%</td>
-                              {/* Interés — editable inline */}
-                              <td style={{...tdP,color:'var(--accent)',cursor:row.cupon?'pointer':'default'}}
-                                onClick={()=>row.cupon&&!editInt&&setEditingCell({id:row.cupon.id,value:String(row.interestPct)})}>
-                                {editInt
-                                  ?<input autoFocus type="number" step="0.0001"
-                                      value={editingCell.value}
-                                      onChange={e=>setEditingCell(p=>({...p,value:e.target.value}))}
-                                      onBlur={e=>saveCellEdit(selected,row.cupon.id,'monto',e.target.value)}
-                                      onKeyDown={e=>{if(e.key==='Enter')e.target.blur();if(e.key==='Escape')setEditingCell(null);}}
-                                      style={{...inp,width:80,textAlign:'right',padding:'2px 6px'}}/>
-                                  :<span>{row.interestPct>0?fmtN(row.interestPct)+'%':'—'}{row.cupon&&<span style={{fontSize:8,color:'var(--text-muted)',marginLeft:3}}>✎</span>}</span>
+                              {/* Interés — input siempre visible, estilo texto hasta focus */}
+                              <td style={{...tdP,color:'var(--accent)',padding:'4px 6px'}}>
+                                {row.cupon
+                                  ?<input type="number" step="0.0001"
+                                      defaultValue={row.interestPct}
+                                      key={row.cupon.id+'-i-'+row.interestPct}
+                                      onFocus={e=>{e.target.select();e.target.style.background='var(--bg-input)';e.target.style.color='var(--accent)';e.target.style.border='1px solid var(--accent)';}}
+                                      onBlur={e=>{e.target.style.background='transparent';e.target.style.border='none';e.target.style.color='var(--accent)';saveCellEdit(selected,row.cupon.id,'monto',e.target.value);}}
+                                      onKeyDown={e=>{if(e.key==='Enter')e.target.blur();if(e.key==='Escape'){e.target.value=row.interestPct;e.target.blur();}}}
+                                      style={{background:'transparent',border:'none',color:'inherit',fontFamily:"'DM Mono',monospace",fontSize:12,textAlign:'right',width:'100%',outline:'none',cursor:'pointer',borderRadius:4,padding:'2px 4px'}}/>
+                                  :<span style={{color:'var(--text-muted)'}}>—</span>
                                 }
                               </td>
                               <td style={{...tdP,background:'rgba(251,191,36,0.04)',color:'var(--yellow)',fontWeight:row.amortPct>0?700:400}}>

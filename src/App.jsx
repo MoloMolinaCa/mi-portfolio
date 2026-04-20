@@ -440,16 +440,16 @@ function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRa
         price=liveMap[h.ticker];
       } else if(bars&&bars.length){
         if(dateStr<bars[0].date)continue;
-        const rawPrice=findPrice2(bars,dateStr);
-        if(!rawPrice)continue;
-        // historicos.json stores raw prices per unit → normalize for bonds
-        price=isBond?rawPrice*100:rawPrice;
+        price=findPrice2(bars,dateStr);
+        if(!price)continue;
+        // historicos.json stores per-unit prices, qtyFactor=qty/100 for bonds
+        // value = price_per_unit * qty/100 = correct ✓ no x100 needed
       } else {
         const firstBuy=buys.slice().sort((a,b)=>a.date.localeCompare(b.date))[0];
         if(!firstBuy||dateStr<firstBuy.date)continue;
         const totalCost=buys.reduce((a,t)=>a+t.qty*t.price,0);
         const totalQty=buys.reduce((a,t)=>a+t.qty,0);
-        // trade prices already stored per 100 laminas → use directly
+        // trade prices stored per unit (÷100 on save) → use directly
         price=totalQty>0?totalCost/totalQty:h.currentPrice;
       }
       const cclDay=cclBars.length?findPrice2(cclBars,dateStr)||fxRate:fxRate;
@@ -645,8 +645,14 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
       // Precios en vivo para el punto de hoy
       const livePricesMap={};
       if(!customEnd||customEnd>=new Date().toISOString().slice(0,10)){
-        // currentPrice already normalized (bonds x100) — use directly
-        for(const h of en){if(h.isLive)livePricesMap[h.ticker]=h.currentPrice;}
+        for(const h of en){
+          if(h.isLive){
+            // historicos.json stores per-unit prices, liveMap must match
+            // data912 returns per-100-laminas for bonds → divide by 100
+            const isBondLive=h.type==="bono_ars"||h.type==="bono_usd";
+            livePricesMap[h.ticker]=isBondLive?h.currentPrice/100:h.currentPrice;
+          }
+        }
       }
 
       // TWR — Time Weighted Return

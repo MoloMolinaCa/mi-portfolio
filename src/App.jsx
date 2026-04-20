@@ -70,8 +70,8 @@ const FCI_IDS = {
 // monto = % del VN según prospecto (por cada 100 VN nominales)
 // adjustsBy: variable que ajusta el capital/cupón ('CER', 'CER+TNA', null)
 const SEED_BOND_META = {
-  "TZXD6": {adjustsBy:"CER", desc:"BONTES a Descuento CER V15/12/26 · Cupón 0% + ajuste CER · Ley Argentina"},
-  "TZX27": {adjustsBy:"CER", desc:"BONO CER V30/06/27 · Cupón 2% s/VN ajustado · Ley Argentina"},
+  "TZXD6": {adjustsBy:"CER", emisionDate:"2022-03-15", cerBase:null, desc:"BONTES a Descuento CER V15/12/26 · Cupón 0% + ajuste CER · Ley Argentina"},
+  "TZX27": {adjustsBy:"CER", emisionDate:"2022-12-30", cerBase:null, desc:"BONO CER V30/06/27 · Cupón 2% s/VN ajustado · Ley Argentina"},
   "AO27D": {adjustsBy:null,  desc:"Bono Tesoro 6% V29/10/27 · Cupón mensual 6% anual base 30/360 · Bullet al vencimiento · Ley Nueva York"},
   "GD38D": {adjustsBy:null,  desc:"Global 2038 · Tasa escalonada hasta 5% anual · 22 cuotas de amort. (4.5455% c/u) desde jul/2027 · Ley Nueva York"},
   "TLCUD": {adjustsBy:null,  desc:"ON Telecom Argentina C28 05/03/29 · Cupón 7% anual (3.5% semestral) · Ley Argentina"},
@@ -2540,6 +2540,52 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
     'TZXD6': {tna:0,  base:'30/360'},
   });
   const [metaDraft, setMetaDraft] = useState({tna:'', base:'30/360'});
+  // CER: serie histórica {date:string, valor:number}[], cacheada en memoria
+  const [cerSerie, setCerSerie] = useState(null); // null=no cargado, []=cargando, [{date,valor}]=listo
+  const [cerLoading, setCerLoading] = useState(false);
+
+  // Fetch serie CER desde argentinadatos — solo una vez
+  const fetchCER = async () => {
+    if(cerSerie!==null||cerLoading) return;
+    setCerLoading(true);
+    try {
+      const r = await fetch('https://api.argentinadatos.com/v1/finanzas/indices/cer', {signal:AbortSignal.timeout(10000)});
+      if(r.ok){
+        const data = await r.json();
+        // data: [{fecha:"2023-01-02", valor:3.5678}, ...]
+        const serie = (Array.isArray(data)?data:[])
+          .map(x=>({date:(x.fecha||x.date||'').slice(0,10), valor:parseFloat(x.valor||x.value||0)}))
+          .filter(x=>x.date&&x.valor>0)
+          .sort((a,b)=>a.date.localeCompare(b.date));
+        setCerSerie(serie);
+      }
+    } catch(e){ console.warn('CER fetch error',e); setCerSerie([]); }
+    setCerLoading(false);
+  };
+
+  // Buscar el CER más cercano a una fecha (hacia atrás)
+  const getCER = (serie, dateStr) => {
+    if(!serie||!serie.length) return null;
+    // Buscar el último valor disponible <= dateStr
+    const filtered = serie.filter(x=>x.date<=dateStr);
+    return filtered.length ? filtered[filtered.length-1].valor : serie[0].valor;
+  };
+
+  // Calcular flujos CER ajustados para un bono
+  // Para cada cupón: interés = tasa × (CER_pago/CER_base) × VN_original × días/base
+  // Para amort: monto = (CER_pago/CER_base) × amort_original
+  // cerBase = CER del día 10 días antes de emisionDate
+  const calcFlujoCER = (flow, vnOriginal, cerBase, cerPago, tna, base, dias) => {
+    if(!cerBase||!cerPago||cerBase<=0) return flow.monto; // fallback sin CER
+    const coefCER = cerPago / cerBase;
+    if(flow.tipo==='amortizacion'){
+      return parseFloat((vnOriginal * coefCER * (flow.monto/100)).toFixed(6));
+    } else {
+      // Interés = tna × dias/base × VN ajustado
+      const divisor = base==='30/360' ? 360 : 365;
+      return parseFloat(((tna/100) * (dias/divisor) * vnOriginal * coefCER).toFixed(6));
+    }
+  };
 
   const fmtD = s => s ? s.slice(8)+'/'+s.slice(5,7)+'/'+s.slice(0,4) : '';
   const fmtN = n => Number(n).toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:4});
@@ -3007,7 +3053,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
                 {/* TNA + Base — editable */}
                 {editingMeta ? (
                   <div style={{display:'flex',gap:8,alignItems:'center',background:'var(--bg-input)',border:'1px solid var(--accent)',borderRadius:8,padding:'6px 12px'}}>
-                    <span style={{fontSize:11,color:'var(--text-muted)'}}>TNA:</span>
+                    <span style={{fontSize:11,color:'var(--text-muted)'}}>Cupón:</span>
                     <input type="number" step="0.01" value={metaDraft.tna}
                       onChange={e=>setMetaDraft(p=>({...p,tna:e.target.value}))}
                       style={{...inp,width:70,textAlign:'right'}}/>
@@ -3030,7 +3076,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
                 ) : (
                   <div style={{display:'flex',gap:6,alignItems:'center',background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:8,padding:'6px 12px',cursor:'pointer'}}
                     onClick={()=>{setMetaDraft({tna:selMeta.tna, base:selMeta.base});setEditingMeta(true);}}>
-                    <span style={{fontSize:12,color:'var(--text-secondary)'}}>TNA <b style={{color:'var(--accent)'}}>{selMeta.tna}%</b></span>
+                    <span style={{fontSize:12,color:'var(--text-secondary)'}}>Cupón <b style={{color:'var(--accent)'}}>{selMeta.tna}%</b></span>
                     <span style={{fontSize:10,color:'var(--text-muted)'}}>·</span>
                     <span style={{fontSize:12,color:'var(--text-secondary)'}}>Base <b style={{color:'var(--text-primary)'}}>{selMeta.base}</b></span>
                     <span style={{fontSize:10,color:'var(--text-muted)',marginLeft:4}}>✏️</span>
@@ -3050,18 +3096,42 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
               </div>
             )}
 
-            {/* Alerta CER */}
-            {adjustsBy&&(
-              <div style={{background:'rgba(251,191,36,0.08)',border:'1px solid rgba(251,191,36,0.25)',borderRadius:8,padding:'10px 14px',marginBottom:10,display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}>
-                <div style={{fontSize:12,color:'var(--yellow)'}}>⚠️ Ajusta por <b>{adjustsBy}</b>. Los montos son sobre VN original — el cobro real depende del coeficiente vigente.</div>
-                <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
-                  <span style={{fontSize:11,color:'var(--text-muted)'}}>Coef. {adjustsBy}:</span>
-                  <input type="number" step="0.01" value={cerCoef[selected]||''}
-                    onChange={e=>setCerCoef(p=>({...p,[selected]:e.target.value}))}
-                    placeholder="ej: 45.23" style={{...inp,width:90}}/>
+            {/* Bloque CER — carga serie y muestra estado */}
+            {adjustsBy==='CER'&&(()=>{
+              const meta2 = SEED_BOND_META[selected]||{};
+              const emisionDate = meta2.emisionDate||null;
+              // Fecha base CER = 10 días antes de emisión
+              const cerBaseDate = emisionDate ? new Date(new Date(emisionDate).getTime()-10*24*60*60*1000).toISOString().slice(0,10) : null;
+              const cerBaseVal = cerSerie&&cerBaseDate ? getCER(cerSerie,cerBaseDate) : null;
+              const cerHoy = cerSerie ? getCER(cerSerie,todayAR()) : null;
+              const coefHoy = cerBaseVal&&cerHoy ? (cerHoy/cerBaseVal) : null;
+
+              return(
+                <div style={{background:'rgba(251,191,36,0.08)',border:'1px solid rgba(251,191,36,0.25)',borderRadius:8,padding:'10px 14px',marginBottom:10}}>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:10}}>
+                    <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
+                      <span style={{fontSize:12,color:'var(--yellow)',fontWeight:600}}>⚡ Bono CER</span>
+                      {emisionDate&&<span style={{fontSize:11,color:'var(--text-muted)'}}>Emisión: <b style={{color:'var(--text-secondary)'}}>{fmtD(emisionDate)}</b></span>}
+                      {cerBaseDate&&<span style={{fontSize:11,color:'var(--text-muted)'}}>CER base ({fmtD(cerBaseDate)}): <b style={{color:'var(--text-secondary)',fontFamily:"'DM Mono',monospace"}}>{cerBaseVal?cerBaseVal.toFixed(4):'—'}</b></span>}
+                      {coefHoy&&<span style={{fontSize:11,color:'var(--text-muted)'}}>Coef. actual: <b style={{color:'var(--yellow)',fontFamily:"'DM Mono',monospace"}}>{coefHoy.toFixed(4)}</b></span>}
+                      {cerLoading&&<span style={{fontSize:11,color:'var(--text-muted)',animation:'spin 0.8s linear infinite',display:'inline-block'}}>⟳</span>}
+                    </div>
+                    {!cerSerie&&!cerLoading&&(
+                      <button onClick={fetchCER}
+                        style={{background:'rgba(251,191,36,0.15)',border:'1px solid rgba(251,191,36,0.4)',borderRadius:6,padding:'4px 12px',color:'var(--yellow)',cursor:'pointer',fontSize:11,fontWeight:600}}>
+                        Cargar serie CER
+                      </button>
+                    )}
+                    {cerSerie&&cerSerie.length>0&&<span style={{fontSize:10,color:'var(--green)'}}>✓ {cerSerie.length} datos cargados</span>}
+                  </div>
+                  {!emisionDate&&(
+                    <div style={{fontSize:11,color:'var(--text-muted)',marginTop:6}}>
+                      ⚠️ Falta fecha de emisión en SEED_BOND_META para calcular coeficiente CER automático.
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Form agregar pago */}
             {addingFlow===selected&&(
@@ -3131,7 +3201,15 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
                 </div>
 
                 {/* ── VISTA PROSPECTO ── */}
-                {viewMode==='prospecto'&&(
+                {viewMode==='prospecto'&&(()=>{
+                  // Datos CER para este bono si aplica
+                  const isCERBond = adjustsBy==='CER';
+                  const meta2 = SEED_BOND_META[selected]||{};
+                  const emisionDate2 = meta2.emisionDate||null;
+                  const cerBaseDate2 = emisionDate2 ? new Date(new Date(emisionDate2).getTime()-10*24*60*60*1000).toISOString().slice(0,10) : null;
+                  const cerBaseVal2 = (isCERBond&&cerSerie&&cerBaseDate2) ? getCER(cerSerie,cerBaseDate2) : null;
+
+                  return(
                   <div style={{overflowX:'auto',borderRadius:10,border:'1px solid var(--border)'}}>
                     <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
                       <thead>
@@ -3141,8 +3219,9 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
                           <th style={thP}>Días ({selMeta.base})</th>
                           <th style={thP}>Amort. % VN</th>
                           <th style={thP}>VN Residual</th>
-                          <th style={thP}>TNA</th>
+                          <th style={thP}>Cupón</th>
                           <th style={thP}>Interés % VN</th>
+                          {isCERBond&&<><th style={{...thP,background:'rgba(251,191,36,0.06)',color:'var(--yellow)'}}>CER</th><th style={{...thP,background:'rgba(251,191,36,0.06)',color:'var(--yellow)'}}>VN Ajust.</th><th style={{...thP,background:'rgba(251,191,36,0.06)',color:'var(--yellow)'}}>Interés Aj.</th></>}
                           <th style={{...thP,background:'rgba(251,191,36,0.1)',color:'var(--yellow)'}}>Amort.</th>
                           <th style={{...thP,background:'rgba(59,130,246,0.1)',color:'var(--accent)'}}>Interés</th>
                           <th style={{...thP,background:'rgba(52,211,153,0.1)',color:'var(--green)'}}>Total</th>
@@ -3155,6 +3234,14 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
                           const isCobrado = (row.cupon?.cobrado??!row.cupon) && (row.amort?.cobrado??!row.amort);
                           const dias      = i===0 ? '—' : (selMeta.base==='30/360' ? row.dias30360 : row.diasReales);
                           const rowBg = isCobrado?'rgba(52,211,153,0.04)':isPast?'rgba(251,191,36,0.03)':'transparent';
+                          // CER de la fecha de pago
+                          const cerPagoVal = (isCERBond&&cerSerie) ? getCER(cerSerie,row.date) : null;
+                          const coefCER = (cerBaseVal2&&cerPagoVal) ? cerPagoVal/cerBaseVal2 : null;
+                          const vnAjust = coefCER ? 100*coefCER : null; // VN ajustado por cada 100 originales
+                          // Interés ajustado CER
+                          const diasNum = typeof dias === 'number' ? dias : 0;
+                          const divisor = selMeta.base==='30/360'?360:365;
+                          const interesAjust = (coefCER&&selMeta.tna&&diasNum>0) ? parseFloat(((selMeta.tna/100)*(diasNum/divisor)*100*coefCER).toFixed(4)) : null;
                           return(
                             <tr key={row.date} style={{background:rowBg}}>
                               <td style={{...tdPL,color:'var(--text-muted)',fontSize:11}}>{i+1}</td>
@@ -3203,6 +3290,20 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
                                   :<span style={{color:'var(--text-muted)'}}>—</span>
                                 }
                               </td>
+                              {/* Celdas CER — solo bonos CER con serie cargada */}
+                              {isCERBond&&(
+                                <>
+                                  <td style={{...tdP,background:'rgba(251,191,36,0.03)',color:'var(--yellow)',fontSize:11}}>
+                                    {cerPagoVal?cerPagoVal.toFixed(4):<span style={{color:'var(--text-muted)'}}>—</span>}
+                                  </td>
+                                  <td style={{...tdP,background:'rgba(251,191,36,0.03)',color:'var(--yellow)',fontSize:11}}>
+                                    {vnAjust?fmtN2(vnAjust):<span style={{color:'var(--text-muted)'}}>—</span>}
+                                  </td>
+                                  <td style={{...tdP,background:'rgba(251,191,36,0.03)',color:'var(--yellow)',fontSize:11,fontWeight:600}}>
+                                    {interesAjust!=null?fmtN(interesAjust)+'%':<span style={{color:'var(--text-muted)'}}>—</span>}
+                                  </td>
+                                </>
+                              )}
                               <td style={{...tdP,background:'rgba(251,191,36,0.04)',color:'var(--yellow)',fontWeight:row.amortPct>0?700:400}}>
                                 {row.amortPct>0?fmtN(row.amortPct):'—'}
                               </td>
@@ -3222,7 +3323,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
                       </tbody>
                       <tfoot>
                         <tr style={{borderTop:'2px solid var(--border)',background:'var(--bg-input)'}}>
-                          <td colSpan={7} style={{...tdPL,fontWeight:700,fontSize:10,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:0.8}}>Total</td>
+                          <td colSpan={isCERBond?10:7} style={{...tdPL,fontWeight:700,fontSize:10,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:0.8}}>Total</td>
                           <td style={{...tdP,background:'rgba(251,191,36,0.08)',color:'var(--yellow)',fontWeight:700}}>{fmtN(rows.reduce((a,r)=>a+r.amortPct,0))}</td>
                           <td style={{...tdP,background:'rgba(59,130,246,0.08)',color:'var(--accent)',fontWeight:700}}>{fmtN(rows.reduce((a,r)=>a+r.interestPct,0))}</td>
                           <td style={{...tdP,background:'rgba(52,211,153,0.08)',color:'var(--green)',fontWeight:700}}>{fmtN(rows.reduce((a,r)=>a+r.totalPct,0))}</td>
@@ -3230,9 +3331,14 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
                         </tr>
                       </tfoot>
                     </table>
-                    <div style={{fontSize:9,color:'var(--text-muted)',padding:'6px 10px'}}>✎ Doble clic en celda para editar · Recalculá todos los cupones futuros editando TNA/Base en el header</div>
+                    <div style={{fontSize:9,color:'var(--text-muted)',padding:'6px 10px'}}>
+                      ✎ Click en celda para editar
+                      {isCERBond&&cerSerie&&cerSerie.length>0?' · Columnas CER calculadas con serie argentinadatos':''}
+                      {isCERBond&&!cerSerie?' · Cargá la serie CER para ver columnas ajustadas':''}
+                    </div>
                   </div>
-                )}
+                  );
+                })()}
 
                 {/* ── VISTA MI COBRO ── */}
                 {viewMode==='micobro'&&(

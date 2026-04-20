@@ -36,6 +36,9 @@ const GALICIA_PORTFOLIO = [
 ];
 
 const FX_FALLBACK = { CCL:1481, MEP:1427, oficial:1389 };  // updated Apr 2026
+// Token para estadisticasbcra.com — registrate en estadisticasbcra.com/api/registracion
+// Es gratis, solo necesitás un email. Pegá el token acá:
+const CER_TOKEN = 'eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE4MDgyNTU1NjksInR5cGUiOiJleHRlcm5hbCIsInVzZXIiOiJtYXJ0aW5tb2xpbmFjYUBob3RtYWlsLmNvbSJ9.ibxg2E94m3vGfK-scw6EftJaqaUM0HlWq_8j2KlyAl7LSnOxRP8xvDjpBuQ9nUziouUSphRNGsHy0avKYcSe8w'; // vence ~Apr 2027
 const YAHOO_PROXY = "https://yahoo-proxy-blue.vercel.app/api/yahoo"; // proxy sin CORS
 const T10Y_FALLBACK = 4.35;
 
@@ -2545,7 +2548,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
   const [cerLoading, setCerLoading] = useState(false);
   const cerFetchedRef = React.useRef(false); // evita doble fetch en StrictMode
 
-  // Fetch serie CER — intenta argentinadatos primero, luego BCRA API
+  // Fetch serie CER desde estadisticasbcra.com
   const fetchCER = async () => {
     if(cerFetchedRef.current) return;
     cerFetchedRef.current = true;
@@ -2555,61 +2558,39 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
       if(!Array.isArray(data)||!data.length) return null;
       const serie = data
         .map(x=>({
-          date:(x.fecha||x.date||x.d||'').slice(0,10),
-          valor:parseFloat(x.valor||x.value||x.v||0)
+          date:(x.d||x.fecha||x.date||'').slice(0,10),
+          valor:parseFloat(x.v||x.valor||x.value||0)
         }))
         .filter(x=>x.date&&x.valor>0)
         .sort((a,b)=>a.date.localeCompare(b.date));
       return serie.length>0 ? serie : null;
     };
 
-    // 1. argentinadatos — endpoint CER
-    const ENDPOINTS = [
-      'https://api.argentinadatos.com/v1/finanzas/indices/cer',
-      'https://api.argentinadatos.com/v1/finanzas/indices/cer/ultimo', // por si es solo el último
-    ];
-
-    for(const url of ENDPOINTS){
+    // estadisticasbcra.com — requiere token Bearer
+    if(CER_TOKEN){
       try{
-        const r = await fetch(url, {signal:AbortSignal.timeout(8000)});
+        const r = await fetch('https://api.estadisticasbcra.com/cer', {
+          signal:AbortSignal.timeout(10000),
+          headers:{'Authorization':'Bearer '+CER_TOKEN}
+        });
         if(r.ok){
           const data = await r.json();
-          // Si es objeto único (ultimo), wrapearlo
-          const arr = Array.isArray(data) ? data : [data];
-          const serie = parseSerie(arr);
+          const serie = parseSerie(data);
           if(serie){
-            console.log('CER cargado desde', url, serie.length, 'registros');
+            console.log('CER cargado:', serie.length, 'registros, último:', serie[serie.length-1]);
             setCerSerie(serie);
             setCerLoading(false);
             return;
           }
+        } else {
+          console.warn('CER estadisticasbcra status:', r.status);
         }
-      } catch(e){ console.warn('CER endpoint falló:', url, e.message); }
+      } catch(e){ console.warn('CER fetch error:', e.message); }
     }
 
-    // 2. BCRA Open Data — variable 28 = CER
-    try{
-      const today = todayAR();
-      const desde = '2020-01-01';
-      const url = `https://api.bcra.gob.ar/estadisticas/v3.0/datosvariable/28/${desde}/${today}`;
-      const r = await fetch(url, {signal:AbortSignal.timeout(10000), headers:{'Accept':'application/json'}});
-      if(r.ok){
-        const data = await r.json();
-        // BCRA: {results:[{fecha,valor},...]}
-        const arr = data?.results||data?.datos||[];
-        const serie = parseSerie(arr);
-        if(serie){
-          console.log('CER cargado desde BCRA', serie.length, 'registros');
-          setCerSerie(serie);
-          setCerLoading(false);
-          return;
-        }
-      }
-    } catch(e){ console.warn('BCRA CER falló:', e.message); }
-
-    console.warn('CER: todos los endpoints fallaron');
+    console.warn('CER: configurá CER_TOKEN en App.jsx');
     setCerSerie([]);
-    cerFetchedRef.current = false; // permitir reintento manual
+    cerFetchedRef.current = false;
     setCerLoading(false);
   };
 
@@ -3184,7 +3165,8 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
                 <div style={{background:'rgba(251,191,36,0.06)',border:'1px solid rgba(251,191,36,0.2)',borderRadius:8,padding:'8px 14px',marginBottom:10,display:'flex',alignItems:'center',gap:16,flexWrap:'wrap',fontSize:11}}>
                   <span style={{color:'var(--yellow)',fontWeight:600}}>⚡ CER</span>
                   {cerLoading&&<span style={{color:'var(--text-muted)',display:'flex',alignItems:'center',gap:4}}><span style={{animation:'spin 0.8s linear infinite',display:'inline-block'}}>⟳</span> Cargando serie...</span>}
-                  {!emisionDate&&!cerLoading&&<span style={{color:'var(--text-muted)'}}>Editá el chip ✏️ para ingresar la fecha de emisión</span>}
+                  {!CER_TOKEN&&!cerLoading&&<span style={{color:'var(--text-muted)'}}>⚙️ Configurá <code style={{background:'rgba(255,255,255,0.08)',padding:'1px 5px',borderRadius:3}}>CER_TOKEN</code> en App.jsx · registrate en <b>estadisticasbcra.com/api/registracion</b></span>}
+                  {CER_TOKEN&&!emisionDate&&!cerLoading&&<span style={{color:'var(--text-muted)'}}>Editá el chip ✏️ para ingresar la fecha de emisión</span>}
                   {cerBaseVal&&<span style={{color:'var(--text-muted)'}}>CER base ({fmtD(cerBaseFecha)}): <b style={{color:'var(--text-secondary)',fontFamily:"'DM Mono',monospace"}}>{cerBaseVal.toFixed(4)}</b></span>}
                   {cerHoy&&<span style={{color:'var(--text-muted)'}}>CER hoy: <b style={{color:'var(--text-secondary)',fontFamily:"'DM Mono',monospace"}}>{cerHoy.toFixed(4)}</b></span>}
                   {coefHoy&&<span style={{color:'var(--text-muted)'}}>Coef. actual: <b style={{color:'var(--yellow)',fontFamily:"'DM Mono',monospace"}}>{coefHoy.toFixed(4)}</b></span>}

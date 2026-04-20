@@ -2782,7 +2782,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
         const fmtMoney = (p) => p.currency==='USD' ? `US$${fmtN2(p.total)}` : `$${fmtN2(p.total)}`;
 
         return(
-          <div style={{...card,padding:'20px',display:'grid',gridTemplateColumns:'1fr 320px',gap:20}}>
+          <div style={{...card,padding:'16px 20px',display:'grid',gridTemplateColumns:'1fr 300px',gap:20,maxHeight:390,overflow:'hidden'}}>
 
             {/* Calendario */}
             <div>
@@ -2816,7 +2816,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
               </div>
 
               {/* Grid celdas */}
-              <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:3}}>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2}}>
                 {cells.map((d,i)=>{
                   if(!d) return <div key={'empty-'+i}/>;
                   const dateStr = `${calYear}-${String(calMon+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
@@ -2834,8 +2834,8 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
                       onClick={()=>hasPago&&setCalSelectedDate(isSelected?null:dateStr)}
                       style={{
                         borderRadius:8,
-                        padding:'6px 4px',
-                        minHeight:52,
+                        padding:'4px 3px',
+                        minHeight:38,
                         cursor:hasPago?'pointer':'default',
                         background:isSelected?'rgba(59,130,246,0.15)':isToday?'rgba(59,130,246,0.06)':'transparent',
                         border:isSelected?'1px solid var(--accent)':isToday?'1px solid rgba(59,130,246,0.3)':'1px solid transparent',
@@ -2845,7 +2845,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
                       }}
                       onMouseEnter={e=>{if(hasPago&&!isSelected)e.currentTarget.style.background='rgba(255,255,255,0.04)';}}
                       onMouseLeave={e=>{if(hasPago&&!isSelected)e.currentTarget.style.background='transparent';}}>
-                      <div style={{fontSize:13,fontWeight:isToday?700:400,color:isToday?'var(--accent)':hasPago?'var(--text-primary)':'var(--text-muted)',marginBottom:4}}>
+                      <div style={{fontSize:12,fontWeight:isToday?700:400,color:isToday?'var(--accent)':hasPago?'var(--text-primary)':'var(--text-muted)',marginBottom:2}}>
                         {d}
                       </div>
                       {hasPago&&(
@@ -2925,7 +2925,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
                   <div style={{fontSize:10,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:1,fontWeight:600,marginBottom:12}}>
                     Próximos cobros
                   </div>
-                  <div style={{display:'flex',flexDirection:'column',gap:1,overflowY:'auto',maxHeight:520}}>
+                  <div style={{display:'flex',flexDirection:'column',gap:1,overflowY:'auto',maxHeight:390}}>
                     {proximos.length===0
                       ? <div style={{color:'var(--text-muted)',fontSize:13}}>No hay flujos cargados.</div>
                       : proximos.map((p,i)=>{

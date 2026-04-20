@@ -2958,10 +2958,10 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
                                 {row.amort
                                   ?<input type="number" step="0.0001"
                                       defaultValue={row.amortPct}
-                                      key={row.amort.id+'-a-'+row.amortPct}
+                                      key={'a-'+row.amort.id+'-'+row.amort.monto}
                                       onFocus={e=>{e.target.select();e.target.style.background='var(--bg-input)';e.target.style.color='var(--yellow)';e.target.style.border='1px solid var(--accent)';}}
                                       onBlur={e=>{e.target.style.background='transparent';e.target.style.border='none';e.target.style.color=row.amortPct>0?'var(--yellow)':'var(--text-muted)';saveCellEdit(selected,row.amort.id,'monto',e.target.value);}}
-                                      onKeyDown={e=>{if(e.key==='Enter')e.target.blur();if(e.key==='Escape'){e.target.value=row.amortPct;e.target.blur();}}}
+                                      onKeyDown={e=>{if(e.key==='Enter')e.target.blur();if(e.key==='Escape'){e.target.value=row.amort.monto;e.target.blur();}}}
                                       style={{background:'transparent',border:'none',color:'inherit',fontFamily:"'DM Mono',monospace",fontSize:12,textAlign:'right',width:'100%',outline:'none',cursor:'pointer',borderRadius:4,padding:'2px 4px'}}/>
                                   :<span style={{color:'var(--text-muted)'}}>—</span>
                                 }
@@ -2973,10 +2973,10 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
                                 {row.cupon
                                   ?<input type="number" step="0.0001"
                                       defaultValue={row.interestPct}
-                                      key={row.cupon.id+'-i-'+row.interestPct}
+                                      key={'i-'+row.cupon.id+'-'+row.cupon.monto}
                                       onFocus={e=>{e.target.select();e.target.style.background='var(--bg-input)';e.target.style.color='var(--accent)';e.target.style.border='1px solid var(--accent)';}}
                                       onBlur={e=>{e.target.style.background='transparent';e.target.style.border='none';e.target.style.color='var(--accent)';saveCellEdit(selected,row.cupon.id,'monto',e.target.value);}}
-                                      onKeyDown={e=>{if(e.key==='Enter')e.target.blur();if(e.key==='Escape'){e.target.value=row.interestPct;e.target.blur();}}}
+                                      onKeyDown={e=>{if(e.key==='Enter')e.target.blur();if(e.key==='Escape'){e.target.value=row.cupon.monto;e.target.blur();}}}
                                       style={{background:'transparent',border:'none',color:'inherit',fontFamily:"'DM Mono',monospace",fontSize:12,textAlign:'right',width:'100%',outline:'none',cursor:'pointer',borderRadius:4,padding:'2px 4px'}}/>
                                   :<span style={{color:'var(--text-muted)'}}>—</span>
                                 }

@@ -2533,13 +2533,13 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
   const [editingMeta, setEditingMeta] = useState(false);
   // bondMeta: {ticker:{tna, base}} — tna=% anual, base='30/360'|'dias/365'
   const [bondMeta, setBondMeta] = useState({
-    'AO27D': {tna:6,  base:'30/360'},
-    'GD38D': {tna:5,  base:'30/360'},
-    'TLCUD': {tna:7,  base:'30/360'},
-    'TZX27': {tna:2,  base:'30/360'},
-    'TZXD6': {tna:0,  base:'30/360'},
+    'AO27D': {tna:6,  base:'30/360', emisionDate:null},
+    'GD38D': {tna:5,  base:'30/360', emisionDate:null},
+    'TLCUD': {tna:7,  base:'30/360', emisionDate:null},
+    'TZX27': {tna:2,  base:'30/360', emisionDate:'2022-12-30'},
+    'TZXD6': {tna:0,  base:'30/360', emisionDate:'2022-03-15'},
   });
-  const [metaDraft, setMetaDraft] = useState({tna:'', base:'30/360'});
+  const [metaDraft, setMetaDraft] = useState({tna:'', base:'30/360', emisionDate:''});
   // CER: serie histórica {date:string, valor:number}[], cacheada en memoria
   const [cerSerie, setCerSerie] = useState(null); // null=no cargado, []=cargando, [{date,valor}]=listo
   const [cerLoading, setCerLoading] = useState(false);
@@ -2642,6 +2642,15 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
     });
   };
 
+  // Auto-fetch CER cuando se selecciona un bono CER
+  useEffect(()=>{
+    if(!selected) return;
+    const meta = SEED_BOND_META[selected]||{};
+    if(meta.adjustsBy==='CER' && cerSerie===null && !cerLoading){
+      fetchCER();
+    }
+  },[selected]);
+
   // ── Handlers ─────────────────────────────────────────────────────────────
   const fetchFlows = async (ticker) => {
     setLoadingTicker(ticker);
@@ -2686,8 +2695,9 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
   const applyMeta = () => {
     const tna = parseFloat(metaDraft.tna);
     const base = metaDraft.base;
+    const emisionDate = metaDraft.emisionDate||null;
     if(!isNaN(tna) && tna >= 0) {
-      setBondMeta(prev => ({...prev, [selected]: {tna, base}}));
+      setBondMeta(prev => ({...prev, [selected]: {tna, base, emisionDate}}));
       // Recalcular flujos futuros
       setBondFlows(prev => {
         const flows = prev[selected]||[];
@@ -3064,6 +3074,12 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
                       <option value="30/360">30/360</option>
                       <option value="dias/365">Días/365</option>
                     </select>
+                    {adjustsBy==='CER'&&<>
+                      <span style={{fontSize:11,color:'var(--text-muted)',marginLeft:8}}>Emisión:</span>
+                      <input type="date" value={metaDraft.emisionDate||''}
+                        onChange={e=>setMetaDraft(p=>({...p,emisionDate:e.target.value}))}
+                        style={{...inp,width:140}}/>
+                    </>}
                     <button onClick={applyMeta}
                       style={{background:'var(--accent)',border:'none',borderRadius:6,padding:'4px 12px',color:'#fff',cursor:'pointer',fontSize:12,fontWeight:600}}>
                       ✓ Aplicar
@@ -3075,10 +3091,11 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
                   </div>
                 ) : (
                   <div style={{display:'flex',gap:6,alignItems:'center',background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:8,padding:'6px 12px',cursor:'pointer'}}
-                    onClick={()=>{setMetaDraft({tna:selMeta.tna, base:selMeta.base});setEditingMeta(true);}}>
+                    onClick={()=>{setMetaDraft({tna:selMeta.tna, base:selMeta.base, emisionDate:selMeta.emisionDate||''});setEditingMeta(true);}}>
                     <span style={{fontSize:12,color:'var(--text-secondary)'}}>Cupón <b style={{color:'var(--accent)'}}>{selMeta.tna}%</b></span>
                     <span style={{fontSize:10,color:'var(--text-muted)'}}>·</span>
                     <span style={{fontSize:12,color:'var(--text-secondary)'}}>Base <b style={{color:'var(--text-primary)'}}>{selMeta.base}</b></span>
+                    {adjustsBy==='CER'&&<><span style={{fontSize:10,color:'var(--text-muted)'}}>·</span><span style={{fontSize:12,color:'var(--text-secondary)'}}>Emisión <b style={{color:'var(--yellow)'}}>{selMeta.emisionDate?fmtD(selMeta.emisionDate):'—'}</b></span></>}
                     <span style={{fontSize:10,color:'var(--text-muted)',marginLeft:4}}>✏️</span>
                   </div>
                 )}
@@ -3096,39 +3113,21 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
               </div>
             )}
 
-            {/* Bloque CER — carga serie y muestra estado */}
+            {/* Estado CER — inline, sin panel separado */}
             {adjustsBy==='CER'&&(()=>{
-              const meta2 = SEED_BOND_META[selected]||{};
-              const emisionDate = meta2.emisionDate||null;
-              // Fecha base CER = 10 días antes de emisión
+              const emisionDate = selMeta.emisionDate||null;
               const cerBaseDate = emisionDate ? new Date(new Date(emisionDate).getTime()-10*24*60*60*1000).toISOString().slice(0,10) : null;
               const cerBaseVal = cerSerie&&cerBaseDate ? getCER(cerSerie,cerBaseDate) : null;
-              const cerHoy = cerSerie ? getCER(cerSerie,todayAR()) : null;
+              const cerHoy = cerSerie&&cerBaseDate ? getCER(cerSerie,todayAR()) : null;
               const coefHoy = cerBaseVal&&cerHoy ? (cerHoy/cerBaseVal) : null;
-
               return(
-                <div style={{background:'rgba(251,191,36,0.08)',border:'1px solid rgba(251,191,36,0.25)',borderRadius:8,padding:'10px 14px',marginBottom:10}}>
-                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:10}}>
-                    <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
-                      <span style={{fontSize:12,color:'var(--yellow)',fontWeight:600}}>⚡ Bono CER</span>
-                      {emisionDate&&<span style={{fontSize:11,color:'var(--text-muted)'}}>Emisión: <b style={{color:'var(--text-secondary)'}}>{fmtD(emisionDate)}</b></span>}
-                      {cerBaseDate&&<span style={{fontSize:11,color:'var(--text-muted)'}}>CER base ({fmtD(cerBaseDate)}): <b style={{color:'var(--text-secondary)',fontFamily:"'DM Mono',monospace"}}>{cerBaseVal?cerBaseVal.toFixed(4):'—'}</b></span>}
-                      {coefHoy&&<span style={{fontSize:11,color:'var(--text-muted)'}}>Coef. actual: <b style={{color:'var(--yellow)',fontFamily:"'DM Mono',monospace"}}>{coefHoy.toFixed(4)}</b></span>}
-                      {cerLoading&&<span style={{fontSize:11,color:'var(--text-muted)',animation:'spin 0.8s linear infinite',display:'inline-block'}}>⟳</span>}
-                    </div>
-                    {!cerSerie&&!cerLoading&&(
-                      <button onClick={fetchCER}
-                        style={{background:'rgba(251,191,36,0.15)',border:'1px solid rgba(251,191,36,0.4)',borderRadius:6,padding:'4px 12px',color:'var(--yellow)',cursor:'pointer',fontSize:11,fontWeight:600}}>
-                        Cargar serie CER
-                      </button>
-                    )}
-                    {cerSerie&&cerSerie.length>0&&<span style={{fontSize:10,color:'var(--green)'}}>✓ {cerSerie.length} datos cargados</span>}
-                  </div>
-                  {!emisionDate&&(
-                    <div style={{fontSize:11,color:'var(--text-muted)',marginTop:6}}>
-                      ⚠️ Falta fecha de emisión en SEED_BOND_META para calcular coeficiente CER automático.
-                    </div>
-                  )}
+                <div style={{background:'rgba(251,191,36,0.06)',border:'1px solid rgba(251,191,36,0.2)',borderRadius:8,padding:'8px 14px',marginBottom:10,display:'flex',alignItems:'center',gap:16,flexWrap:'wrap',fontSize:11}}>
+                  <span style={{color:'var(--yellow)',fontWeight:600}}>⚡ CER</span>
+                  {cerLoading&&<span style={{color:'var(--text-muted)',animation:'spin 0.8s linear infinite',display:'inline-block'}}>⟳ Cargando serie...</span>}
+                  {!emisionDate&&!cerLoading&&<span style={{color:'var(--text-muted)'}}>Ingresá la fecha de emisión en el chip ✏️ para calcular el coeficiente</span>}
+                  {cerBaseDate&&<span style={{color:'var(--text-muted)'}}>CER base <b style={{color:'var(--text-secondary)',fontFamily:"'DM Mono',monospace"}}>{cerBaseVal?cerBaseVal.toFixed(4):'—'}</b></span>}
+                  {coefHoy&&<span style={{color:'var(--text-muted)'}}>Coef. hoy <b style={{color:'var(--yellow)',fontFamily:"'DM Mono',monospace"}}>{coefHoy.toFixed(4)}</b></span>}
+                  {cerSerie&&cerSerie.length>0&&!cerLoading&&<span style={{color:'var(--green)',marginLeft:'auto'}}>✓ {cerSerie.length} registros</span>}
                 </div>
               );
             })()}
@@ -3205,7 +3204,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
                   // Datos CER para este bono si aplica
                   const isCERBond = adjustsBy==='CER';
                   const meta2 = SEED_BOND_META[selected]||{};
-                  const emisionDate2 = meta2.emisionDate||null;
+                  const emisionDate2 = selMeta.emisionDate||meta2.emisionDate||null;
                   const cerBaseDate2 = emisionDate2 ? new Date(new Date(emisionDate2).getTime()-10*24*60*60*1000).toISOString().slice(0,10) : null;
                   const cerBaseVal2 = (isCERBond&&cerSerie&&cerBaseDate2) ? getCER(cerSerie,cerBaseDate2) : null;
 

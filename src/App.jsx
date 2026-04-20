@@ -2546,7 +2546,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
 
   // Fetch serie CER desde argentinadatos — solo una vez
   const fetchCER = async () => {
-    if(cerSerie!==null||cerLoading) return;
+    if(cerLoading||(cerSerie&&cerSerie.length>0)) return;
     setCerLoading(true);
     try {
       const r = await fetch('https://api.argentinadatos.com/v1/finanzas/indices/cer', {signal:AbortSignal.timeout(10000)});
@@ -2563,12 +2563,21 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
     setCerLoading(false);
   };
 
-  // Buscar el CER más cercano a una fecha (hacia atrás)
+  // Buscar el último CER conocido <= dateStr (si no hay, devuelve el más antiguo disponible)
   const getCER = (serie, dateStr) => {
     if(!serie||!serie.length) return null;
-    // Buscar el último valor disponible <= dateStr
     const filtered = serie.filter(x=>x.date<=dateStr);
-    return filtered.length ? filtered[filtered.length-1].valor : serie[0].valor;
+    if(filtered.length) return filtered[filtered.length-1].valor;
+    // Si no hay dato anterior, devolver el más antiguo conocido
+    return serie[0].valor;
+  };
+
+  // CER de 10 días hábiles antes de una fecha
+  const getCERMinus10 = (serie, dateStr) => {
+    if(!serie||!serie.length||!dateStr) return null;
+    const d = new Date(dateStr);
+    d.setDate(d.getDate()-10);
+    return getCER(serie, d.toISOString().slice(0,10));
   };
 
   // Calcular flujos CER ajustados para un bono
@@ -3113,21 +3122,23 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
               </div>
             )}
 
-            {/* Estado CER — inline, sin panel separado */}
+            {/* Estado CER — inline */}
             {adjustsBy==='CER'&&(()=>{
               const emisionDate = selMeta.emisionDate||null;
-              const cerBaseDate = emisionDate ? new Date(new Date(emisionDate).getTime()-10*24*60*60*1000).toISOString().slice(0,10) : null;
-              const cerBaseVal = cerSerie&&cerBaseDate ? getCER(cerSerie,cerBaseDate) : null;
-              const cerHoy = cerSerie&&cerBaseDate ? getCER(cerSerie,todayAR()) : null;
+              const cerBaseVal = emisionDate&&cerSerie ? getCERMinus10(cerSerie,emisionDate) : null;
+              const cerHoy = cerSerie ? getCER(cerSerie,todayAR()) : null;
               const coefHoy = cerBaseVal&&cerHoy ? (cerHoy/cerBaseVal) : null;
+              // Fecha efectiva del CER base (10d antes de emisión)
+              const cerBaseFecha = emisionDate ? (()=>{const d=new Date(emisionDate);d.setDate(d.getDate()-10);return d.toISOString().slice(0,10);})() : null;
               return(
                 <div style={{background:'rgba(251,191,36,0.06)',border:'1px solid rgba(251,191,36,0.2)',borderRadius:8,padding:'8px 14px',marginBottom:10,display:'flex',alignItems:'center',gap:16,flexWrap:'wrap',fontSize:11}}>
                   <span style={{color:'var(--yellow)',fontWeight:600}}>⚡ CER</span>
-                  {cerLoading&&<span style={{color:'var(--text-muted)',animation:'spin 0.8s linear infinite',display:'inline-block'}}>⟳ Cargando serie...</span>}
-                  {!emisionDate&&!cerLoading&&<span style={{color:'var(--text-muted)'}}>Ingresá la fecha de emisión en el chip ✏️ para calcular el coeficiente</span>}
-                  {cerBaseDate&&<span style={{color:'var(--text-muted)'}}>CER base <b style={{color:'var(--text-secondary)',fontFamily:"'DM Mono',monospace"}}>{cerBaseVal?cerBaseVal.toFixed(4):'—'}</b></span>}
-                  {coefHoy&&<span style={{color:'var(--text-muted)'}}>Coef. hoy <b style={{color:'var(--yellow)',fontFamily:"'DM Mono',monospace"}}>{coefHoy.toFixed(4)}</b></span>}
-                  {cerSerie&&cerSerie.length>0&&!cerLoading&&<span style={{color:'var(--green)',marginLeft:'auto'}}>✓ {cerSerie.length} registros</span>}
+                  {cerLoading&&<span style={{color:'var(--text-muted)',display:'flex',alignItems:'center',gap:4}}><span style={{animation:'spin 0.8s linear infinite',display:'inline-block'}}>⟳</span> Cargando serie...</span>}
+                  {!emisionDate&&!cerLoading&&<span style={{color:'var(--text-muted)'}}>Editá el chip ✏️ para ingresar la fecha de emisión</span>}
+                  {cerBaseVal&&<span style={{color:'var(--text-muted)'}}>CER base ({fmtD(cerBaseFecha)}): <b style={{color:'var(--text-secondary)',fontFamily:"'DM Mono',monospace"}}>{cerBaseVal.toFixed(4)}</b></span>}
+                  {cerHoy&&<span style={{color:'var(--text-muted)'}}>CER hoy: <b style={{color:'var(--text-secondary)',fontFamily:"'DM Mono',monospace"}}>{cerHoy.toFixed(4)}</b></span>}
+                  {coefHoy&&<span style={{color:'var(--text-muted)'}}>Coef. actual: <b style={{color:'var(--yellow)',fontFamily:"'DM Mono',monospace"}}>{coefHoy.toFixed(4)}</b></span>}
+                  {cerSerie&&cerSerie.length>0&&!cerLoading&&<span style={{color:'var(--green)',marginLeft:'auto',fontSize:10}}>✓ {cerSerie.length} registros</span>}
                 </div>
               );
             })()}
@@ -3205,8 +3216,8 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
                   const isCERBond = adjustsBy==='CER';
                   const meta2 = SEED_BOND_META[selected]||{};
                   const emisionDate2 = selMeta.emisionDate||meta2.emisionDate||null;
-                  const cerBaseDate2 = emisionDate2 ? new Date(new Date(emisionDate2).getTime()-10*24*60*60*1000).toISOString().slice(0,10) : null;
-                  const cerBaseVal2 = (isCERBond&&cerSerie&&cerBaseDate2) ? getCER(cerSerie,cerBaseDate2) : null;
+                  // CER base = último CER conocido 10 días antes de la emisión
+                  const cerBaseVal2 = (isCERBond&&cerSerie&&emisionDate2) ? getCERMinus10(cerSerie,emisionDate2) : null;
 
                   return(
                   <div style={{overflowX:'auto',borderRadius:10,border:'1px solid var(--border)'}}>
@@ -3234,7 +3245,8 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
                           const dias      = i===0 ? '—' : (selMeta.base==='30/360' ? row.dias30360 : row.diasReales);
                           const rowBg = isCobrado?'rgba(52,211,153,0.04)':isPast?'rgba(251,191,36,0.03)':'transparent';
                           // CER de la fecha de pago
-                          const cerPagoVal = (isCERBond&&cerSerie) ? getCER(cerSerie,row.date) : null;
+                          // getCER devuelve el último valor conocido <= fecha (o el más antiguo si no hay anterior)
+                          const cerPagoVal = (isCERBond&&cerSerie&&cerBaseVal2) ? getCER(cerSerie,row.date) : null;
                           const coefCER = (cerBaseVal2&&cerPagoVal) ? cerPagoVal/cerBaseVal2 : null;
                           const vnAjust = coefCER ? 100*coefCER : null; // VN ajustado por cada 100 originales
                           // Interés ajustado CER

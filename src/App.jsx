@@ -2679,22 +2679,31 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
     setNewFlow({date:'',tipo:'cupon',amort:'',nota:''});
   };
 
-  // ── Próximos pagos ────────────────────────────────────────────────────────
-  const proximosPagos = bonds.map(b => {
+  // ── Próximos pagos — todos los pagos futuros de todos los bonos, ordenados cronológicamente
+  const proximosPagos = bonds.flatMap(b => {
     const flows = (bondFlows[b.ticker]||[]);
-    // Agrupar por fecha para mostrar el total combinado
     const byDate = {};
     flows.forEach(f => {
-      if(!byDate[f.date]) byDate[f.date]={date:f.date,monto:0,cobrado:true,tipo:'cupon'};
+      if(!byDate[f.date]) byDate[f.date]={date:f.date,monto:0,montoCupon:0,montoAmort:0,cobrado:true,hasAmort:false,hasCupon:false};
       byDate[f.date].monto += f.monto;
       if(!f.cobrado) byDate[f.date].cobrado = false;
-      if(f.tipo==='amortizacion') byDate[f.date].tipo='amortizacion';
+      if(f.tipo==='amortizacion'){byDate[f.date].hasAmort=true;byDate[f.date].montoAmort+=f.monto;}
+      else{byDate[f.date].hasCupon=true;byDate[f.date].montoCupon+=f.monto;}
     });
-    const next = Object.values(byDate).filter(r=>!r.cobrado&&r.date>=today).sort((a,b)=>a.date.localeCompare(b.date))[0];
-    if(!next) return null;
-    const total = next.monto * (b.qty/100);
-    return {ticker:b.ticker, name:b.name, flow:next, total, currency:b.buyCurrency};
-  }).filter(Boolean).sort((a,b)=>a.flow.date.localeCompare(b.flow.date));
+    return Object.values(byDate)
+      .filter(r=>!r.cobrado&&r.date>=today)
+      .map(r=>({
+        ticker:b.ticker, name:b.name, currency:b.buyCurrency,
+        date:r.date, monto:r.monto,
+        montoCupon:r.montoCupon, montoAmort:r.montoAmort,
+        hasAmort:r.hasAmort, hasCupon:r.hasCupon,
+        total:r.monto*(b.qty/100),
+        totalCupon:r.montoCupon*(b.qty/100),
+        totalAmort:r.montoAmort*(b.qty/100),
+      }));
+  }).sort((a,b)=>a.date.localeCompare(b.date)||a.ticker.localeCompare(b.ticker));
+  const [pagosOffset, setPagosOffset] = useState(0);
+  const PAGOS_PER_PAGE = 5;
 
   const selBond  = bonds.find(b=>b.ticker===selected);
   const selFlows = selected ? (bondFlows[selected]||[]).sort((a,b)=>a.date.localeCompare(b.date)) : [];
@@ -2741,25 +2750,69 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
   return (
     <div style={{display:'flex',flexDirection:'column',gap:16}}>
 
-      {/* Próximos pagos */}
-      <div style={{...card,padding:'16px 20px'}}>
-        <div style={{fontSize:10,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:1.2,fontWeight:600,marginBottom:12}}>📅 Próximos pagos</div>
+      {/* Próximos pagos — carrusel */}
+      <div style={{...card,padding:'14px 20px'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+          <div style={{display:'flex',alignItems:'center',gap:10}}>
+            <span style={{fontSize:10,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:1.2,fontWeight:600}}>📅 Próximos pagos</span>
+            {proximosPagos.length>0&&<span style={{fontSize:10,color:'var(--text-muted)'}}>
+              {pagosOffset+1}–{Math.min(pagosOffset+PAGOS_PER_PAGE,proximosPagos.length)} de {proximosPagos.length}
+            </span>}
+          </div>
+          {proximosPagos.length>PAGOS_PER_PAGE&&(
+            <div style={{display:'flex',gap:4}}>
+              <button onClick={()=>setPagosOffset(o=>Math.max(0,o-PAGOS_PER_PAGE))}
+                disabled={pagosOffset===0}
+                style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:6,padding:'4px 10px',cursor:pagosOffset===0?'not-allowed':'pointer',color:pagosOffset===0?'var(--text-muted)':'var(--text-secondary)',fontSize:14,opacity:pagosOffset===0?0.4:1}}>
+                ‹
+              </button>
+              <button onClick={()=>setPagosOffset(o=>Math.min(proximosPagos.length-PAGOS_PER_PAGE,o+PAGOS_PER_PAGE))}
+                disabled={pagosOffset+PAGOS_PER_PAGE>=proximosPagos.length}
+                style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:6,padding:'4px 10px',cursor:pagosOffset+PAGOS_PER_PAGE>=proximosPagos.length?'not-allowed':'pointer',color:pagosOffset+PAGOS_PER_PAGE>=proximosPagos.length?'var(--text-muted)':'var(--text-secondary)',fontSize:14,opacity:pagosOffset+PAGOS_PER_PAGE>=proximosPagos.length?0.4:1}}>
+                ›
+              </button>
+            </div>
+          )}
+        </div>
         {proximosPagos.length===0
           ? <div style={{color:'var(--text-muted)',fontSize:13}}>No hay flujos cargados aún.</div>
-          : <div style={{display:'flex',gap:12,flexWrap:'wrap'}}>
-              {proximosPagos.map(p=>(
-                <div key={p.ticker} onClick={()=>setSelected(p.ticker)}
-                  style={{...card,padding:'12px 16px',cursor:'pointer',minWidth:160,borderLeft:`3px solid ${p.flow.tipo==='amortizacion'?'var(--yellow)':'var(--accent)'}`}}>
-                  <div style={{fontSize:11,fontWeight:700,color:'var(--accent)',marginBottom:4}}>{p.ticker}</div>
-                  <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:6}}>{fmtD(p.flow.date)}</div>
-                  <div style={{fontSize:11,color:'var(--text-secondary)',marginBottom:4}}>
-                    {p.flow.tipo==='amortizacion'?'💰 Amort.+Cupón':'🎫 Cupón'}
+          : <div style={{display:'grid',gridTemplateColumns:`repeat(${Math.min(PAGOS_PER_PAGE,proximosPagos.slice(pagosOffset,pagosOffset+PAGOS_PER_PAGE).length)},1fr)`,gap:10}}>
+              {proximosPagos.slice(pagosOffset,pagosOffset+PAGOS_PER_PAGE).map((p,i)=>{
+                const accentColor = p.hasAmort?'var(--yellow)':'var(--accent)';
+                const tipoLabel = p.hasAmort&&p.hasCupon?'💰+🎫 Amort.+Cupón':p.hasAmort?'💰 Amortización':'🎫 Cupón';
+                const isNext = pagosOffset===0&&i===0;
+                return(
+                  <div key={p.ticker+p.date} onClick={()=>setSelected(p.ticker)}
+                    style={{...card,padding:'12px 14px',cursor:'pointer',
+                      borderLeft:`3px solid ${accentColor}`,
+                      background:isNext?'rgba(59,130,246,0.04)':'transparent',
+                      transition:'transform 0.15s,box-shadow 0.15s'}}
+                    onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-1px)';e.currentTarget.style.boxShadow='var(--card-hover-glow)';}}
+                    onMouseLeave={e=>{e.currentTarget.style.transform='';e.currentTarget.style.boxShadow='';}}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:6}}>
+                      <span style={{fontSize:12,fontWeight:700,color:'var(--accent)',fontFamily:"'DM Mono',monospace"}}>{p.ticker}</span>
+                      {isNext&&<span style={{fontSize:9,background:'var(--accent)',color:'#fff',borderRadius:4,padding:'1px 5px',fontWeight:700}}>NEXT</span>}
+                    </div>
+                    <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:4}}>{fmtD(p.date)}</div>
+                    <div style={{fontSize:10,color:accentColor,marginBottom:6}}>{tipoLabel}</div>
+                    {p.hasAmort&&p.hasCupon?(
+                      <div>
+                        <div style={{fontSize:13,fontWeight:700,color:'var(--text-primary)',fontFamily:"'DM Mono',monospace"}}>
+                          {p.currency==='USD'?'US$':'$'}{fmtN2(p.total)}
+                        </div>
+                        <div style={{display:'flex',gap:6,marginTop:3}}>
+                          <span style={{fontSize:9,color:'var(--yellow)'}}>Amort: {p.currency==='USD'?'US$':'$'}{fmtN2(p.totalAmort)}</span>
+                          <span style={{fontSize:9,color:'var(--accent)'}}>Int: {p.currency==='USD'?'US$':'$'}{fmtN2(p.totalCupon)}</span>
+                        </div>
+                      </div>
+                    ):(
+                      <div style={{fontSize:13,fontWeight:700,color:'var(--text-primary)',fontFamily:"'DM Mono',monospace"}}>
+                        {p.currency==='USD'?'US$':'$'}{fmtN2(p.total)}
+                      </div>
+                    )}
                   </div>
-                  <div style={{fontSize:14,fontWeight:700,color:'var(--text-primary)',fontFamily:"'DM Mono',monospace"}}>
-                    {p.currency==='USD'?'US$':'$'}{fmtN2(p.total)}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
         }
       </div>

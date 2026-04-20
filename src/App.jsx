@@ -343,7 +343,7 @@ function Chart100({series}){
         onMouseMove={onMove} onMouseLeave={()=>setHover(null)}>
         {yTicks.map((v,i)=>(
           <g key={i}>
-            <line x1={PL} x2={W-PR} y1={yS(v)} y2={yS(v)} stroke="var(--border)" strokeWidth="0.5"/>
+            <line x1={PL} x2={W-PR} y1={yS(v)} y2={yS(v)} stroke="var(--border)" strokeWidth="0.6" opacity="0.8"/>
             <text x={PL-6} y={yS(v)+4} textAnchor="end" fontSize="10" fill="var(--text-muted)">{v.toFixed(1)}</text>
           </g>
         ))}
@@ -784,12 +784,12 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
             onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}>
             <div ref={scrubRef} style={{position:"relative",height:18,cursor:"default",overflow:"visible"}}>
               {/* Track line */}
-              <div style={{position:"absolute",top:"50%",left:0,right:0,height:2,background:"var(--border)",borderRadius:1,transform:"translateY(-50%)"}}/>
+              <div style={{position:"absolute",top:"50%",left:0,right:0,height:3,background:"var(--border)",borderRadius:2,transform:"translateY(-50%)"}}/>
               {/* Active segment */}
               <div style={{
                 position:"absolute",top:"50%",
                 left:`${startX}%`,width:`${endX-startX}%`,
-                height:3,background:"var(--accent)",borderRadius:1,
+                height:3,background:"linear-gradient(90deg,var(--accent),var(--accent2))",borderRadius:2,
                 transform:"translateY(-50%)",cursor:"grab",
               }} onMouseDown={e=>onMouseDown(e,'window')}/>
               {/* Start handle */}
@@ -797,14 +797,14 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
                 position:"absolute",top:"50%",transform:"translate(-50%,-50%)",
                 left:`${startX}%`,width:12,height:12,
                 background:"var(--accent)",borderRadius:"50%",cursor:"ew-resize",
-                boxShadow:"0 0 0 2px var(--bg-card)",
+                boxShadow:"0 0 0 2px var(--bg-card),0 0 8px rgba(59,130,246,0.4)",
               }} onMouseDown={e=>onMouseDown(e,'start')}/>
               {/* End handle */}
               <div style={{
                 position:"absolute",top:"50%",transform:"translate(-50%,-50%)",
-                left:`${endX}%`,width:12,height:12,
+                left:`${endX}%`,width:14,height:14,
                 background:"var(--accent)",borderRadius:"50%",cursor:"ew-resize",
-                boxShadow:"0 0 0 2px var(--bg-card)",
+                boxShadow:"0 0 0 2px var(--bg-card),0 0 8px rgba(59,130,246,0.4)",
               }} onMouseDown={e=>onMouseDown(e,'end')}/>
             </div>
             {/* Date labels centered below each handle */}
@@ -1703,7 +1703,7 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
   const thS={padding:"8px 12px",textAlign:"left",fontSize:10,color:"var(--text-muted)",fontWeight:500,textTransform:"uppercase",letterSpacing:0.8,borderBottom:"1px solid var(--border)",whiteSpace:"nowrap"};
   const thR={...thS,textAlign:"center"};
   const tdL={padding:"10px 12px",color:"var(--text-secondary)",fontSize:13};
-  const tdR={...tdL,textAlign:"center"};
+  const tdR={...tdL,textAlign:"center",fontFamily:"'DM Mono',monospace",fontSize:12};
 
   // Helper: encontrar TC histórico más cercano a una fecha
   const findHistCCL=(dateStr)=>{
@@ -2750,7 +2750,7 @@ export default function App(){
     })();
   },[ventaResult?.ticker,ventaResult?.buyDate,ventaResult?.sellDate]);
 
-  const card={background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:12};
+  const card={background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:14,boxShadow:"var(--card-glow)"};
   const [darkMode, setDarkMode] = useState(true);
   const [hideAmounts, setHideAmounts] = useState(false);
   const [chartModal, setChartModal] = useState(false);
@@ -2761,19 +2761,31 @@ export default function App(){
         *{box-sizing:border-box;margin:0;padding:0;}
         body{background:var(--bg);color:var(--text-primary);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
         .theme-dark{
-          --bg:#07101f;--bg-card:#0d1a2e;--bg-input:#152030;--border:#1c2e44;
-          --accent:#2563EB;--text-primary:#E8F0FE;--text-secondary:#7A9EC4;
-          --text-muted:#364F6B;--red:#F87171;--green:#34D399;--yellow:#FBBF24;
+          --bg:#060e1a;--bg-card:#0b1628;--bg-input:#111f33;--border:#1a2d45;
+          --accent:#3b82f6;--accent2:#6366f1;
+          --text-primary:#e2ecf8;--text-secondary:#6b8faf;
+          --text-muted:#2e4560;--red:#f87171;--green:#34d399;--yellow:#fbbf24;
           --title-color:#ffffff;
+          --card-glow:0 1px 3px rgba(0,0,0,0.4),0 0 0 1px rgba(59,130,246,0.04);
+          --card-hover-glow:0 4px 20px rgba(59,130,246,0.08),0 0 0 1px rgba(59,130,246,0.1);
         }
         .theme-light{
-          --bg:#F0F4F8;--bg-card:#FFFFFF;--bg-input:#E8EEF4;--border:#CBD5E1;
-          --accent:#2563EB;--text-primary:#0F172A;--text-secondary:#475569;
-          --text-muted:#94A3B8;--red:#EF4444;--green:#16A34A;--yellow:#D97706;
-          --title-color:#0F172A;
+          --bg:#f1f5fb;--bg-card:#ffffff;--bg-input:#e8eef6;--border:#dde5f0;
+          --accent:#2563eb;--accent2:#4f46e5;
+          --text-primary:#0f172a;--text-secondary:#475569;
+          --text-muted:#94a3b8;--red:#ef4444;--green:#16a34a;--yellow:#d97706;
+          --title-color:#0f172a;
+          --card-glow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.04);
+          --card-hover-glow:0 4px 16px rgba(37,99,235,0.1),0 0 0 1px rgba(37,99,235,0.12);
         }
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
         @keyframes spin{to{transform:rotate(360deg)}}
+        @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+        .fi{font-family:'DM Sans',system-ui,sans-serif;animation:fadeIn 0.3s ease;}
         .fi *{box-sizing:border-box;}
+        .fi .kpi-card{transition:box-shadow 0.2s,transform 0.2s;}
+        .fi .kpi-card:hover{box-shadow:var(--card-hover-glow);transform:translateY(-1px);}
+        .fi .nav-btn{transition:color 0.15s;}
         ::-webkit-scrollbar{width:4px;height:4px}
         ::-webkit-scrollbar-track{background:var(--bg)}
         ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
@@ -2781,11 +2793,11 @@ export default function App(){
 
       <div style={{minHeight:"100vh",background:"var(--bg)"}} className={darkMode?"theme-dark":"theme-light"}>
         {/* Header */}
-        <div style={{background:"var(--bg-card)",borderBottom:"1px solid var(--border)",padding:"10px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <div style={{width:28,height:28,borderRadius:8,background:"var(--accent)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>📊</div>
+        <div style={{background:"var(--bg-card)",borderBottom:"1px solid var(--border)",padding:"11px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{width:32,height:32,borderRadius:10,background:"linear-gradient(135deg,var(--accent),var(--accent2))",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,boxShadow:"0 2px 8px rgba(59,130,246,0.3)"}}>📊</div>
             <div>
-              <div style={{fontWeight:700,fontSize:14,color:"var(--title-color)"}}>Mi Portfolio</div>
+              <div style={{fontWeight:700,fontSize:15,color:"var(--title-color)",letterSpacing:"-0.3px"}}>Mi Portfolio</div>
               <div style={{fontSize:11,color:"var(--text-muted)"}}>
                 {priceStatus==="live"&&<span style={{color:"var(--green)"}}>● {liveCount}/{port.length} activos · actualizado {lastRefresh?.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})} · próx. {Math.floor(countdown/60)}:{String(countdown%60).padStart(2,"0")}</span>}
                 {priceStatus==="partial"&&<span style={{color:"var(--yellow)"}}>◐ Parcial · actualizado {lastRefresh?.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})} · próx. {Math.floor(countdown/60)}:{String(countdown%60).padStart(2,"0")}</span>}
@@ -2820,7 +2832,7 @@ export default function App(){
         {/* Nav */}
         <div style={{background:"var(--bg-card)",borderBottom:"1px solid var(--border)",padding:"0 20px",display:"flex",gap:0}}>
           {[["dashboard","📊 Dashboard"],["portfolio","💼 Portfolio"],["analisis","🔍 Análisis"],["operaciones","📋 Operaciones"]].map(([id,lbl])=>(
-            <button key={id} onClick={()=>setTab(id)} style={{padding:"12px 16px",background:"transparent",border:"none",borderBottom:tab===id?"2px solid var(--accent)":"2px solid transparent",color:tab===id?"var(--text-primary)":"var(--text-muted)",cursor:"pointer",fontSize:13,fontWeight:tab===id?600:400}}>
+            <button key={id} onClick={()=>setTab(id)} className="nav-btn" style={{padding:"13px 18px",background:"transparent",border:"none",borderBottom:tab===id?"2px solid var(--accent)":"2px solid transparent",color:tab===id?"var(--text-primary)":"var(--text-muted)",cursor:"pointer",fontSize:13,fontWeight:tab===id?600:400,letterSpacing:tab===id?"-0.1px":0}}>
               {lbl}
             </button>
           ))}
@@ -2888,24 +2900,24 @@ export default function App(){
                 return(
                   <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,maxWidth:860}}>
                     {kpis.map(k=>(
-                      <div key={k.lbl} style={{
+                      <div key={k.lbl} className="kpi-card" style={{
                         ...card,
-                        padding:"10px 14px",
+                        padding:"16px 20px",
                         position:"relative",
                         overflow:"hidden",
                         borderLeft:`3px solid ${k.mainColor==="var(--text-secondary)"?"var(--border)":k.mainColor}`,
                       }}>
-                        {k.trend!=null&&<div style={{position:"absolute",inset:0,background:`${k.trend>=0?"rgba(52,211,153,":"rgba(248,113,113,"}0.03)`,pointerEvents:"none"}}/>}
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-                          <span style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8,fontWeight:500}}>{k.lbl}</span>
-                          <span style={{fontSize:14,lineHeight:1}}>{k.icon}</span>
+                        {k.trend!=null&&<div style={{position:"absolute",inset:0,background:`${k.trend>=0?"rgba(52,211,153,":"rgba(248,113,113,"}0.04)`,pointerEvents:"none"}}/>}
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+                          <span style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1.2,fontWeight:600}}>{k.lbl}</span>
+                          <span style={{fontSize:13,lineHeight:1,opacity:0.7}}>{k.icon}</span>
                         </div>
-                        <div style={{fontSize:20,fontFamily:"Georgia,serif",fontWeight:700,color:k.mainColor,lineHeight:1,marginBottom:4}}>
+                        <div style={{fontSize:26,fontFamily:"'DM Sans',Georgia,serif",fontWeight:700,color:k.mainColor,lineHeight:1,marginBottom:8,letterSpacing:"-0.5px"}}>
                           {k.main}
                         </div>
                         <div style={{display:"flex",alignItems:"baseline",gap:4}}>
-                          <span style={{fontSize:k.bigSub?14:11,color:k.trend!=null?pc(k.trend):"var(--text-secondary)",fontWeight:k.bigSub?700:k.trend!=null?600:400,fontFamily:k.bigSub?"Georgia,serif":"inherit"}}>{k.sub}</span>
-                          {k.subLabel&&<span style={{fontSize:8,color:"var(--text-muted)",textTransform:"uppercase",marginLeft:2}}>{k.subLabel}</span>}
+                          <span style={{fontSize:k.bigSub?15:12,color:k.trend!=null?pc(k.trend):"var(--text-secondary)",fontWeight:k.bigSub?600:k.trend!=null?600:400}}>{k.sub}</span>
+                          {k.subLabel&&<span style={{fontSize:8,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8,marginLeft:3}}>{k.subLabel}</span>}
                         </div>
                       </div>
                     ))}
@@ -2914,8 +2926,8 @@ export default function App(){
               })()}
 
               <div style={{display:"grid",gridTemplateColumns:"220px 1fr",gap:14,alignItems:"stretch"}}>
-                <div style={{...card,padding:18,display:"flex",flexDirection:"column"}}>
-                  <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:14}}>Asignación por tipo</div>
+                <div style={{...card,padding:"18px 16px",display:"flex",flexDirection:"column"}}>
+                  <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1.2,marginBottom:12,fontWeight:600}}>Asignación por tipo</div>
                   <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
                     <Donut segs={byType.map(t=>({k:t.key,v:t.val,color:t.color,label:t.label}))} size={170}/>
                     <div style={{width:"100%",display:"grid",gap:8}}>

@@ -2523,77 +2523,220 @@ async function fetchBondFlows(ticker) {
 }
 
 function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
-  const [selected, setSelected] = useState(null);
+  const [selected, setSelected]       = useState(null);
   const [loadingTicker, setLoadingTicker] = useState(null);
-  const [editFlow, setEditFlow] = useState(null);
-  const [addingFlow, setAddingFlow] = useState(null);
-  const [newFlow, setNewFlow] = useState({date:'',tipo:'cupon',monto:''});
-  const [viewMode, setViewMode] = useState('micobro'); // 'prospecto' | 'miobro'
-  const [cerCoef, setCerCoef] = useState({}); // {ticker: coeficiente}
+  const [addingFlow, setAddingFlow]   = useState(null);
+  const [newFlow, setNewFlow]         = useState({date:'',tipo:'cupon',amort:'',nota:''});
+  const [viewMode, setViewMode]       = useState('micobro');
+  const [cerCoef, setCerCoef]         = useState({});
+  const [editingCell, setEditingCell] = useState(null); // {ticker,date,field} field=amort|interes
+  const [editingMeta, setEditingMeta] = useState(false);
+  // bondMeta: {ticker:{tna, base}} — tna=% anual, base='30/360'|'dias/365'
+  const [bondMeta, setBondMeta] = useState({
+    'AO27D': {tna:6,  base:'30/360'},
+    'GD38D': {tna:5,  base:'30/360'},
+    'TLCUD': {tna:7,  base:'30/360'},
+    'TZX27': {tna:2,  base:'30/360'},
+    'TZXD6': {tna:0,  base:'30/360'},
+  });
+  const [metaDraft, setMetaDraft] = useState({tna:'', base:'30/360'});
 
   const fmtD = s => s ? s.slice(8)+'/'+s.slice(5,7)+'/'+s.slice(0,4) : '';
-  const fmtN = n => Number(n).toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
+  const fmtN = n => Number(n).toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:4});
+  const fmtN2 = n => Number(n).toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
   const today = todayAR();
 
-  // Solo bonos y ONs
   const bonds = port.filter(h => h.type==='bono_ars'||h.type==='bono_usd');
 
+  // ── Helpers de cálculo ──────────────────────────────────────────────────
+  // Días 30/360: convención ICMA/Bond
+  const dias30_360 = (d1, d2) => {
+    const a=new Date(d1), b=new Date(d2);
+    const [y1,m1,day1] = [a.getFullYear(), a.getMonth()+1, a.getDate()];
+    const [y2,m2,day2] = [b.getFullYear(), b.getMonth()+1, b.getDate()];
+    const D1 = Math.min(day1, 30);
+    const D2 = (day1>=30 && day2===31) ? 30 : day2;
+    return (y2-y1)*360 + (m2-m1)*30 + (D2-D1);
+  };
+
+  const diasReales = (d1, d2) =>
+    Math.round((new Date(d2) - new Date(d1)) / (1000*60*60*24));
+
+  const calcInteres = (tna, base, diasCalc, vnResidual) => {
+    if(!tna || !vnResidual) return 0;
+    const divisor = base==='30/360' ? 360 : 365;
+    return parseFloat(((tna/100) * (diasCalc/divisor) * vnResidual).toFixed(6));
+  };
+
+  // Recalcular intereses de cupones futuros no cobrados
+  const recalcularFuturos = (ticker, flows, tna, base) => {
+    const sorted = [...flows].sort((a,b)=>a.date.localeCompare(b.date));
+    // Construir VN residual acumulado
+    let vn = 100;
+    const vnMap = {}; // date → vn antes de ese pago
+    sorted.forEach(f => {
+      if(!vnMap[f.date]) vnMap[f.date] = vn;
+      if(f.tipo==='amortizacion') vn = Math.max(0, vn - f.monto);
+    });
+    // Fechas ordenadas únicas para calcular días
+    const dates = [...new Set(sorted.map(f=>f.date))].sort();
+
+    return flows.map(f => {
+      if(f.tipo!=='cupon') return f;      // amorts no se tocan
+      if(f.cobrado) return f;             // cobrados no se tocan
+      if(f.date <= today) return f;       // vencidos no se tocan
+      const idx = dates.indexOf(f.date);
+      const prevDate = idx > 0 ? dates[idx-1] : f.date;
+      const diasCalc = base==='30/360'
+        ? dias30_360(prevDate, f.date)
+        : diasReales(prevDate, f.date);
+      const vnAntes = vnMap[f.date] ?? 100;
+      const nuevoInteres = calcInteres(tna, base, diasCalc, vnAntes);
+      return {...f, monto: nuevoInteres};
+    });
+  };
+
+  // ── Handlers ─────────────────────────────────────────────────────────────
   const fetchFlows = async (ticker) => {
     setLoadingTicker(ticker);
     const flows = await fetchBondFlows(ticker);
     setLoadingTicker(null);
     if(flows&&flows.length) {
       setBondFlows(prev => ({...prev, [ticker]: flows}));
-      setSelected(ticker);
     } else {
-      setAddingFlow(ticker);
       setBondFlows(prev => ({...prev, [ticker]: prev[ticker]||[]}));
-      setSelected(ticker);
     }
+    setSelected(ticker);
+    setAddingFlow(flows&&flows.length ? null : ticker);
   };
 
-  const saveEdit = () => {
-    if(!editFlow) return;
+  const confirmCobro = (ticker, ids) => {
     setBondFlows(prev => ({
       ...prev,
-      [editFlow.ticker]: (prev[editFlow.ticker]||[]).map(f => f.id===editFlow.flow.id ? editFlow.flow : f)
-    }));
-    setEditFlow(null);
-  };
-
-  const confirmCobro = (ticker, flowId) => {
-    setBondFlows(prev => ({
-      ...prev,
-      [ticker]: (prev[ticker]||[]).map(f => f.id===flowId ? {...f, cobrado:true, fechaCobro:today} : f)
+      [ticker]: (prev[ticker]||[]).map(f =>
+        ids.includes(f.id) ? {...f, cobrado:true, fechaCobro:today} : f
+      )
     }));
   };
 
-  const deleteFlow = (ticker, flowId) => {
-    setBondFlows(prev => ({...prev, [ticker]: (prev[ticker]||[]).filter(f=>f.id!==flowId)}));
+  const deleteFlow = (ticker, id) => {
+    setBondFlows(prev => ({...prev, [ticker]: (prev[ticker]||[]).filter(f=>f.id!==id)}));
+  };
+
+  const deleteRow = (ticker, ids) => {
+    setBondFlows(prev => ({...prev, [ticker]: (prev[ticker]||[]).filter(f=>!ids.includes(f.id))}));
+  };
+
+  const saveCellEdit = (ticker, id, field, value) => {
+    setBondFlows(prev => ({
+      ...prev,
+      [ticker]: (prev[ticker]||[]).map(f =>
+        f.id===id ? {...f, monto: parseFloat(value)||f.monto} : f
+      )
+    }));
+    setEditingCell(null);
+  };
+
+  const applyMeta = () => {
+    const tna = parseFloat(metaDraft.tna);
+    const base = metaDraft.base;
+    if(!isNaN(tna) && tna >= 0) {
+      setBondMeta(prev => ({...prev, [selected]: {tna, base}}));
+      // Recalcular flujos futuros
+      setBondFlows(prev => {
+        const flows = prev[selected]||[];
+        return {...prev, [selected]: recalcularFuturos(selected, flows, tna, base)};
+      });
+    }
+    setEditingMeta(false);
   };
 
   const addNewFlow = () => {
-    if(!newFlow.date||!newFlow.monto) return;
-    const flow = {id:Date.now(), date:newFlow.date, tipo:newFlow.tipo, monto:parseFloat(newFlow.monto), cobrado:false, fechaCobro:null, fuente:'manual'};
-    setBondFlows(prev => ({...prev, [addingFlow]: [...(prev[addingFlow]||[]), flow].sort((a,b)=>a.date.localeCompare(b.date))}));
-    setNewFlow({date:'',tipo:'cupon',monto:''});
+    if(!newFlow.date) return;
+    const meta = bondMeta[addingFlow] || {tna:0, base:'30/360'};
+    const flows = (bondFlows[addingFlow]||[]).sort((a,b)=>a.date.localeCompare(b.date));
+    // VN residual hasta esta fecha
+    let vn = 100;
+    flows.forEach(f => { if(f.date<newFlow.date && f.tipo==='amortizacion') vn=Math.max(0,vn-f.monto); });
+    // Fecha anterior para calcular días
+    const prevDates = [...new Set(flows.map(f=>f.date))].filter(d=>d<newFlow.date).sort();
+    const prevDate = prevDates.length ? prevDates[prevDates.length-1] : newFlow.date;
+    const diasCalc = meta.base==='30/360'
+      ? dias30_360(prevDate, newFlow.date)
+      : diasReales(prevDate, newFlow.date);
+
+    const amortVal = parseFloat(newFlow.amort)||0;
+    const interesVal = newFlow.tipo==='cupon' ? calcInteres(meta.tna, meta.base, diasCalc, vn) : 0;
+
+    const flowsToAdd = [];
+    if(newFlow.tipo==='cupon' || newFlow.tipo==='ambos') {
+      flowsToAdd.push({id:Date.now(), date:newFlow.date, tipo:'cupon', monto:interesVal, cobrado:false, fechaCobro:null, fuente:'manual', nota:newFlow.nota||''});
+    }
+    if(newFlow.tipo==='amortizacion' || newFlow.tipo==='ambos') {
+      flowsToAdd.push({id:Date.now()+1, date:newFlow.date, tipo:'amortizacion', monto:amortVal, cobrado:false, fechaCobro:null, fuente:'manual', nota:newFlow.nota||''});
+    }
+    setBondFlows(prev => ({...prev, [addingFlow]: [...(prev[addingFlow]||[]), ...flowsToAdd].sort((a,b)=>a.date.localeCompare(b.date))}));
+    setNewFlow({date:'',tipo:'cupon',amort:'',nota:''});
   };
 
-  // Próximos pagos por ticker
+  // ── Próximos pagos ────────────────────────────────────────────────────────
   const proximosPagos = bonds.map(b => {
-    const flows = bondFlows[b.ticker]||[];
-    const next = flows.filter(f=>!f.cobrado&&f.date>=today).sort((a,b)=>a.date.localeCompare(b.date))[0];
+    const flows = (bondFlows[b.ticker]||[]);
+    // Agrupar por fecha para mostrar el total combinado
+    const byDate = {};
+    flows.forEach(f => {
+      if(!byDate[f.date]) byDate[f.date]={date:f.date,monto:0,cobrado:true,tipo:'cupon'};
+      byDate[f.date].monto += f.monto;
+      if(!f.cobrado) byDate[f.date].cobrado = false;
+      if(f.tipo==='amortizacion') byDate[f.date].tipo='amortizacion';
+    });
+    const next = Object.values(byDate).filter(r=>!r.cobrado&&r.date>=today).sort((a,b)=>a.date.localeCompare(b.date))[0];
     if(!next) return null;
-    const isBond = b.type==='bono_ars'||b.type==='bono_usd';
-    const qty = b.qty;
-    const total = next.monto * (isBond?qty/100:qty);
+    const total = next.monto * (b.qty/100);
     return {ticker:b.ticker, name:b.name, flow:next, total, currency:b.buyCurrency};
   }).filter(Boolean).sort((a,b)=>a.flow.date.localeCompare(b.flow.date));
 
-  const selBond = bonds.find(b=>b.ticker===selected);
+  const selBond  = bonds.find(b=>b.ticker===selected);
   const selFlows = selected ? (bondFlows[selected]||[]).sort((a,b)=>a.date.localeCompare(b.date)) : [];
+  const selMeta  = bondMeta[selected] || {tna:0, base:'30/360'};
+  const seedMeta = SEED_BOND_META[selected] || {};
+  const adjustsBy = seedMeta.adjustsBy || null;
+  const coef = parseFloat(cerCoef[selected])||1;
+  const currency = selBond?.buyCurrency==='USD' ? 'US$' : '$';
 
-  const inp = {background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:8,padding:'6px 10px',color:'var(--text-primary)',fontSize:13,width:'100%'};
+  const inp = {background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:6,padding:'5px 9px',color:'var(--text-primary)',fontSize:12,width:'100%'};
+
+  // ── Agrupar flows por fecha ───────────────────────────────────────────────
+  const buildRows = (flows) => {
+    const byDate = {};
+    flows.forEach(f => {
+      if(!byDate[f.date]) byDate[f.date]={date:f.date,cupon:null,amort:null,ids:[]};
+      if(f.tipo==='amortizacion') byDate[f.date].amort=f;
+      else byDate[f.date].cupon=f;
+      byDate[f.date].ids.push(f.id);
+    });
+    const rows = Object.values(byDate).sort((a,b)=>a.date.localeCompare(b.date));
+    let vn = 100;
+    return rows.map((row,i) => {
+      const amortPct    = row.amort?.monto ?? 0;
+      const interestPct = row.cupon?.monto ?? 0;
+      const vnAntes     = vn;
+      vn = Math.max(0, vn - amortPct);
+      // Días
+      const prevDate = i>0 ? rows[i-1].date : row.date;
+      const diasR = i===0 ? 0 : diasReales(prevDate, row.date);
+      const dias3 = i===0 ? 0 : dias30_360(prevDate, row.date);
+      return {...row, amortPct, interestPct, totalPct:amortPct+interestPct, vnAntes, vnDespues:vn, diasReales:diasR, dias30360:dias3};
+    });
+  };
+
+  const rows = buildRows(selFlows);
+
+  // Estilos tabla
+  const thP  = {padding:'7px 10px',fontSize:10,fontWeight:700,textTransform:'uppercase',letterSpacing:0.6,background:'var(--bg-input)',borderBottom:'2px solid var(--border)',textAlign:'right',whiteSpace:'nowrap',color:'var(--text-muted)'};
+  const thPL = {...thP,textAlign:'left'};
+  const tdP  = {padding:'6px 10px',fontFamily:"'DM Mono',monospace",fontSize:12,textAlign:'right',borderBottom:'1px solid var(--border)',color:'var(--text-secondary)'};
+  const tdPL = {...tdP,textAlign:'left'};
 
   return (
     <div style={{display:'flex',flexDirection:'column',gap:16}}>
@@ -2602,7 +2745,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
       <div style={{...card,padding:'16px 20px'}}>
         <div style={{fontSize:10,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:1.2,fontWeight:600,marginBottom:12}}>📅 Próximos pagos</div>
         {proximosPagos.length===0
-          ? <div style={{color:'var(--text-muted)',fontSize:13}}>No hay flujos cargados aún. Seleccioná un bono abajo para cargar sus flujos.</div>
+          ? <div style={{color:'var(--text-muted)',fontSize:13}}>No hay flujos cargados aún.</div>
           : <div style={{display:'flex',gap:12,flexWrap:'wrap'}}>
               {proximosPagos.map(p=>(
                 <div key={p.ticker} onClick={()=>setSelected(p.ticker)}
@@ -2610,10 +2753,10 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
                   <div style={{fontSize:11,fontWeight:700,color:'var(--accent)',marginBottom:4}}>{p.ticker}</div>
                   <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:6}}>{fmtD(p.flow.date)}</div>
                   <div style={{fontSize:11,color:'var(--text-secondary)',marginBottom:4}}>
-                    {p.flow.tipo==='amortizacion'?'💰 Amortización':'🎫 Cupón'}
+                    {p.flow.tipo==='amortizacion'?'💰 Amort.+Cupón':'🎫 Cupón'}
                   </div>
                   <div style={{fontSize:14,fontWeight:700,color:'var(--text-primary)',fontFamily:"'DM Mono',monospace"}}>
-                    {p.currency==='USD'?'US$':'$'}{fmtN(p.total)}
+                    {p.currency==='USD'?'US$':'$'}{fmtN2(p.total)}
                   </div>
                 </div>
               ))}
@@ -2621,7 +2764,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
         }
       </div>
 
-      {/* Lista de bonos */}
+      {/* Lista de bonos + tabla */}
       <div style={{...card,padding:'16px 20px'}}>
         <div style={{fontSize:10,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:1.2,fontWeight:600,marginBottom:12}}>Bonos y ONs en cartera</div>
         <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:16}}>
@@ -2630,7 +2773,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
             const isActive = selected===b.ticker;
             return(
               <button key={b.ticker}
-                onClick={()=>{ if(hasFlows){setSelected(b.ticker);}else{fetchFlows(b.ticker);} }}
+                onClick={()=>{ if(hasFlows){setSelected(b.ticker);setAddingFlow(null);}else{fetchFlows(b.ticker);} }}
                 style={{padding:'6px 14px',borderRadius:8,border:`1px solid ${isActive?'var(--accent)':'var(--border)'}`,
                   background:isActive?'var(--accent)':'var(--bg-input)',
                   color:isActive?'#fff':'var(--text-secondary)',cursor:'pointer',fontSize:12,fontWeight:isActive?700:400,
@@ -2642,38 +2785,115 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
           })}
         </div>
 
-        {/* Tabla de flujos del bono seleccionado */}
         {selected&&selBond&&(
           <div>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+            {/* Header del bono */}
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:12,flexWrap:'wrap',gap:8}}>
               <div>
                 <span style={{fontWeight:700,color:'var(--text-primary)',fontSize:14}}>{selBond.ticker}</span>
                 <span style={{color:'var(--text-muted)',fontSize:12,marginLeft:8}}>{selBond.name}</span>
                 <span style={{color:'var(--text-muted)',fontSize:11,marginLeft:8}}>{selBond.qty.toLocaleString('es-AR')} nominales</span>
               </div>
-              <button onClick={()=>setAddingFlow(selected)}
-                style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:6,padding:'5px 12px',cursor:'pointer',color:'var(--text-secondary)',fontSize:12}}>
-                + Agregar pago
-              </button>
+              <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+                {/* TNA + Base — editable */}
+                {editingMeta ? (
+                  <div style={{display:'flex',gap:8,alignItems:'center',background:'var(--bg-input)',border:'1px solid var(--accent)',borderRadius:8,padding:'6px 12px'}}>
+                    <span style={{fontSize:11,color:'var(--text-muted)'}}>TNA:</span>
+                    <input type="number" step="0.01" value={metaDraft.tna}
+                      onChange={e=>setMetaDraft(p=>({...p,tna:e.target.value}))}
+                      style={{...inp,width:70,textAlign:'right'}}/>
+                    <span style={{fontSize:11,color:'var(--text-muted)'}}>%</span>
+                    <span style={{fontSize:11,color:'var(--text-muted)',marginLeft:8}}>Base:</span>
+                    <select value={metaDraft.base} onChange={e=>setMetaDraft(p=>({...p,base:e.target.value}))}
+                      style={{...inp,width:110}}>
+                      <option value="30/360">30/360</option>
+                      <option value="dias/365">Días/365</option>
+                    </select>
+                    <button onClick={applyMeta}
+                      style={{background:'var(--accent)',border:'none',borderRadius:6,padding:'4px 12px',color:'#fff',cursor:'pointer',fontSize:12,fontWeight:600}}>
+                      ✓ Aplicar
+                    </button>
+                    <button onClick={()=>setEditingMeta(false)}
+                      style={{background:'transparent',border:'1px solid var(--border)',borderRadius:6,padding:'4px 8px',color:'var(--text-muted)',cursor:'pointer',fontSize:12}}>
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{display:'flex',gap:6,alignItems:'center',background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:8,padding:'6px 12px',cursor:'pointer'}}
+                    onClick={()=>{setMetaDraft({tna:selMeta.tna, base:selMeta.base});setEditingMeta(true);}}>
+                    <span style={{fontSize:12,color:'var(--text-secondary)'}}>TNA <b style={{color:'var(--accent)'}}>{selMeta.tna}%</b></span>
+                    <span style={{fontSize:10,color:'var(--text-muted)'}}>·</span>
+                    <span style={{fontSize:12,color:'var(--text-secondary)'}}>Base <b style={{color:'var(--text-primary)'}}>{selMeta.base}</b></span>
+                    <span style={{fontSize:10,color:'var(--text-muted)',marginLeft:4}}>✏️</span>
+                  </div>
+                )}
+                <button onClick={()=>setAddingFlow(selected)}
+                  style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:6,padding:'5px 12px',cursor:'pointer',color:'var(--text-secondary)',fontSize:12}}>
+                  + Agregar pago
+                </button>
+              </div>
             </div>
 
-            {/* Add flow form */}
+            {/* Descripción */}
+            {seedMeta.desc&&(
+              <div style={{background:'rgba(59,130,246,0.06)',border:'1px solid rgba(59,130,246,0.12)',borderRadius:8,padding:'9px 14px',marginBottom:10,fontSize:12,color:'var(--text-secondary)'}}>
+                📋 {seedMeta.desc}
+              </div>
+            )}
+
+            {/* Alerta CER */}
+            {adjustsBy&&(
+              <div style={{background:'rgba(251,191,36,0.08)',border:'1px solid rgba(251,191,36,0.25)',borderRadius:8,padding:'10px 14px',marginBottom:10,display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}>
+                <div style={{fontSize:12,color:'var(--yellow)'}}>⚠️ Ajusta por <b>{adjustsBy}</b>. Los montos son sobre VN original — el cobro real depende del coeficiente vigente.</div>
+                <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
+                  <span style={{fontSize:11,color:'var(--text-muted)'}}>Coef. {adjustsBy}:</span>
+                  <input type="number" step="0.01" value={cerCoef[selected]||''}
+                    onChange={e=>setCerCoef(p=>({...p,[selected]:e.target.value}))}
+                    placeholder="ej: 45.23" style={{...inp,width:90}}/>
+                </div>
+              </div>
+            )}
+
+            {/* Form agregar pago */}
             {addingFlow===selected&&(
               <div style={{background:'rgba(59,130,246,0.06)',border:'1px solid rgba(59,130,246,0.15)',borderRadius:10,padding:'14px 16px',marginBottom:12,display:'flex',gap:10,alignItems:'flex-end',flexWrap:'wrap'}}>
-                <div style={{flex:1,minWidth:130}}>
-                  <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:4}}>Fecha</div>
-                  <input type="date" value={newFlow.date} onChange={e=>setNewFlow(p=>({...p,date:e.target.value}))} style={{...inp}}/>
+                <div style={{display:'flex',flexDirection:'column',gap:4,minWidth:130}}>
+                  <span style={{fontSize:10,color:'var(--text-muted)'}}>Fecha</span>
+                  <input type="date" value={newFlow.date} onChange={e=>setNewFlow(p=>({...p,date:e.target.value}))} style={inp}/>
                 </div>
-                <div style={{flex:1,minWidth:130}}>
-                  <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:4}}>Tipo</div>
-                  <select value={newFlow.tipo} onChange={e=>setNewFlow(p=>({...p,tipo:e.target.value}))} style={{...inp}}>
-                    <option value="cupon">Cupón</option>
-                    <option value="amortizacion">Amortización</option>
+                <div style={{display:'flex',flexDirection:'column',gap:4,minWidth:140}}>
+                  <span style={{fontSize:10,color:'var(--text-muted)'}}>Tipo</span>
+                  <select value={newFlow.tipo} onChange={e=>setNewFlow(p=>({...p,tipo:e.target.value}))} style={inp}>
+                    <option value="cupon">🎫 Solo cupón</option>
+                    <option value="amortizacion">💰 Solo amort.</option>
+                    <option value="ambos">💰+🎫 Amort.+Cupón</option>
                   </select>
                 </div>
-                <div style={{flex:1,minWidth:130}}>
-                  <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:4}}>Monto / 100 láminas</div>
-                  <input type="number" value={newFlow.monto} onChange={e=>setNewFlow(p=>({...p,monto:e.target.value}))} placeholder="0,00" style={{...inp}}/>
+                {(newFlow.tipo==='amortizacion'||newFlow.tipo==='ambos')&&(
+                  <div style={{display:'flex',flexDirection:'column',gap:4,minWidth:120}}>
+                    <span style={{fontSize:10,color:'var(--text-muted)'}}>Amort. % VN</span>
+                    <input type="number" step="0.0001" value={newFlow.amort} onChange={e=>setNewFlow(p=>({...p,amort:e.target.value}))} placeholder="ej: 4.5455" style={inp}/>
+                  </div>
+                )}
+                <div style={{display:'flex',flexDirection:'column',gap:4,minWidth:130}}>
+                  <span style={{fontSize:10,color:'var(--text-muted)'}}>Nota (opcional)</span>
+                  <input value={newFlow.nota} onChange={e=>setNewFlow(p=>({...p,nota:e.target.value}))} placeholder="ej: cuota 5/22" style={inp}/>
+                </div>
+                <div style={{display:'flex',flexDirection:'column',gap:4,fontSize:10,color:'var(--text-muted)'}}>
+                  <span>Interés calculado</span>
+                  <div style={{...inp,background:'transparent',color:'var(--accent)',fontWeight:700,minWidth:80,textAlign:'right'}}>
+                    {(()=>{
+                      if(!newFlow.date||(newFlow.tipo==='amortizacion')) return '—';
+                      const meta2 = bondMeta[addingFlow]||{tna:0,base:'30/360'};
+                      const flows2 = (bondFlows[addingFlow]||[]).sort((a,b)=>a.date.localeCompare(b.date));
+                      let vn2=100;
+                      flows2.forEach(f=>{if(f.date<newFlow.date&&f.tipo==='amortizacion')vn2=Math.max(0,vn2-f.monto);});
+                      const prevDates2=[...new Set(flows2.map(f=>f.date))].filter(d=>d<newFlow.date).sort();
+                      const prev2=prevDates2.length?prevDates2[prevDates2.length-1]:newFlow.date;
+                      const dc=meta2.base==='30/360'?dias30_360(prev2,newFlow.date):diasReales(prev2,newFlow.date);
+                      return fmtN(calcInteres(meta2.tna,meta2.base,dc,vn2))+'%';
+                    })()}
+                  </div>
                 </div>
                 <button onClick={addNewFlow}
                   style={{background:'var(--accent)',border:'none',borderRadius:8,padding:'7px 16px',color:'#fff',cursor:'pointer',fontSize:13,fontWeight:600}}>
@@ -2686,270 +2906,169 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
               </div>
             )}
 
-            {selFlows.length===0
-              ? <div style={{color:'var(--text-muted)',fontSize:13,padding:'20px 0'}}>No hay flujos cargados. Usá "+ Agregar pago" para cargarlos manualmente.</div>
-              : (()=>{
-                  const meta=SEED_BOND_META[selected]||{};
-                  const adjustsBy=meta.adjustsBy||null;
-                  const coef=parseFloat(cerCoef[selected])||1;
-                  const currency=selBond.buyCurrency==='USD'?'US$':'$';
+            {rows.length===0
+              ? <div style={{color:'var(--text-muted)',fontSize:13,padding:'20px 0'}}>No hay flujos. Usá "+ Agregar pago" para cargarlos.</div>
+              : (<>
+                {/* Toggle vista */}
+                <div style={{display:'flex',gap:8,marginBottom:12}}>
+                  {[['prospecto','📋 Prospecto'],['micobro','💰 Mi cobro']].map(([k,lbl])=>(
+                    <button key={k} onClick={()=>setViewMode(k)}
+                      style={{padding:'5px 14px',borderRadius:6,border:`1px solid ${viewMode===k?'var(--accent)':'var(--border)'}`,
+                        background:viewMode===k?'var(--accent)':'var(--bg-input)',
+                        color:viewMode===k?'#fff':'var(--text-secondary)',cursor:'pointer',fontSize:12,fontWeight:viewMode===k?700:400}}>
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
 
-                  return(<>
-                    {/* Descripción del papel */}
-                    {meta.desc&&(
-                      <div style={{background:'rgba(59,130,246,0.06)',border:'1px solid rgba(59,130,246,0.12)',borderRadius:8,padding:'10px 14px',marginBottom:12,fontSize:12,color:'var(--text-secondary)'}}>
-                        📋 {meta.desc}
-                      </div>
-                    )}
-
-                    {/* Alerta variable */}
-                    {adjustsBy&&(
-                      <div style={{background:'rgba(251,191,36,0.08)',border:'1px solid rgba(251,191,36,0.25)',borderRadius:8,padding:'10px 14px',marginBottom:12,display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}>
-                        <div style={{fontSize:12,color:'var(--yellow)'}}>
-                          ⚠️ Este bono ajusta por <b>{adjustsBy}</b>. Los montos del prospecto son sobre VN original — el cobro real depende del coeficiente vigente.
-                        </div>
-                        <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
-                          <span style={{fontSize:11,color:'var(--text-muted)'}}>Coef. {adjustsBy}:</span>
-                          <input type="number" step="0.01"
-                            value={cerCoef[selected]||''}
-                            onChange={e=>setCerCoef(p=>({...p,[selected]:e.target.value}))}
-                            placeholder="ej: 45.23"
-                            style={{...inp,width:90,padding:'4px 8px',fontSize:12}}/>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Toggle vista */}
-                    <div style={{display:'flex',gap:8,marginBottom:12}}>
-                      {[['prospecto','📋 Prospecto'],['miobro','💰 Mi cobro']].map(([k,lbl])=>(
-                        <button key={k} onClick={()=>setViewMode(k)}
-                          style={{padding:'5px 14px',borderRadius:6,border:`1px solid ${viewMode===k?'var(--accent)':'var(--border)'}`,
-                            background:viewMode===k?'var(--accent)':'var(--bg-input)',
-                            color:viewMode===k?'#fff':'var(--text-secondary)',cursor:'pointer',fontSize:12,fontWeight:viewMode===k?700:400}}>
-                          {lbl}
-                        </button>
-                      ))}
-                    </div>
-
-                    {viewMode==='prospecto'?(()=>{
-                      // Agrupar flows por fecha: fusionar cupon + amortizacion de la misma fecha en una sola fila
-                      const byDate = {};
-                      selFlows.forEach(f=>{
-                        if(!byDate[f.date]) byDate[f.date]={date:f.date,cupon:null,amort:null,ids:[]};
-                        if(f.tipo==='amortizacion') byDate[f.date].amort=f;
-                        else byDate[f.date].cupon=f;
-                        byDate[f.date].ids.push(f.id);
-                      });
-                      const rows = Object.values(byDate).sort((a,b)=>a.date.localeCompare(b.date));
-
-                      // Calcular VN residual acumulado
-                      let vnResidual = 100;
-                      const rowsWithResidual = rows.map(row=>{
-                        const amortPct = row.amort ? row.amort.monto : 0;
-                        const interestPct = row.cupon ? row.cupon.monto : 0;
-                        const totalPct = amortPct + interestPct;
-                        const vnAntes = vnResidual;
-                        vnResidual = Math.max(0, vnResidual - amortPct);
-                        return {...row, amortPct, interestPct, totalPct, vnAntes, vnDespues: vnResidual};
-                      });
-
-                      // Número de cupón secuencial
-                      let cuponNum = 0;
-
-                      const thP = {padding:'7px 10px',fontSize:10,fontWeight:700,textTransform:'uppercase',letterSpacing:0.7,
-                        background:'var(--bg-input)',borderBottom:'2px solid var(--border)',textAlign:'right',whiteSpace:'nowrap',color:'var(--text-muted)'};
-                      const thPL = {...thP, textAlign:'left'};
-                      const tdP = {padding:'7px 10px',fontFamily:"'DM Mono',monospace",fontSize:12,textAlign:'right',borderBottom:'1px solid var(--border)',color:'var(--text-secondary)'};
-                      const tdPL = {...tdP, textAlign:'left'};
-
-                      return(
-                        <div style={{overflowX:'auto',borderRadius:10,border:'1px solid var(--border)'}}>
-                          <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
-                            <thead>
-                              <tr>
-                                <th style={{...thPL,width:30}}>#</th>
-                                <th style={{...thPL}}>Fecha</th>
-                                <th style={thP}>Días</th>
-                                <th style={thP}>Base</th>
-                                <th style={thP}>Amort. % VN</th>
-                                <th style={thP}>VN Residual</th>
-                                <th style={thP}>Tasa</th>
-                                <th style={thP}>Interés % VN</th>
-                                <th style={{...thP,background:'rgba(251,191,36,0.08)',color:'var(--yellow)'}}>Amort.</th>
-                                <th style={{...thP,background:'rgba(59,130,246,0.08)',color:'var(--accent)'}}>Interés</th>
-                                <th style={{...thP,background:'rgba(52,211,153,0.08)',color:'var(--green)',borderRight:'none'}}>Total</th>
-                                <th style={{...thP,textAlign:'center',width:60}}>Acc.</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {rowsWithResidual.map((row,i)=>{
-                                cuponNum++;
-                                const isPast = row.date < today;
-                                const isCobrado = (row.cupon?.cobrado||false) && (row.amort?row.amort.cobrado:true);
-                                // Días: diferencia con fila anterior (approx 180 para semestrales)
-                                const dias = i===0 ? '—' : Math.round((new Date(row.date)-new Date(rowsWithResidual[i-1].date))/(1000*60*60*24));
-                                // Tasa implícita: interés / vnAntes * 2 (semestral → anual), redondeado
-                                const tasaAnual = row.vnAntes>0 ? (row.interestPct / row.vnAntes)*200 : 0;
-
-                                const rowBg = isCobrado ? 'rgba(52,211,153,0.04)'
-                                           : isPast    ? 'rgba(251,191,36,0.04)'
-                                           : 'transparent';
-                                return(
-                                  <tr key={row.date} style={{background:rowBg}}>
-                                    <td style={{...tdPL,color:'var(--text-muted)',fontSize:11}}>{cuponNum}</td>
-                                    <td style={{...tdPL,fontWeight:600,color:isCobrado?'var(--green)':isPast?'var(--yellow)':'var(--text-primary)'}}>
-                                      {fmtD(row.date)}
-                                      {isCobrado&&<span style={{fontSize:9,marginLeft:6,color:'var(--green)'}}>✓</span>}
-                                    </td>
-                                    <td style={{...tdP,color:'var(--text-muted)'}}>{dias}</td>
-                                    <td style={{...tdP,color:'var(--text-muted)'}}>360</td>
-                                    <td style={{...tdP,color:row.amortPct>0?'var(--yellow)':'var(--text-muted)'}}>
-                                      {row.amortPct>0 ? fmtN(row.amortPct)+'%' : '0,00%'}
-                                    </td>
-                                    <td style={{...tdP}}>
-                                      {fmtN(row.vnDespues)}%
-                                    </td>
-                                    <td style={{...tdP,color:'var(--text-muted)'}}>
-                                      {tasaAnual>0 ? fmtN(tasaAnual)+'%' : '—'}
-                                      {adjustsBy&&<span style={{fontSize:9,color:'var(--yellow)',display:'block'}}>{adjustsBy}</span>}
-                                    </td>
-                                    <td style={{...tdP,color:'var(--accent)'}}>
-                                      {row.interestPct>0 ? fmtN(row.interestPct)+'%' : '—'}
-                                    </td>
-                                    <td style={{...tdP,background:'rgba(251,191,36,0.04)',color:'var(--yellow)',fontWeight:row.amortPct>0?700:400}}>
-                                      {row.amortPct>0 ? fmtN(row.amortPct) : '—'}
-                                    </td>
-                                    <td style={{...tdP,background:'rgba(59,130,246,0.04)',color:'var(--accent)'}}>
-                                      {row.interestPct>0 ? fmtN(row.interestPct) : '—'}
-                                    </td>
-                                    <td style={{...tdP,background:'rgba(52,211,153,0.04)',color:'var(--green)',fontWeight:700}}>
-                                      {fmtN(row.totalPct)}
-                                    </td>
-                                    <td style={{...tdP,textAlign:'center'}}>
-                                      <div style={{display:'flex',gap:3,justifyContent:'center'}}>
-                                        {row.cupon&&<button onClick={()=>setEditFlow({ticker:selected,flow:{...row.cupon}})}
-                                          style={{background:'transparent',border:'none',cursor:'pointer',color:'var(--text-muted)',fontSize:12,padding:'0 2px'}}>✏️</button>}
-                                        {row.ids.map(id=>(
-                                          <button key={id} onClick={()=>deleteFlow(selected,id)}
-                                            style={{background:'transparent',border:'none',cursor:'pointer',color:'var(--red)',fontSize:12,padding:'0 2px'}}>🗑</button>
-                                        ))}
-                                      </div>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                            {/* Totales */}
-                            <tfoot>
-                              <tr style={{borderTop:'2px solid var(--border)',background:'var(--bg-input)'}}>
-                                <td colSpan={8} style={{...tdPL,fontWeight:700,fontSize:11,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:0.8}}>Total flujos</td>
-                                <td style={{...tdP,background:'rgba(251,191,36,0.08)',color:'var(--yellow)',fontWeight:700}}>
-                                  {fmtN(rowsWithResidual.reduce((a,r)=>a+r.amortPct,0))}
-                                </td>
-                                <td style={{...tdP,background:'rgba(59,130,246,0.08)',color:'var(--accent)',fontWeight:700}}>
-                                  {fmtN(rowsWithResidual.reduce((a,r)=>a+r.interestPct,0))}
-                                </td>
-                                <td style={{...tdP,background:'rgba(52,211,153,0.08)',color:'var(--green)',fontWeight:700}}>
-                                  {fmtN(rowsWithResidual.reduce((a,r)=>a+r.totalPct,0))}
-                                </td>
-                                <td style={tdP}/>
-                              </tr>
-                            </tfoot>
-                          </table>
-                        </div>
-                      );
-                    })() : (
-                    // ── Vista Mi Cobro ──────────────────────────────────────
-                    (()=>{
-                      // Agrupar por fecha también en Mi Cobro
-                      const byDate = {};
-                      selFlows.forEach(f=>{
-                        if(!byDate[f.date]) byDate[f.date]={date:f.date,cupon:null,amort:null};
-                        if(f.tipo==='amortizacion') byDate[f.date].amort=f;
-                        else byDate[f.date].cupon=f;
-                      });
-                      const rows = Object.values(byDate).sort((a,b)=>a.date.localeCompare(b.date));
-
-                      const thM = {padding:'8px 12px',textAlign:'left',fontSize:10,color:'var(--text-muted)',fontWeight:600,textTransform:'uppercase',letterSpacing:0.8,borderBottom:'1px solid var(--border)'};
-                      const thMR = {...thM, textAlign:'right'};
-                      const tdM = {padding:'10px 12px',fontSize:13,color:'var(--text-secondary)'};
-                      const tdMR = {...tdM, textAlign:'right', fontFamily:"'DM Mono',monospace"};
-
-                      return(
-                        <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
-                          <thead>
-                            <tr>
-                              <th style={thM}>Fecha</th>
-                              <th style={thM}>Tipo</th>
-                              <th style={thMR}>% VN</th>
-                              <th style={thMR}>Nominales</th>
-                              <th style={thMR}>Cobro estimado</th>
-                              <th style={thM}>Estado</th>
-                              <th style={thM}/>
+                {/* ── VISTA PROSPECTO ── */}
+                {viewMode==='prospecto'&&(
+                  <div style={{overflowX:'auto',borderRadius:10,border:'1px solid var(--border)'}}>
+                    <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+                      <thead>
+                        <tr>
+                          <th style={{...thPL,width:28}}>#</th>
+                          <th style={{...thPL}}>Fecha</th>
+                          <th style={thP}>Días ({selMeta.base})</th>
+                          <th style={thP}>Amort. % VN</th>
+                          <th style={thP}>VN Residual</th>
+                          <th style={thP}>TNA</th>
+                          <th style={thP}>Interés % VN</th>
+                          <th style={{...thP,background:'rgba(251,191,36,0.1)',color:'var(--yellow)'}}>Amort.</th>
+                          <th style={{...thP,background:'rgba(59,130,246,0.1)',color:'var(--accent)'}}>Interés</th>
+                          <th style={{...thP,background:'rgba(52,211,153,0.1)',color:'var(--green)'}}>Total</th>
+                          <th style={{...thP,textAlign:'center',width:56}}>Acc.</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((row,i)=>{
+                          const isPast    = row.date < today;
+                          const isCobrado = (row.cupon?.cobrado??!row.cupon) && (row.amort?.cobrado??!row.amort);
+                          const dias      = i===0 ? '—' : (selMeta.base==='30/360' ? row.dias30360 : row.diasReales);
+                          const editA = editingCell?.date===row.date&&editingCell?.field==='amort';
+                          const editI = editingCell?.date===row.date&&editingCell?.field==='interes';
+                          const rowBg = isCobrado?'rgba(52,211,153,0.04)':isPast?'rgba(251,191,36,0.03)':'transparent';
+                          return(
+                            <tr key={row.date} style={{background:rowBg}}>
+                              <td style={{...tdPL,color:'var(--text-muted)',fontSize:11}}>{i+1}</td>
+                              <td style={{...tdPL,fontWeight:600,color:isCobrado?'var(--green)':isPast?'var(--yellow)':'var(--text-primary)'}}>
+                                {fmtD(row.date)}{isCobrado&&<span style={{fontSize:9,marginLeft:5,color:'var(--green)'}}>✓</span>}
+                              </td>
+                              <td style={{...tdP,color:'var(--text-muted)'}}>{dias}</td>
+                              {/* Amort — editable */}
+                              <td style={{...tdP,color:row.amortPct>0?'var(--yellow)':'var(--text-muted)',cursor:row.amort&&!isCobrado?'pointer':'default'}}
+                                onDoubleClick={()=>!isCobrado&&row.amort&&setEditingCell({date:row.date,field:'amort',value:row.amortPct})}>
+                                {editA
+                                  ? <input autoFocus type="number" step="0.0001"
+                                      defaultValue={row.amortPct}
+                                      onBlur={e=>saveCellEdit(selected, row.amort.id, 'amort', e.target.value)}
+                                      onKeyDown={e=>{if(e.key==='Enter')e.target.blur();if(e.key==='Escape')setEditingCell(null);}}
+                                      style={{...inp,width:80,textAlign:'right'}}/>
+                                  : <>{row.amortPct>0?fmtN(row.amortPct)+'%':'0,00%'}{row.amort&&!isCobrado&&<span style={{fontSize:8,color:'var(--text-muted)',marginLeft:3}}>✎</span>}</>
+                                }
+                              </td>
+                              <td style={tdP}>{fmtN2(row.vnDespues)}%</td>
+                              <td style={{...tdP,color:'var(--text-muted)'}}>{selMeta.tna}%</td>
+                              {/* Interés — editable */}
+                              <td style={{...tdP,color:'var(--accent)',cursor:row.cupon&&!isCobrado?'pointer':'default'}}
+                                onDoubleClick={()=>!isCobrado&&row.cupon&&setEditingCell({date:row.date,field:'interes',value:row.interestPct})}>
+                                {editI
+                                  ? <input autoFocus type="number" step="0.0001"
+                                      defaultValue={row.interestPct}
+                                      onBlur={e=>saveCellEdit(selected, row.cupon.id, 'interes', e.target.value)}
+                                      onKeyDown={e=>{if(e.key==='Enter')e.target.blur();if(e.key==='Escape')setEditingCell(null);}}
+                                      style={{...inp,width:80,textAlign:'right'}}/>
+                                  : <>{row.interestPct>0?fmtN(row.interestPct)+'%':'—'}{row.cupon&&!isCobrado&&<span style={{fontSize:8,color:'var(--text-muted)',marginLeft:3}}>✎</span>}</>
+                                }
+                              </td>
+                              <td style={{...tdP,background:'rgba(251,191,36,0.04)',color:'var(--yellow)',fontWeight:row.amortPct>0?700:400}}>
+                                {row.amortPct>0?fmtN(row.amortPct):'—'}
+                              </td>
+                              <td style={{...tdP,background:'rgba(59,130,246,0.04)',color:'var(--accent)'}}>
+                                {row.interestPct>0?fmtN(row.interestPct):'—'}
+                              </td>
+                              <td style={{...tdP,background:'rgba(52,211,153,0.04)',color:'var(--green)',fontWeight:700}}>
+                                {fmtN(row.totalPct)}
+                              </td>
+                              <td style={{...tdP,textAlign:'center'}}>
+                                <button onClick={()=>deleteRow(selected,row.ids)}
+                                  style={{background:'transparent',border:'none',cursor:'pointer',color:'var(--red)',fontSize:12,padding:'0 2px'}}>🗑</button>
+                              </td>
                             </tr>
-                          </thead>
-                          <tbody>
-                            {rows.map(row=>{
-                              // Fila unificada: si tiene amort, mostrar amort+cupon juntos
-                              const f = row.amort || row.cupon;
-                              const hasAmort = !!row.amort;
-                              const hasCupon = !!row.cupon;
-                              const isFuture = row.date > today;
-                              const montoAmort = hasAmort ? (adjustsBy ? row.amort.monto*coef : row.amort.monto) : 0;
-                              const montoInt   = hasCupon ? (adjustsBy ? row.cupon.monto*coef : row.cupon.monto) : 0;
-                              const montoTotal = montoAmort + montoInt;
-                              const totalCobro = montoTotal * (selBond.qty/100);
-                              const cobrado = (row.cupon?.cobrado||!hasCupon) && (row.amort?.cobrado||!hasAmort);
-                              const tipoLabel = hasAmort&&hasCupon ? '💰+🎫 Amort.+Cupón' : hasAmort ? '💰 Amort.' : '🎫 Cupón';
-                              const tipoColor = hasAmort ? 'var(--yellow)' : 'var(--accent)';
+                          );
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr style={{borderTop:'2px solid var(--border)',background:'var(--bg-input)'}}>
+                          <td colSpan={7} style={{...tdPL,fontWeight:700,fontSize:10,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:0.8}}>Total</td>
+                          <td style={{...tdP,background:'rgba(251,191,36,0.08)',color:'var(--yellow)',fontWeight:700}}>{fmtN(rows.reduce((a,r)=>a+r.amortPct,0))}</td>
+                          <td style={{...tdP,background:'rgba(59,130,246,0.08)',color:'var(--accent)',fontWeight:700}}>{fmtN(rows.reduce((a,r)=>a+r.interestPct,0))}</td>
+                          <td style={{...tdP,background:'rgba(52,211,153,0.08)',color:'var(--green)',fontWeight:700}}>{fmtN(rows.reduce((a,r)=>a+r.totalPct,0))}</td>
+                          <td style={tdP}/>
+                        </tr>
+                      </tfoot>
+                    </table>
+                    <div style={{fontSize:9,color:'var(--text-muted)',padding:'6px 10px'}}>✎ Doble clic en celda para editar · Recalculá todos los cupones futuros editando TNA/Base en el header</div>
+                  </div>
+                )}
 
-                              return(
-                                <tr key={row.date} style={{borderBottom:'1px solid var(--border)',
-                                  background:cobrado?'rgba(52,211,153,0.03)':!isFuture?'rgba(251,191,36,0.03)':'transparent'}}>
-                                  <td style={{...tdM,fontFamily:"'DM Mono',monospace",fontSize:12}}>{fmtD(row.date)}</td>
-                                  <td style={{...tdM}}>
-                                    <span style={{color:tipoColor,fontSize:12}}>{tipoLabel}</span>
-                                  </td>
-                                  <td style={{...tdMR,fontSize:12}}>
-                                    {fmtN(montoTotal)}%
-                                    {adjustsBy&&coef!==1&&<span style={{fontSize:9,color:'var(--yellow)',display:'block'}}>×{coef} {adjustsBy}</span>}
-                                  </td>
-                                  <td style={{...tdMR,fontSize:12,color:'var(--text-muted)'}}>{selBond.qty.toLocaleString('es-AR')}</td>
-                                  <td style={{...tdMR,fontWeight:700,fontSize:13}}>
-                                    {currency}{fmtN(totalCobro)}
-                                  </td>
-                                  <td style={{...tdM,fontSize:12}}>
-                                    {cobrado
-                                      ?<span style={{color:'var(--green)'}}>✅ {fmtD(row.cupon?.fechaCobro||row.amort?.fechaCobro)}</span>
-                                      :!isFuture
-                                        ?<button onClick={()=>{
-                                            if(row.cupon) confirmCobro(selected,row.cupon.id);
-                                            if(row.amort) confirmCobro(selected,row.amort.id);
-                                          }}
-                                          style={{background:'rgba(52,211,153,0.1)',border:'1px solid rgba(52,211,153,0.3)',borderRadius:6,padding:'3px 10px',color:'var(--green)',cursor:'pointer',fontSize:11}}>
-                                          Confirmar cobro
-                                        </button>
-                                        :<span style={{color:'var(--text-muted)',fontSize:11}}>🟡 Pendiente</span>
-                                    }
-                                  </td>
-                                  <td style={{...tdM}}>
-                                    <div style={{display:'flex',gap:4}}>
-                                      {[row.cupon,row.amort].filter(Boolean).map(fl=>(
-                                        <button key={fl.id} onClick={()=>deleteFlow(selected,fl.id)}
-                                          style={{background:'transparent',border:'none',cursor:'pointer',color:'var(--red)',fontSize:13}}>🗑</button>
-                                      ))}
-                                    </div>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      );
-                    })()
-                    )}
-                  </>);
-                })()
+                {/* ── VISTA MI COBRO ── */}
+                {viewMode==='micobro'&&(
+                  <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
+                    <thead>
+                      <tr>
+                        {['Fecha','Tipo','% VN total','Nominales','Cobro estimado','Estado',''].map(h=>(
+                          <th key={h} style={{padding:'8px 12px',textAlign:h==='Cobro estimado'||h==='% VN total'?'right':'left',fontSize:10,color:'var(--text-muted)',fontWeight:600,textTransform:'uppercase',letterSpacing:0.8,borderBottom:'1px solid var(--border)'}}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map(row=>{
+                        const isFuture  = row.date > today;
+                        const cobrado   = (row.cupon?.cobrado??!row.cupon) && (row.amort?.cobrado??!row.amort);
+                        const hasAmort  = !!row.amort;
+                        const hasCupon  = !!row.cupon;
+                        const montoAmort= hasAmort?(adjustsBy?row.amort.monto*coef:row.amort.monto):0;
+                        const montoInt  = hasCupon?(adjustsBy?row.cupon.monto*coef:row.cupon.monto):0;
+                        const montoTotal= montoAmort+montoInt;
+                        const totalCobro= montoTotal*(selBond.qty/100);
+                        const tipoLabel = hasAmort&&hasCupon?'💰+🎫 Amort.+Cupón':hasAmort?'💰 Amort.':'🎫 Cupón';
+                        const tipoColor = hasAmort?'var(--yellow)':'var(--accent)';
+                        return(
+                          <tr key={row.date} style={{borderBottom:'1px solid var(--border)',
+                            background:cobrado?'rgba(52,211,153,0.03)':!isFuture?'rgba(251,191,36,0.03)':'transparent'}}>
+                            <td style={{padding:'10px 12px',fontFamily:"'DM Mono',monospace",fontSize:12}}>{fmtD(row.date)}</td>
+                            <td style={{padding:'10px 12px'}}><span style={{color:tipoColor,fontSize:12}}>{tipoLabel}</span></td>
+                            <td style={{padding:'10px 12px',textAlign:'right',fontFamily:"'DM Mono',monospace",fontSize:12}}>
+                              {fmtN(montoTotal)}%
+                              {adjustsBy&&coef!==1&&<span style={{fontSize:9,color:'var(--yellow)',display:'block'}}>×{coef} {adjustsBy}</span>}
+                            </td>
+                            <td style={{padding:'10px 12px',textAlign:'right',fontFamily:"'DM Mono',monospace",fontSize:12,color:'var(--text-muted)'}}>{selBond.qty.toLocaleString('es-AR')}</td>
+                            <td style={{padding:'10px 12px',textAlign:'right',fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:13}}>
+                              {currency}{fmtN2(totalCobro)}
+                            </td>
+                            <td style={{padding:'10px 12px',fontSize:12}}>
+                              {cobrado
+                                ?<span style={{color:'var(--green)'}}>✅ {fmtD(row.cupon?.fechaCobro||row.amort?.fechaCobro)}</span>
+                                :!isFuture
+                                  ?<button onClick={()=>confirmCobro(selected,row.ids)}
+                                    style={{background:'rgba(52,211,153,0.1)',border:'1px solid rgba(52,211,153,0.3)',borderRadius:6,padding:'3px 10px',color:'var(--green)',cursor:'pointer',fontSize:11}}>
+                                    Confirmar cobro
+                                  </button>
+                                  :<span style={{color:'var(--text-muted)',fontSize:11}}>🟡 Pendiente</span>
+                              }
+                            </td>
+                            <td style={{padding:'10px 12px'}}>
+                              <button onClick={()=>deleteRow(selected,row.ids)}
+                                style={{background:'transparent',border:'none',cursor:'pointer',color:'var(--red)',fontSize:13}}>🗑</button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </>)
             }
           </div>
         )}

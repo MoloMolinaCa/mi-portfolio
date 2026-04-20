@@ -990,7 +990,7 @@ function inferCurrency(item, endpoint){
   return "ARS";
 }
 
-function Modal({h,port=[],onSave,onClose}){
+function Modal({h,port=[],onSave,onClose,darkMode=true}){
   const blank={ticker:"",name:"",type:"accion_ar",qty:"",buyPrice:"",buyCurrency:"ARS",buyDate:todayAR(),operacion:"compra",comision:"",comisionPct:""};
   const [f,setF]=useState(h?{...h,operacion:"compra",buyPrice:""}:blank);
   const [tickerStatus,setTickerStatus]=useState(h?"confirmed":"idle");
@@ -1120,10 +1120,10 @@ function Modal({h,port=[],onSave,onClose}){
   const canSave=f.ticker&&f.qty&&f.buyPrice&&!overSelling&&(f.operacion==="venta"||tickerStatus==="confirmed"||tickerStatus==="found"||tickerStatus==="notfound");
 
   return(
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200}}>
+    <div className={darkMode?"theme-dark":"theme-light"} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200}}>
       <div style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:16,padding:28,width:520,maxWidth:"95vw",maxHeight:"90vh",overflowY:"auto"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-          <h3 style={{fontFamily:"Georgia,serif",fontSize:16}}>{h?"Editar posición":"Nueva posición"}</h3>
+          <h3 style={{fontFamily:"Georgia,serif",fontSize:16,color:"var(--text-primary)",margin:0}}>{h?"Editar posición":"Nueva posición"}</h3>
           <button onClick={onClose} style={{background:"transparent",border:"none",color:"var(--text-muted)",cursor:"pointer",fontSize:18}}>×</button>
         </div>
 
@@ -2116,7 +2116,7 @@ function OperacionesTab({trades,port,setTrades,setPort,card,livePrices}){
 
       {/* Modal confirmación eliminar */}
       {confirmDelete&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300}}>
+        <div className={darkMode?"theme-dark":"theme-light"} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300}}>
           <div style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:16,padding:28,width:420,maxWidth:"95vw"}}>
             <div style={{fontFamily:"Georgia,serif",fontSize:16,fontWeight:700,marginBottom:12}}>¿Eliminar operación?</div>
             <div style={{background:"var(--bg-input)",borderRadius:8,padding:"12px 14px",marginBottom:16,fontSize:13}}>
@@ -3072,8 +3072,10 @@ function App(){
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
         @keyframes spin{to{transform:rotate(360deg)}}
         @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
-        .fi{font-family:'DM Sans',system-ui,sans-serif;animation:fadeIn 0.3s ease;}
-        .fi *{box-sizing:border-box;}
+        .fi{font-family:'DM Sans',system-ui,sans-serif;animation:fadeIn 0.3s ease;color:var(--text-primary);}
+        .fi *{box-sizing:border-box;color:inherit;}
+        .theme-dark{color:var(--text-primary);}
+        .theme-light{color:var(--text-primary);}
         .fi .kpi-card{transition:box-shadow 0.2s,transform 0.2s;}
         .fi .kpi-card:hover{box-shadow:var(--card-hover-glow);transform:translateY(-1px);}
         .fi .nav-btn{transition:color 0.15s;}
@@ -3082,7 +3084,7 @@ function App(){
         ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
       `}</style>
 
-      <div style={{minHeight:"100vh",background:"var(--bg)"}} className={darkMode?"theme-dark":"theme-light"}>
+      <div style={{minHeight:"100vh",background:"var(--bg)",color:"var(--text-primary)"}} className={darkMode?"theme-dark":"theme-light"}>
         {/* Header */}
         <div style={{background:"var(--bg-card)",borderBottom:"1px solid var(--border)",padding:"11px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
@@ -3325,7 +3327,7 @@ function App(){
 
       {/* Venta result modal */}
       {ventaResult&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300}}>
+        <div className={darkMode?"theme-dark":"theme-light"} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300}}>
           <div style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:16,padding:28,width:460,maxWidth:"95vw",maxHeight:"90vh",overflowY:"auto"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
               <div>
@@ -3386,7 +3388,7 @@ function App(){
         </div>
       )}
 
-      {modal&&<Modal h={modal==="add"?null:modal} port={port} onSave={saveOrDelete} onClose={()=>setModal(null)}/>}
+      {modal&&<Modal h={modal==="add"?null:modal} port={port} onSave={saveOrDelete} onClose={()=>setModal(null)} darkMode={darkMode}/>}
     </>
   );
 }

@@ -2702,8 +2702,8 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
         totalAmort:r.montoAmort*(b.qty/100),
       }));
   }).sort((a,b)=>a.date.localeCompare(b.date)||a.ticker.localeCompare(b.ticker));
-  const [pagosOffset, setPagosOffset] = useState(0);
-  const PAGOS_PER_PAGE = 5;
+  const [calMonth, setCalMonth] = useState(new Date());
+  const [calSelectedDate, setCalSelectedDate] = useState(null);
 
   const selBond  = bonds.find(b=>b.ticker===selected);
   const selFlows = selected ? (bondFlows[selected]||[]).sort((a,b)=>a.date.localeCompare(b.date)) : [];
@@ -2750,72 +2750,228 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
   return (
     <div style={{display:'flex',flexDirection:'column',gap:16}}>
 
-      {/* Próximos pagos — carrusel */}
-      <div style={{...card,padding:'14px 20px'}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-          <div style={{display:'flex',alignItems:'center',gap:10}}>
-            <span style={{fontSize:10,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:1.2,fontWeight:600}}>📅 Próximos pagos</span>
-            {proximosPagos.length>0&&<span style={{fontSize:10,color:'var(--text-muted)'}}>
-              {pagosOffset+1}–{Math.min(pagosOffset+PAGOS_PER_PAGE,proximosPagos.length)} de {proximosPagos.length}
-            </span>}
-          </div>
-          {proximosPagos.length>PAGOS_PER_PAGE&&(
-            <div style={{display:'flex',gap:4}}>
-              <button onClick={()=>setPagosOffset(o=>Math.max(0,o-PAGOS_PER_PAGE))}
-                disabled={pagosOffset===0}
-                style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:6,padding:'4px 10px',cursor:pagosOffset===0?'not-allowed':'pointer',color:pagosOffset===0?'var(--text-muted)':'var(--text-secondary)',fontSize:14,opacity:pagosOffset===0?0.4:1}}>
-                ‹
-              </button>
-              <button onClick={()=>setPagosOffset(o=>Math.min(proximosPagos.length-PAGOS_PER_PAGE,o+PAGOS_PER_PAGE))}
-                disabled={pagosOffset+PAGOS_PER_PAGE>=proximosPagos.length}
-                style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:6,padding:'4px 10px',cursor:pagosOffset+PAGOS_PER_PAGE>=proximosPagos.length?'not-allowed':'pointer',color:pagosOffset+PAGOS_PER_PAGE>=proximosPagos.length?'var(--text-muted)':'var(--text-secondary)',fontSize:14,opacity:pagosOffset+PAGOS_PER_PAGE>=proximosPagos.length?0.4:1}}>
-                ›
-              </button>
-            </div>
-          )}
-        </div>
-        {proximosPagos.length===0
-          ? <div style={{color:'var(--text-muted)',fontSize:13}}>No hay flujos cargados aún.</div>
-          : <div style={{display:'grid',gridTemplateColumns:`repeat(${Math.min(PAGOS_PER_PAGE,proximosPagos.slice(pagosOffset,pagosOffset+PAGOS_PER_PAGE).length)},1fr)`,gap:10}}>
-              {proximosPagos.slice(pagosOffset,pagosOffset+PAGOS_PER_PAGE).map((p,i)=>{
-                const accentColor = p.hasAmort?'var(--yellow)':'var(--accent)';
-                const tipoLabel = p.hasAmort&&p.hasCupon?'💰+🎫 Amort.+Cupón':p.hasAmort?'💰 Amortización':'🎫 Cupón';
-                const isNext = pagosOffset===0&&i===0;
-                return(
-                  <div key={p.ticker+p.date} onClick={()=>setSelected(p.ticker)}
-                    style={{...card,padding:'12px 14px',cursor:'pointer',
-                      borderLeft:`3px solid ${accentColor}`,
-                      background:isNext?'rgba(59,130,246,0.04)':'transparent',
-                      transition:'transform 0.15s,box-shadow 0.15s'}}
-                    onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-1px)';e.currentTarget.style.boxShadow='var(--card-hover-glow)';}}
-                    onMouseLeave={e=>{e.currentTarget.style.transform='';e.currentTarget.style.boxShadow='';}}>
-                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:6}}>
-                      <span style={{fontSize:12,fontWeight:700,color:'var(--accent)',fontFamily:"'DM Mono',monospace"}}>{p.ticker}</span>
-                      {isNext&&<span style={{fontSize:9,background:'var(--accent)',color:'#fff',borderRadius:4,padding:'1px 5px',fontWeight:700}}>NEXT</span>}
+      {/* ── Calendario de cobros ──────────────────────────────────────────── */}
+      {(()=>{
+        // Agrupar todos los pagos por fecha (YYYY-MM-DD)
+        const pagosByDate = {};
+        proximosPagos.forEach(p=>{
+          if(!pagosByDate[p.date]) pagosByDate[p.date]=[];
+          pagosByDate[p.date].push(p);
+        });
+
+        const calYear  = calMonth.getFullYear();
+        const calMon   = calMonth.getMonth(); // 0-indexed
+        const firstDay = new Date(calYear, calMon, 1);
+        const lastDay  = new Date(calYear, calMon+1, 0);
+        // Día de semana del 1ero (0=Dom, ajustar a Lun=0)
+        const startDow = (firstDay.getDay()+6)%7;
+        const daysInMonth = lastDay.getDate();
+        const DAYS = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+        const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+        // Total del mes visible
+        const totalMesUSD = proximosPagos.filter(p=>p.date.startsWith(`${calYear}-${String(calMon+1).padStart(2,'0')}`))
+          .reduce((a,p)=>a+(p.currency==='USD'?p.total:p.total/fxRate),0);
+
+        // Celdas del calendario: blancos antes + días del mes
+        const cells = [];
+        for(let i=0;i<startDow;i++) cells.push(null);
+        for(let d=1;d<=daysInMonth;d++) cells.push(d);
+
+        const todayStr2 = todayAR();
+        const fmtMoney = (p) => p.currency==='USD' ? `US$${fmtN2(p.total)}` : `$${fmtN2(p.total)}`;
+
+        return(
+          <div style={{...card,padding:'20px',display:'grid',gridTemplateColumns:'1fr 320px',gap:20}}>
+
+            {/* Calendario */}
+            <div>
+              {/* Header mes */}
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+                <div>
+                  <div style={{fontSize:18,fontWeight:700,color:'var(--text-primary)',letterSpacing:'-0.5px'}}>
+                    {MONTHS[calMon]} {calYear}
+                  </div>
+                  {totalMesUSD>0&&(
+                    <div style={{fontSize:11,color:'var(--accent)',marginTop:2}}>
+                      Total del mes: <b style={{fontFamily:"'DM Mono',monospace"}}>≈ US${fmtN2(totalMesUSD)}</b>
                     </div>
-                    <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:4}}>{fmtD(p.date)}</div>
-                    <div style={{fontSize:10,color:accentColor,marginBottom:6}}>{tipoLabel}</div>
-                    {p.hasAmort&&p.hasCupon?(
-                      <div>
-                        <div style={{fontSize:13,fontWeight:700,color:'var(--text-primary)',fontFamily:"'DM Mono',monospace"}}>
+                  )}
+                </div>
+                <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                  <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()-1,1))}
+                    style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:8,width:32,height:32,cursor:'pointer',color:'var(--text-secondary)',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center'}}>‹</button>
+                  <button onClick={()=>setCalMonth(new Date())}
+                    style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:8,padding:'4px 12px',cursor:'pointer',color:'var(--text-secondary)',fontSize:11}}>Hoy</button>
+                  <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()+1,1))}
+                    style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:8,width:32,height:32,cursor:'pointer',color:'var(--text-secondary)',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center'}}>›</button>
+                </div>
+              </div>
+
+              {/* Grid días semana */}
+              <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:3,marginBottom:3}}>
+                {DAYS.map(d=>(
+                  <div key={d} style={{textAlign:'center',fontSize:10,color:'var(--text-muted)',fontWeight:600,textTransform:'uppercase',letterSpacing:0.8,padding:'4px 0'}}>{d}</div>
+                ))}
+              </div>
+
+              {/* Grid celdas */}
+              <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:3}}>
+                {cells.map((d,i)=>{
+                  if(!d) return <div key={'empty-'+i}/>;
+                  const dateStr = `${calYear}-${String(calMon+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                  const pagos = pagosByDate[dateStr]||[];
+                  const isToday = dateStr===todayStr2;
+                  const isSelected = calSelectedDate===dateStr;
+                  const hasPago = pagos.length>0;
+                  const hasAmort = pagos.some(p=>p.hasAmort);
+                  const dotColor = hasAmort?'var(--yellow)':'var(--accent)';
+                  // Total del día en USD
+                  const totalDia = pagos.reduce((a,p)=>a+(p.currency==='USD'?p.total:p.total/fxRate),0);
+
+                  return(
+                    <div key={dateStr}
+                      onClick={()=>hasPago&&setCalSelectedDate(isSelected?null:dateStr)}
+                      style={{
+                        borderRadius:8,
+                        padding:'6px 4px',
+                        minHeight:52,
+                        cursor:hasPago?'pointer':'default',
+                        background:isSelected?'rgba(59,130,246,0.15)':isToday?'rgba(59,130,246,0.06)':'transparent',
+                        border:isSelected?'1px solid var(--accent)':isToday?'1px solid rgba(59,130,246,0.3)':'1px solid transparent',
+                        transition:'background 0.12s',
+                        position:'relative',
+                        textAlign:'center',
+                      }}
+                      onMouseEnter={e=>{if(hasPago&&!isSelected)e.currentTarget.style.background='rgba(255,255,255,0.04)';}}
+                      onMouseLeave={e=>{if(hasPago&&!isSelected)e.currentTarget.style.background='transparent';}}>
+                      <div style={{fontSize:13,fontWeight:isToday?700:400,color:isToday?'var(--accent)':hasPago?'var(--text-primary)':'var(--text-muted)',marginBottom:4}}>
+                        {d}
+                      </div>
+                      {hasPago&&(
+                        <>
+                          {/* Dots por ticker */}
+                          <div style={{display:'flex',justifyContent:'center',gap:2,flexWrap:'wrap',marginBottom:2}}>
+                            {pagos.slice(0,3).map(p=>(
+                              <div key={p.ticker} style={{width:5,height:5,borderRadius:'50%',background:p.hasAmort?'var(--yellow)':'var(--accent)'}}/>
+                            ))}
+                            {pagos.length>3&&<div style={{width:5,height:5,borderRadius:'50%',background:'var(--text-muted)'}}/>}
+                          </div>
+                          {/* Total del día */}
+                          <div style={{fontSize:9,color:dotColor,fontFamily:"'DM Mono',monospace",fontWeight:600,lineHeight:1}}>
+                            {totalDia>=1000?`${(totalDia/1000).toFixed(1)}k`:`${fmtN2(totalDia)}`}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Leyenda */}
+              <div style={{display:'flex',gap:16,marginTop:12,fontSize:10,color:'var(--text-muted)'}}>
+                <div style={{display:'flex',alignItems:'center',gap:4}}><div style={{width:7,height:7,borderRadius:'50%',background:'var(--accent)'}}/> Cupón</div>
+                <div style={{display:'flex',alignItems:'center',gap:4}}><div style={{width:7,height:7,borderRadius:'50%',background:'var(--yellow)'}}/> Amort.</div>
+              </div>
+            </div>
+
+            {/* Panel derecho: próximos o detalle del día */}
+            <div style={{borderLeft:'1px solid var(--border)',paddingLeft:20,display:'flex',flexDirection:'column',gap:0,overflow:'hidden'}}>
+              {calSelectedDate?(()=>{
+                // Detalle del día seleccionado
+                const pagosDelDia = pagosByDate[calSelectedDate]||[];
+                const [dd,mm,yyyy] = [calSelectedDate.slice(8),calSelectedDate.slice(5,7),calSelectedDate.slice(0,4)];
+                return(<>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+                    <div>
+                      <div style={{fontSize:14,fontWeight:700,color:'var(--text-primary)'}}>{dd}/{mm}/{yyyy}</div>
+                      <div style={{fontSize:10,color:'var(--text-muted)',marginTop:1}}>{pagosDelDia.length} pago{pagosDelDia.length!==1?'s':''}</div>
+                    </div>
+                    <button onClick={()=>setCalSelectedDate(null)}
+                      style={{background:'transparent',border:'none',color:'var(--text-muted)',cursor:'pointer',fontSize:16}}>✕</button>
+                  </div>
+                  <div style={{display:'flex',flexDirection:'column',gap:8,overflowY:'auto',maxHeight:380}}>
+                    {pagosDelDia.map(p=>(
+                      <div key={p.ticker+p.date} onClick={()=>setSelected(p.ticker)}
+                        style={{background:'var(--bg-input)',borderRadius:10,padding:'12px 14px',cursor:'pointer',
+                          borderLeft:`3px solid ${p.hasAmort?'var(--yellow)':'var(--accent)'}`,
+                          transition:'opacity 0.12s'}}
+                        onMouseEnter={e=>e.currentTarget.style.opacity='0.85'}
+                        onMouseLeave={e=>e.currentTarget.style.opacity='1'}>
+                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+                          <span style={{fontWeight:700,fontSize:13,color:'var(--accent)',fontFamily:"'DM Mono',monospace"}}>{p.ticker}</span>
+                          <span style={{fontSize:10,color:p.hasAmort?'var(--yellow)':'var(--accent)'}}>
+                            {p.hasAmort&&p.hasCupon?'💰+🎫':p.hasAmort?'💰':'🎫'}
+                          </span>
+                        </div>
+                        <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:6,lineHeight:1.4}}>{p.name}</div>
+                        <div style={{fontSize:16,fontWeight:700,color:'var(--text-primary)',fontFamily:"'DM Mono',monospace"}}>
                           {p.currency==='USD'?'US$':'$'}{fmtN2(p.total)}
                         </div>
-                        <div style={{display:'flex',gap:6,marginTop:3}}>
-                          <span style={{fontSize:9,color:'var(--yellow)'}}>Amort: {p.currency==='USD'?'US$':'$'}{fmtN2(p.totalAmort)}</span>
-                          <span style={{fontSize:9,color:'var(--accent)'}}>Int: {p.currency==='USD'?'US$':'$'}{fmtN2(p.totalCupon)}</span>
-                        </div>
+                        {p.hasAmort&&p.hasCupon&&(
+                          <div style={{display:'flex',gap:10,marginTop:4}}>
+                            <span style={{fontSize:10,color:'var(--yellow)'}}>Amort: {p.currency==='USD'?'US$':'$'}{fmtN2(p.totalAmort)}</span>
+                            <span style={{fontSize:10,color:'var(--accent)'}}>Int: {p.currency==='USD'?'US$':'$'}{fmtN2(p.totalCupon)}</span>
+                          </div>
+                        )}
                       </div>
-                    ):(
-                      <div style={{fontSize:13,fontWeight:700,color:'var(--text-primary)',fontFamily:"'DM Mono',monospace"}}>
-                        {p.currency==='USD'?'US$':'$'}{fmtN2(p.total)}
-                      </div>
-                    )}
+                    ))}
                   </div>
-                );
-              })}
+                </>);
+              })():(()=>{
+                // Lista próximos pagos
+                const proximos = proximosPagos.filter(p=>p.date>=todayStr2).slice(0,8);
+                return(<>
+                  <div style={{fontSize:10,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:1,fontWeight:600,marginBottom:12}}>
+                    Próximos cobros
+                  </div>
+                  <div style={{display:'flex',flexDirection:'column',gap:1,overflowY:'auto',maxHeight:400}}>
+                    {proximos.length===0
+                      ? <div style={{color:'var(--text-muted)',fontSize:13}}>No hay flujos cargados.</div>
+                      : proximos.map((p,i)=>{
+                          const isFirst = i===0;
+                          return(
+                            <div key={p.ticker+p.date} onClick={()=>{setSelected(p.ticker);setCalSelectedDate(p.date);setCalMonth(new Date(p.date));}}
+                              style={{display:'flex',alignItems:'center',gap:10,padding:'9px 10px',borderRadius:8,cursor:'pointer',
+                                background:isFirst?'rgba(59,130,246,0.06)':'transparent',
+                                transition:'background 0.12s'}}
+                              onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,0.04)'}
+                              onMouseLeave={e=>e.currentTarget.style.background=isFirst?'rgba(59,130,246,0.06)':'transparent'}>
+                              {/* Fecha grande */}
+                              <div style={{textAlign:'center',minWidth:42,flexShrink:0}}>
+                                <div style={{fontSize:20,fontWeight:700,fontFamily:"'DM Mono',monospace",color:p.hasAmort?'var(--yellow)':'var(--accent)',lineHeight:1}}>
+                                  {p.date.slice(8)}
+                                </div>
+                                <div style={{fontSize:9,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:0.5}}>
+                                  {['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][parseInt(p.date.slice(5,7))-1]}
+                                </div>
+                              </div>
+                              {/* Separador */}
+                              <div style={{width:1,height:32,background:'var(--border)',flexShrink:0}}/>
+                              {/* Info */}
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:2}}>
+                                  <span style={{fontWeight:700,fontSize:12,color:'var(--text-primary)',fontFamily:"'DM Mono',monospace"}}>{p.ticker}</span>
+                                  <span style={{fontSize:9,color:p.hasAmort?'var(--yellow)':'var(--accent)'}}>
+                                    {p.hasAmort&&p.hasCupon?'Amort.+Cupón':p.hasAmort?'Amort.':'Cupón'}
+                                  </span>
+                                  {isFirst&&<span style={{fontSize:8,background:'var(--accent)',color:'#fff',borderRadius:3,padding:'1px 4px',fontWeight:700}}>NEXT</span>}
+                                </div>
+                                <div style={{fontSize:12,fontWeight:600,color:'var(--text-secondary)',fontFamily:"'DM Mono',monospace"}}>
+                                  {p.currency==='USD'?'US$':'$'}{fmtN2(p.total)}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                    }
+                  </div>
+                </>);
+              })()}
             </div>
-        }
-      </div>
+          </div>
+        );
+      })()}
 
       {/* Lista de bonos + tabla */}
       <div style={{...card,padding:'16px 20px'}}>

@@ -13,7 +13,7 @@ const ASSET_TYPES = {
 const GALICIA_PORTFOLIO = [
   // BONOS ARS
   { id:1,  ticker:"TZXD6",     name:"BONTES CER V15/12/26",          type:"bono_ars", qty:781503,   buyPrice:179,       currentPrice:269.35,   buyCurrency:"ARS", rendPct:50.53, buyDate:"2026-04-01" },
-  { id:2,  ticker:"TZX27",     name:"BONO REP ARG CER V30/06/27",    type:"bono_ars", qty:428449,   buyPrice:3.553,     currentPrice:360.95,   buyCurrency:"ARS", rendPct:1.60,  buyDate:"2026-04-06" },
+  { id:2,  ticker:"TZX27",     name:"BONO REP ARG CER V30/06/27",    type:"bono_ars", qty:428449,   buyPrice:355.3,     currentPrice:360.95,   buyCurrency:"ARS", rendPct:1.60,  buyDate:"2026-04-06" },
   // BONOS USD
   { id:3,  ticker:"TLCUD",     name:"ON Telecom C28 05/03/29",       type:"bono_usd", qty:7000,     buyPrice:100.0,     currentPrice:101.6,    buyCurrency:"USD", rendPct:1.60,  buyDate:"2026-04-01" },
   { id:4,  ticker:"AO27D",     name:"Bono Tesoro 6% V29/10/27",      type:"bono_usd", qty:2954,     buyPrice:102.0,     currentPrice:101.7,    buyCurrency:"USD", rendPct:0.10,  buyDate:"2026-04-01" },
@@ -436,16 +436,20 @@ function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRa
       const bars=tickerBars[h.ticker];
       let price;
       if(isToday&&liveMap[h.ticker]){
+        // liveMap already has normalized price (x100 for bonds)
         price=liveMap[h.ticker];
       } else if(bars&&bars.length){
         if(dateStr<bars[0].date)continue;
-        price=findPrice2(bars,dateStr);
-        if(!price)continue;
+        const rawPrice=findPrice2(bars,dateStr);
+        if(!rawPrice)continue;
+        // historicos.json stores raw prices per unit → normalize for bonds
+        price=isBond?rawPrice*100:rawPrice;
       } else {
         const firstBuy=buys.slice().sort((a,b)=>a.date.localeCompare(b.date))[0];
         if(!firstBuy||dateStr<firstBuy.date)continue;
         const totalCost=buys.reduce((a,t)=>a+t.qty*t.price,0);
         const totalQty=buys.reduce((a,t)=>a+t.qty,0);
+        // trade prices already stored per 100 laminas → use directly
         price=totalQty>0?totalCost/totalQty:h.currentPrice;
       }
       const cclDay=cclBars.length?findPrice2(cclBars,dateStr)||fxRate:fxRate;
@@ -641,6 +645,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
       // Precios en vivo para el punto de hoy
       const livePricesMap={};
       if(!customEnd||customEnd>=new Date().toISOString().slice(0,10)){
+        // currentPrice already normalized (bonds x100) — use directly
         for(const h of en){if(h.isLive)livePricesMap[h.ticker]=h.currentPrice;}
       }
 
@@ -1777,16 +1782,14 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
         <td style={tdR}>{Number(h.qty).toLocaleString("es-AR",{maximumFractionDigits:4})}</td>
         <td style={{...tdR,color:"var(--text-muted)",fontSize:11}}>
           {(()=>{
-            const needsx100=["TZX27","TZX28","TZXD7","GD38D","GD30D","GD35D","GD41D","AL30D","AL29D","AO27D"].includes(h.ticker);
-            const ppcVal=(h.ppc||h.buyPrice)*(needsx100?100:1);
+            const ppcVal=h.ppc||h.buyPrice;
             return isUSD?fmtU(ppcVal,2):fmtA(ppcVal);
           })()}
           <span style={{display:"block",fontSize:9,color:"var(--text-muted)"}}>{h.buyCurrency} · PPC</span>
         </td>
         <td style={{...tdR,fontSize:11}}>
           {(()=>{
-            const needsx100=["TZX27","TZX28","TZXD7","GD38D","GD30D","GD35D","GD41D","AL30D","AL29D","AO27D"].includes(h.ticker);
-            const cp=h.currentPrice*(needsx100?100:1);
+            const cp=h.currentPrice;
             return isUSD?fmtU(cp,2):fmtA(cp);
           })()}
           {h.liveChangePct!=null&&h.isLive&&<span style={{display:"block",fontSize:9,color:pc(h.liveChangePct)}}>{fmtP(h.liveChangePct)} hoy</span>}
@@ -2057,8 +2060,7 @@ function OperacionesTab({trades,port,setTrades,setPort,card,livePrices}){
                       {isEditing
                         ?<input type="number" value={editData.price} onChange={e=>setEditData(p=>({...p,price:e.target.value}))} style={{...inp,width:110,textAlign:"right"}}/>
                         :<span>{(()=>{
-                          const needsx100=["TZX27","TZX28","TZXD7","GD38D","GD30D","GD35D","GD41D","AL30D","AL29D","AO27D"].includes(t.ticker);
-                          const dp=needsx100?t.price*100:t.price;
+                          const dp=t.price;
                           return t.currency==="USD"?fmtU(dp,2):fmtA(dp);
                         })()}<span style={{display:"block",fontSize:9,color:"var(--text-muted)"}}>{t.currency||"ARS"}</span></span>}
                     </td>
@@ -2421,8 +2423,8 @@ export default function App(){
     {id:124,ticker:"MSFT", tipo:"compra",qty:27,  price:18299.3542,   currency:"ARS",date:"2026-04-06",ts:124000,name:"Microsoft Corp",              comision:1482.25},
     {id:125,ticker:"MSFT", tipo:"compra",qty:19,  price:19799.3016,   currency:"ARS",date:"2026-04-15",ts:125000,name:"Microsoft Corp",              comision:1128.56},
     // TZX27 (2 lotes misma fecha)
-    {id:126,ticker:"TZX27",tipo:"compra",qty:315634,price:3.5486,currency:"ARS",date:"2026-04-06",ts:126000,name:"BONO REP ARG CER V30/06/27",comision:3360.14},
-    {id:127,ticker:"TZX27",tipo:"compra",qty:112815,price:3.5486, currency:"ARS",date:"2026-04-06",ts:127000,name:"BONO REP ARG CER V30/06/27",comision:1200.99},
+    {id:126,ticker:"TZX27",tipo:"compra",qty:315634,price:355.0,currency:"ARS",date:"2026-04-06",ts:126000,name:"BONO REP ARG CER V30/06/27",comision:3360.14},
+    {id:127,ticker:"TZX27",tipo:"compra",qty:112815,price:356.0,currency:"ARS",date:"2026-04-06",ts:127000,name:"BONO REP ARG CER V30/06/27",comision:1200.99},
   ];
 
     const [port,setPort]         = useState(GALICIA_PORTFOLIO);
@@ -2523,21 +2525,23 @@ export default function App(){
   const today = new Date().toISOString().slice(0,10);
   const en=port.map(h=>{
     const live=livePrices[h.ticker];
-    const currentPrice=live?live.price:h.currentPrice;
+    const isBondH=h.type==="bono_ars"||h.type==="bono_usd";
+    const livePrice=live?live.price:null; // data912 ya devuelve precio por 100 láminas
+    const currentPrice=livePrice??h.currentPrice;
     const ppc=ppcByTicker[h.ticker]||h.buyPrice;
     let liveChangePct = live?.changePct ?? null;
-    if(live?.price && historicos){
+    if(livePrice && historicos){
       const bars = historicos[h.ticker];
       if(bars && bars.length>=1){
-        const prevClose = bars[bars.length-1].close;
+        const prevClose = bars[bars.length-1].close*(isBondH?100:1);
         if(prevClose>0){
-          liveChangePct = parseFloat(((live.price-prevClose)/prevClose*100).toFixed(2));
+          liveChangePct = parseFloat(((livePrice-prevClose)/prevClose*100).toFixed(2));
         }
       } else {
         // Sin histórico: si fue dado de alta hoy, variación vs PPC de compra
         const buyToday = trades.some(t=>t.ticker===h.ticker&&t.tipo==="compra"&&t.date===today);
         if(buyToday && ppc>0){
-          liveChangePct = parseFloat(((live.price-ppc)/ppc*100).toFixed(2));
+          liveChangePct = parseFloat(((livePrice-ppc)/ppc*100).toFixed(2));
         }
       }
     }

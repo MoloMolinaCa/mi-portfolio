@@ -36,9 +36,7 @@ const GALICIA_PORTFOLIO = [
 ];
 
 const FX_FALLBACK = { CCL:1481, MEP:1427, oficial:1389 };  // updated Apr 2026
-// Token para estadisticasbcra.com — registrate en estadisticasbcra.com/api/registracion
-// Es gratis, solo necesitás un email. Pegá el token acá:
-const CER_TOKEN = 'eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE4MDgyNTU1NjksInR5cGUiOiJleHRlcm5hbCIsInVzZXIiOiJtYXJ0aW5tb2xpbmFjYUBob3RtYWlsLmNvbSJ9.ibxg2E94m3vGfK-scw6EftJaqaUM0HlWq_8j2KlyAl7LSnOxRP8xvDjpBuQ9nUziouUSphRNGsHy0avKYcSe8w'; // vence ~Apr 2027
+// CER: se carga desde historicos.json (update_historicos.py lo descarga con el token del servidor)
 const YAHOO_PROXY = "https://yahoo-proxy-blue.vercel.app/api/yahoo"; // proxy sin CORS
 const T10Y_FALLBACK = 4.35;
 
@@ -2544,55 +2542,15 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
   });
   const [metaDraft, setMetaDraft] = useState({tna:'', base:'30/360', emisionDate:''});
   // CER: serie histórica {date:string, valor:number}[], cacheada en memoria
-  const [cerSerie, setCerSerie] = useState(null); // null=no cargado, []=[]=vacío, [{date,valor}]=listo
-  const [cerLoading, setCerLoading] = useState(false);
-  const cerFetchedRef = React.useRef(false); // evita doble fetch en StrictMode
-
-  // Fetch serie CER desde estadisticasbcra.com
-  const fetchCER = async () => {
-    if(cerFetchedRef.current) return;
-    cerFetchedRef.current = true;
-    setCerLoading(true);
-
-    const parseSerie = (data) => {
-      if(!Array.isArray(data)||!data.length) return null;
-      const serie = data
-        .map(x=>({
-          date:(x.d||x.fecha||x.date||'').slice(0,10),
-          valor:parseFloat(x.v||x.valor||x.value||0)
-        }))
-        .filter(x=>x.date&&x.valor>0)
-        .sort((a,b)=>a.date.localeCompare(b.date));
-      return serie.length>0 ? serie : null;
-    };
-
-    // estadisticasbcra.com — requiere token Bearer
-    if(CER_TOKEN){
-      try{
-        const r = await fetch('https://api.estadisticasbcra.com/cer', {
-          signal:AbortSignal.timeout(10000),
-          headers:{'Authorization':'Bearer '+CER_TOKEN}
-        });
-        if(r.ok){
-          const data = await r.json();
-          const serie = parseSerie(data);
-          if(serie){
-            console.log('CER cargado:', serie.length, 'registros, último:', serie[serie.length-1]);
-            setCerSerie(serie);
-            setCerLoading(false);
-            return;
-          }
-        } else {
-          console.warn('CER estadisticasbcra status:', r.status);
-        }
-      } catch(e){ console.warn('CER fetch error:', e.message); }
-    }
-
-    console.warn('CER: configurá CER_TOKEN en App.jsx');
-    setCerSerie([]);
-    cerFetchedRef.current = false;
-    setCerLoading(false);
-  };
+  // CER: se lee desde historicos.json — cargado por update_historicos.py
+  // No hace fetch desde el browser (evita CORS)
+  const cerSerie = useMemo(()=>{
+    if(!historicos?.cer?.length) return null;
+    // historicos.cer: [{date, close}] — close es el valor CER
+    return historicos.cer.map(x=>({date:x.date, valor:x.close}));
+  },[historicos]);
+  const cerLoading = false; // siempre listo (viene del JSON)
+  const fetchCER = ()=>{}; // no-op, ya no se necesita
 
   // Buscar el último CER conocido <= dateStr (si no hay, devuelve el más antiguo disponible)
   const getCER = (serie, dateStr) => {
@@ -2682,14 +2640,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
     });
   };
 
-  // Auto-fetch CER: dispara al montar FlujoTab y cuando selected cambia a bono CER
-  useEffect(()=>{
-    // Intentar fetch si hay algún bono CER en cartera, no solo al seleccionar
-    const hasCERBond = Object.values(SEED_BOND_META).some(m=>m.adjustsBy==='CER');
-    if(hasCERBond && !cerFetchedRef.current && !cerLoading){
-      fetchCER();
-    }
-  },[]); // solo al montar
+  // CER se carga desde historicos.json — no necesita fetch propio
 
   // ── Handlers ─────────────────────────────────────────────────────────────
   const fetchFlows = async (ticker) => {
@@ -3164,19 +3115,13 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
               return(
                 <div style={{background:'rgba(251,191,36,0.06)',border:'1px solid rgba(251,191,36,0.2)',borderRadius:8,padding:'8px 14px',marginBottom:10,display:'flex',alignItems:'center',gap:16,flexWrap:'wrap',fontSize:11}}>
                   <span style={{color:'var(--yellow)',fontWeight:600}}>⚡ CER</span>
-                  {cerLoading&&<span style={{color:'var(--text-muted)',display:'flex',alignItems:'center',gap:4}}><span style={{animation:'spin 0.8s linear infinite',display:'inline-block'}}>⟳</span> Cargando serie...</span>}
-                  {!CER_TOKEN&&!cerLoading&&<span style={{color:'var(--text-muted)'}}>⚙️ Configurá <code style={{background:'rgba(255,255,255,0.08)',padding:'1px 5px',borderRadius:3}}>CER_TOKEN</code> en App.jsx · registrate en <b>estadisticasbcra.com/api/registracion</b></span>}
-                  {CER_TOKEN&&!emisionDate&&!cerLoading&&<span style={{color:'var(--text-muted)'}}>Editá el chip ✏️ para ingresar la fecha de emisión</span>}
+                  {!cerSerie&&<span style={{color:'var(--text-muted)'}}>⏳ Esperando datos del histórico — el script Python actualiza el CER diariamente</span>}
+                  {cerSerie&&!emisionDate&&<span style={{color:'var(--text-muted)'}}>Editá el chip ✏️ para ingresar la fecha de emisión</span>}
                   {cerBaseVal&&<span style={{color:'var(--text-muted)'}}>CER base ({fmtD(cerBaseFecha)}): <b style={{color:'var(--text-secondary)',fontFamily:"'DM Mono',monospace"}}>{cerBaseVal.toFixed(4)}</b></span>}
                   {cerHoy&&<span style={{color:'var(--text-muted)'}}>CER hoy: <b style={{color:'var(--text-secondary)',fontFamily:"'DM Mono',monospace"}}>{cerHoy.toFixed(4)}</b></span>}
                   {coefHoy&&<span style={{color:'var(--text-muted)'}}>Coef. actual: <b style={{color:'var(--yellow)',fontFamily:"'DM Mono',monospace"}}>{coefHoy.toFixed(4)}</b></span>}
                   {cerSerie&&cerSerie.length>0&&!cerLoading&&<span style={{color:'var(--green)',marginLeft:'auto',fontSize:10}}>✓ {cerSerie.length} registros</span>}
-                  {cerSerie&&cerSerie.length===0&&!cerLoading&&(
-                    <button onClick={()=>{cerFetchedRef.current=false;fetchCER();}}
-                      style={{marginLeft:'auto',background:'rgba(251,191,36,0.15)',border:'1px solid rgba(251,191,36,0.4)',borderRadius:5,padding:'2px 10px',color:'var(--yellow)',cursor:'pointer',fontSize:10}}>
-                      ↻ Reintentar
-                    </button>
-                  )}
+
                 </div>
               );
             })()}

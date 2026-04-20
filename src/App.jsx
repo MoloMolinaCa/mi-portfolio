@@ -441,8 +441,14 @@ function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRa
       const qtyFactor=isBond?qty/100:qty;
       const bars=tickerBars[h.ticker];
       let price;
-      if(isToday&&liveMap[h.ticker]){
-        // liveMap already has normalized price (x100 for bonds)
+      // Check for UTC+1 date bar (script runs at 21hs AR = UTC midnight next day)
+      const nextDay=(()=>{const d=new Date(dateStr);d.setDate(d.getDate()+1);return d.toISOString().slice(0,10);})();
+      const nextDayBar=bars&&bars.length&&bars[bars.length-1]?.date===nextDay?bars[bars.length-1]:null;
+      if(isToday&&nextDayBar){
+        // Use the "next day" bar which is actually today's close in UTC
+        const rawNextDay=nextDayBar.close;
+        price=isBond&&h.type==="bono_ars"?rawNextDay*100:rawNextDay;
+      } else if(isToday&&liveMap[h.ticker]){
         price=liveMap[h.ticker];
       } else if(bars&&bars.length){
         if(dateStr<bars[0].date)continue;

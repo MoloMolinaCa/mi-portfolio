@@ -441,30 +441,22 @@ function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRa
       const qtyFactor=isBond?qty/100:qty;
       const bars=tickerBars[h.ticker];
       let price;
-      // Check for UTC+1 date bar (script runs at 21hs AR = UTC midnight next day)
-      const nextDay=(()=>{const d=new Date(dateStr);d.setDate(d.getDate()+1);return d.toISOString().slice(0,10);})();
-      const nextDayBar=bars&&bars.length&&bars[bars.length-1]?.date===nextDay?bars[bars.length-1]:null;
-      if(isToday&&nextDayBar){
-        // Use the "next day" bar which is actually today's close in UTC
-        const rawNextDay=nextDayBar.close;
-        price=isBond&&h.type==="bono_ars"?rawNextDay*100:rawNextDay;
-      } else if(isToday&&liveMap[h.ticker]){
+      if(isToday&&liveMap[h.ticker]){
+        // liveMap is already in per-unit scale (bono_ars /100 applied earlier)
         price=liveMap[h.ticker];
       } else if(bars&&bars.length){
         if(dateStr<bars[0].date)continue;
+        // findPrice2 returns nearest bar — handles weekends/holidays by using last available
         const rawP=findPrice2(bars,dateStr);
         if(!rawP)continue;
-        // historicos.json stores per-unit, prices are now stored per-100-laminas
-        // need x100 for bono_ars to match stored price scale
-        price=isBond&&h.type==="bono_ars"?rawP*100:rawP;
+        price=rawP; // historicos already in per-100-laminas scale
       } else {
         const firstBuy=buys.slice().sort((a,b)=>a.date.localeCompare(b.date))[0];
         if(!firstBuy||dateStr<firstBuy.date)continue;
         const totalCost=buys.reduce((a,t)=>a+t.qty*t.price,0);
         const totalQty=buys.reduce((a,t)=>a+t.qty,0);
-        const rawFallback=totalQty>0?totalCost/totalQty:h.currentPrice;
-        // bono_ars prices stored per 100 laminas → divide by 100 to match qtyFactor scale
-        price=isBond&&h.type==="bono_ars"?rawFallback/100:rawFallback;
+        price=totalQty>0?totalCost/totalQty:h.currentPrice;
+        // all prices in per-100-laminas scale, qtyFactor=qty/100 handles the rest
       }
       const cclDay=cclBars.length?findPrice2(cclBars,dateStr)||fxRate:fxRate;
       const mepDay=mepBars.length?findPrice2(mepBars,dateStr)||fxRate:fxRate;
@@ -663,8 +655,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
           if(h.isLive){
             // historicos.json stores per-unit prices, liveMap must match
             // data912 returns per-100-laminas for bonds → divide by 100
-            // bono_ars: data912 per 100 laminas, calcTWR qtyFactor=qty/100 expects per-unit → /100
-            livePricesMap[h.ticker]=h.type==="bono_ars"?h.currentPrice/100:h.currentPrice;
+            livePricesMap[h.ticker]=h.currentPrice; // all prices in per-100-laminas scale
           }
         }
       }

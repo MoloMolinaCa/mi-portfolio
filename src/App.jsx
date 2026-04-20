@@ -456,8 +456,9 @@ function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRa
         if(!firstBuy||dateStr<firstBuy.date)continue;
         const totalCost=buys.reduce((a,t)=>a+t.qty*t.price,0);
         const totalQty=buys.reduce((a,t)=>a+t.qty,0);
-        // trade prices stored per unit (÷100 on save) → use directly
-        price=totalQty>0?totalCost/totalQty:h.currentPrice;
+        const rawFallback=totalQty>0?totalCost/totalQty:h.currentPrice;
+        // bono_ars prices stored per 100 laminas → divide by 100 to match qtyFactor scale
+        price=isBond&&h.type==="bono_ars"?rawFallback/100:rawFallback;
       }
       const cclDay=cclBars.length?findPrice2(cclBars,dateStr)||fxRate:fxRate;
       const mepDay=mepBars.length?findPrice2(mepBars,dateStr)||fxRate:fxRate;

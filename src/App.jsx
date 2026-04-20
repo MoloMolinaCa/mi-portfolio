@@ -1777,16 +1777,16 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
         <td style={tdR}>{Number(h.qty).toLocaleString("es-AR",{maximumFractionDigits:4})}</td>
         <td style={{...tdR,color:"var(--text-muted)",fontSize:11}}>
           {(()=>{
-            const isBond=h.type==="bono_ars"||h.type==="bono_usd";
-            const ppcVal=(h.ppc||h.buyPrice)*(isBond?100:1);
+            const needsx100=["TZX27","TZX28","TZXD7","GD38D","GD30D","GD35D","GD41D","AL30D","AL29D","AO27D"].includes(h.ticker);
+            const ppcVal=(h.ppc||h.buyPrice)*(needsx100?100:1);
             return isUSD?fmtU(ppcVal,2):fmtA(ppcVal);
           })()}
           <span style={{display:"block",fontSize:9,color:"var(--text-muted)"}}>{h.buyCurrency} · PPC</span>
         </td>
         <td style={{...tdR,fontSize:11}}>
           {(()=>{
-            const isBond=h.type==="bono_ars"||h.type==="bono_usd";
-            const cp=h.currentPrice*(isBond?100:1);
+            const needsx100=["TZX27","TZX28","TZXD7","GD38D","GD30D","GD35D","GD41D","AL30D","AL29D","AO27D"].includes(h.ticker);
+            const cp=h.currentPrice*(needsx100?100:1);
             return isUSD?fmtU(cp,2):fmtA(cp);
           })()}
           {h.liveChangePct!=null&&h.isLive&&<span style={{display:"block",fontSize:9,color:pc(h.liveChangePct)}}>{fmtP(h.liveChangePct)} hoy</span>}
@@ -2057,8 +2057,8 @@ function OperacionesTab({trades,port,setTrades,setPort,card,livePrices}){
                       {isEditing
                         ?<input type="number" value={editData.price} onChange={e=>setEditData(p=>({...p,price:e.target.value}))} style={{...inp,width:110,textAlign:"right"}}/>
                         :<span>{(()=>{
-                          const isBond=["TZX27","TZXD6","AO27D","GD38D","GD30D","AL30D","TLCUD","GD41D","AL29D"].includes(t.ticker);
-                          const dp=isBond?t.price*100:t.price;
+                          const needsx100=["TZX27","TZX28","TZXD7","GD38D","GD30D","GD35D","GD41D","AL30D","AL29D","AO27D"].includes(t.ticker);
+                          const dp=needsx100?t.price*100:t.price;
                           return t.currency==="USD"?fmtU(dp,2):fmtA(dp);
                         })()}<span style={{display:"block",fontSize:9,color:"var(--text-muted)"}}>{t.currency||"ARS"}</span></span>}
                     </td>

@@ -13,7 +13,7 @@ const ASSET_TYPES = {
 const GALICIA_PORTFOLIO = [
   // BONOS ARS
   { id:1,  ticker:"TZXD6",     name:"BONTES CER V15/12/26",          type:"bono_ars", qty:781503,   buyPrice:179,       currentPrice:269.35,   buyCurrency:"ARS", rendPct:50.53, buyDate:"2026-04-01" },
-  { id:2,  ticker:"TZX27",     name:"BONO REP ARG CER V30/06/27",    type:"bono_ars", qty:428449,   buyPrice:355.3,     currentPrice:360.95,   buyCurrency:"ARS", rendPct:1.60,  buyDate:"2026-04-06" },
+  { id:2,  ticker:"TZX27",     name:"BONO REP ARG CER V30/06/27",    type:"bono_ars", qty:428449,   buyPrice:3.553,     currentPrice:360.95,   buyCurrency:"ARS", rendPct:1.60,  buyDate:"2026-04-06" },
   // BONOS USD
   { id:3,  ticker:"TLCUD",     name:"ON Telecom C28 05/03/29",       type:"bono_usd", qty:7000,     buyPrice:100.0,     currentPrice:101.6,    buyCurrency:"USD", rendPct:1.60,  buyDate:"2026-04-01" },
   { id:4,  ticker:"AO27D",     name:"Bono Tesoro 6% V29/10/27",      type:"bono_usd", qty:2954,     buyPrice:102.0,     currentPrice:101.7,    buyCurrency:"USD", rendPct:0.10,  buyDate:"2026-04-01" },
@@ -1282,7 +1282,11 @@ function Modal({h,port=[],onSave,onClose}){
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
                 <span style={{fontSize:11,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Monto bruto</span>
                 <span style={{fontSize:15,fontWeight:700,color:"var(--text-secondary)"}}>
-                  {f.buyCurrency==="USD"?`USD ${(+f.qty*+f.buyPrice).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}`:`$ ${(+f.qty*+f.buyPrice).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}`}
+                  {(()=>{
+                    const isBondModal=f.type==="bono_ars"||f.type==="bono_usd";
+                    const monto=+f.qty*(isBondModal?+f.buyPrice/100:+f.buyPrice);
+                    return f.buyCurrency==="USD"?`USD ${monto.toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}`:`$ ${monto.toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+                  })()}
                 </span>
               </div>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,gap:8}}>
@@ -1782,14 +1786,16 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
         <td style={tdR}>{Number(h.qty).toLocaleString("es-AR",{maximumFractionDigits:4})}</td>
         <td style={{...tdR,color:"var(--text-muted)",fontSize:11}}>
           {(()=>{
-            const ppcVal=h.ppc||h.buyPrice;
+            const isBondDisp=h.type==="bono_ars"||h.type==="bono_usd";
+            const ppcVal=(h.ppc||h.buyPrice)*(isBondDisp?100:1);
             return isUSD?fmtU(ppcVal,2):fmtA(ppcVal);
           })()}
           <span style={{display:"block",fontSize:9,color:"var(--text-muted)"}}>{h.buyCurrency} · PPC</span>
         </td>
         <td style={{...tdR,fontSize:11}}>
           {(()=>{
-            const cp=h.currentPrice;
+            const isBondDisp2=h.type==="bono_ars"||h.type==="bono_usd";
+            const cp=h.currentPrice*(isBondDisp2?100:1);
             return isUSD?fmtU(cp,2):fmtA(cp);
           })()}
           {h.liveChangePct!=null&&h.isLive&&<span style={{display:"block",fontSize:9,color:pc(h.liveChangePct)}}>{fmtP(h.liveChangePct)} hoy</span>}
@@ -2060,7 +2066,8 @@ function OperacionesTab({trades,port,setTrades,setPort,card,livePrices}){
                       {isEditing
                         ?<input type="number" value={editData.price} onChange={e=>setEditData(p=>({...p,price:e.target.value}))} style={{...inp,width:110,textAlign:"right"}}/>
                         :<span>{(()=>{
-                          const dp=t.price;
+                          const isBondOp=t.type==="bono_ars"||t.type==="bono_usd"||["TZX27","TZXD6","TZX28","TZXD7","AO27D","GD38D","GD30D","GD35D","GD41D","AL30D","AL29D","TLCUD"].includes(t.ticker);
+                          const dp=isBondOp?t.price*100:t.price;
                           return t.currency==="USD"?fmtU(dp,2):fmtA(dp);
                         })()}<span style={{display:"block",fontSize:9,color:"var(--text-muted)"}}>{t.currency||"ARS"}</span></span>}
                     </td>
@@ -2423,8 +2430,8 @@ export default function App(){
     {id:124,ticker:"MSFT", tipo:"compra",qty:27,  price:18299.3542,   currency:"ARS",date:"2026-04-06",ts:124000,name:"Microsoft Corp",              comision:1482.25},
     {id:125,ticker:"MSFT", tipo:"compra",qty:19,  price:19799.3016,   currency:"ARS",date:"2026-04-15",ts:125000,name:"Microsoft Corp",              comision:1128.56},
     // TZX27 (2 lotes misma fecha)
-    {id:126,ticker:"TZX27",tipo:"compra",qty:315634,price:355.0,currency:"ARS",date:"2026-04-06",ts:126000,name:"BONO REP ARG CER V30/06/27",comision:3360.14},
-    {id:127,ticker:"TZX27",tipo:"compra",qty:112815,price:356.0,currency:"ARS",date:"2026-04-06",ts:127000,name:"BONO REP ARG CER V30/06/27",comision:1200.99},
+    {id:126,ticker:"TZX27",tipo:"compra",qty:315634,price:3.55,currency:"ARS",date:"2026-04-06",ts:126000,name:"BONO REP ARG CER V30/06/27",comision:3360.14},
+    {id:127,ticker:"TZX27",tipo:"compra",qty:112815,price:3.56,currency:"ARS",date:"2026-04-06",ts:127000,name:"BONO REP ARG CER V30/06/27",comision:1200.99},
   ];
 
     const [port,setPort]         = useState(GALICIA_PORTFOLIO);
@@ -2666,12 +2673,15 @@ export default function App(){
     const ts=Date.now();
     const comision=h.comision?+h.comision:undefined;
     const tradeBase={ticker:h.ticker.toUpperCase(),currency:h.buyCurrency,date:h.buyDate||new Date().toISOString().slice(0,10),ts,name:h.name,...(comision?{comision}:{})};
+    // Bonos: usuario ingresa precio por 100 láminas → guardar por unidad (÷100)
+    const isBondSave=h.type==="bono_ars"||h.type==="bono_usd";
+    const priceToSave=isBondSave?+h.buyPrice/100:+h.buyPrice;
     if(!existing){
       const newTicker=h.ticker.toUpperCase();
-      const newTrades=[...trades,{id:ts,tipo:"compra",qty:+h.qty,price:+h.buyPrice,...tradeBase}];
+      const newTrades=[...trades,{id:ts,tipo:"compra",qty:+h.qty,price:priceToSave,...tradeBase}];
       setTrades(newTrades);
       setPort(p=>{
-        const newPort=[...p,{...h,id:ts,buyPrice:+h.buyPrice}];
+        const newPort=[...p,{...h,id:ts,buyPrice:priceToSave}];
         const allTickers=[...new Set(newPort.map(x=>x.ticker))];
         setTimeout(()=>refreshPrices(allTickers),100);
         return newPort;
@@ -2679,7 +2689,7 @@ export default function App(){
       // Auto-descarga portfolio_tickers.json para subir al repo
       setTimeout(()=>downloadPortfolioTickers(newTrades),300);
     } else if(h.operacion==="venta"){
-      const sellQty=+h.qty; const sellPrice=+h.buyPrice;
+      const sellQty=+h.qty; const sellPrice=isBondSave?+h.buyPrice/100:+h.buyPrice;
       const buyLots=trades.filter(t=>t.ticker===h.ticker.toUpperCase()&&t.tipo==="compra").sort((a,b)=>a.ts-b.ts);
       let remaining=sellQty,costFIFO=0;
       for(const lot of buyLots){ if(remaining<=0)break; const used=Math.min(lot.qty,remaining); costFIFO+=used*lot.price+(lot.comision?(+lot.comision*used/lot.qty):0); remaining-=used; }
@@ -2694,7 +2704,7 @@ export default function App(){
       else setPort(p=>p.map(x=>x.id===existing.id?{...x,qty:newQty}:x));
       setVentaResult({ticker:h.ticker.toUpperCase(),name:h.name,currency:h.buyCurrency,sellQty,sellPrice,proceeds,proceedsNeto,comisionVenta,costFIFO,pnlAmt:parseFloat(pnlAmt.toFixed(2)),pnlPct:parseFloat(pnlPct.toFixed(2)),buyDate:buyLots[0]?.date||"2026-04-01",sellDate:tradeBase.date});
     } else {
-      setTrades(t=>[...t,{id:ts,tipo:"compra",qty:+h.qty,price:+h.buyPrice,...tradeBase}]);
+      setTrades(t=>[...t,{id:ts,tipo:"compra",qty:+h.qty,price:priceToSave,...tradeBase}]);
       const matchId=existing.id;
       setPort(p=>p.map(x=>x.id===matchId?{...x,qty:x.qty+(+h.qty),buyPrice:+h.buyPrice}:x));
     }

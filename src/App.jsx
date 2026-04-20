@@ -66,6 +66,43 @@ const FCI_IDS = {
   "FIMA-PREMD": { fondo: "4", clase: "A", nombre: "FIMA Premium Dólares" },
 };
 
+// ── Flujos de bonos preconfigurados ─────────────────────────────────────────
+const SEED_BOND_FLOWS = {
+  "TZXD6": [
+    {id:1001,date:"2026-06-15",tipo:"cupon",        monto:2.5,   cobrado:false,fechaCobro:null,fuente:"auto",nota:"Est. CER"},
+    {id:1002,date:"2026-12-15",tipo:"amortizacion", monto:100.0, cobrado:false,fechaCobro:null,fuente:"auto",nota:"Vencimiento"},
+  ],
+  "TZX27": [
+    {id:1003,date:"2026-06-30",tipo:"cupon",        monto:2.0,   cobrado:false,fechaCobro:null,fuente:"auto",nota:"Est. CER"},
+    {id:1004,date:"2026-12-31",tipo:"cupon",        monto:2.0,   cobrado:false,fechaCobro:null,fuente:"auto",nota:"Est. CER"},
+    {id:1005,date:"2027-06-30",tipo:"amortizacion", monto:100.0, cobrado:false,fechaCobro:null,fuente:"auto",nota:"Vencimiento"},
+  ],
+  "AO27D": [
+    {id:1006,date:"2026-10-29",tipo:"cupon",        monto:3.0,   cobrado:false,fechaCobro:null,fuente:"auto",nota:"6% anual"},
+    {id:1007,date:"2027-10-29",tipo:"cupon",        monto:3.0,   cobrado:false,fechaCobro:null,fuente:"auto",nota:"6% anual"},
+    {id:1008,date:"2027-10-29",tipo:"amortizacion", monto:100.0, cobrado:false,fechaCobro:null,fuente:"auto",nota:"Vencimiento"},
+  ],
+  "GD38D": [
+    {id:1009,date:"2026-07-09",tipo:"cupon",        monto:1.8125,cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.625% anual"},
+    {id:1010,date:"2027-01-09",tipo:"cupon",        monto:1.8125,cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.625% anual"},
+    {id:1011,date:"2027-07-09",tipo:"cupon",        monto:1.8125,cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.625% anual"},
+    {id:1012,date:"2028-01-09",tipo:"cupon",        monto:1.8125,cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.625% anual"},
+    {id:1013,date:"2028-07-09",tipo:"cupon",        monto:1.8125,cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.625% anual"},
+    {id:1014,date:"2029-01-09",tipo:"cupon",        monto:1.8125,cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.625% anual"},
+    {id:1015,date:"2029-07-09",tipo:"cupon",        monto:1.8125,cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.625% anual"},
+    {id:1016,date:"2029-07-09",tipo:"amortizacion", monto:4.0,   cobrado:false,fechaCobro:null,fuente:"auto",nota:"Amort. parcial"},
+  ],
+  "TLCUD": [
+    {id:1017,date:"2026-09-05",tipo:"cupon",        monto:3.5,   cobrado:false,fechaCobro:null,fuente:"auto",nota:"7% anual"},
+    {id:1018,date:"2027-03-05",tipo:"cupon",        monto:3.5,   cobrado:false,fechaCobro:null,fuente:"auto",nota:"7% anual"},
+    {id:1019,date:"2027-09-05",tipo:"cupon",        monto:3.5,   cobrado:false,fechaCobro:null,fuente:"auto",nota:"7% anual"},
+    {id:1020,date:"2028-03-05",tipo:"cupon",        monto:3.5,   cobrado:false,fechaCobro:null,fuente:"auto",nota:"7% anual"},
+    {id:1021,date:"2028-09-05",tipo:"cupon",        monto:3.5,   cobrado:false,fechaCobro:null,fuente:"auto",nota:"7% anual"},
+    {id:1022,date:"2029-03-05",tipo:"cupon",        monto:3.5,   cobrado:false,fechaCobro:null,fuente:"auto",nota:"7% anual"},
+    {id:1023,date:"2029-03-05",tipo:"amortizacion", monto:100.0, cobrado:false,fechaCobro:null,fuente:"auto",nota:"Vencimiento"},
+  ],
+};
+
 // ── Tipo de cambio — dolarapi.com (tiempo real, sin CORS) ────────────────────
 // CCL y MEP: precios en tiempo real del mercado
 // Oficial: BNA minorista (dolarapi) — el BCRA A3500 (mayorista) difiere ~1-2%
@@ -2706,7 +2743,7 @@ function App(){
 
     const [port,setPort]         = useState(GALICIA_PORTFOLIO);
   const [trades,setTrades]     = useState(SEED_TRADES);
-  const [bondFlows,setBondFlows] = useState({}); // {ticker: [{id,date,tipo,monto,cobrado,fechaCobro}]}
+  const [bondFlows,setBondFlows] = useState(SEED_BOND_FLOWS);
   const [storageReady,setStorageReady] = useState(false);
   const [historicos,setHistoricos] = useState(null);
 
@@ -2744,7 +2781,12 @@ function App(){
       if(sp) setPort(JSON.parse(sp));
       if(st) setTrades(JSON.parse(st));
       const bf=localStorage.getItem('gal_bond_flows_v1');
-      if(bf) setBondFlows(JSON.parse(bf));
+      if(bf){
+        // Merge: keep user edits but add any new seed flows not yet in localStorage
+        const saved=JSON.parse(bf);
+        const merged={...SEED_BOND_FLOWS,...saved};
+        setBondFlows(merged);
+      }
     }catch{}
     setStorageReady(true);
   },[]);

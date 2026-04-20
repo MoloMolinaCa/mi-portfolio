@@ -2946,25 +2946,8 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
                           const isCobrado = (row.cupon?.cobrado??!row.cupon) && (row.amort?.cobrado??!row.amort);
                           const dias      = i===0 ? '—' : (selMeta.base==='30/360' ? row.dias30360 : row.diasReales);
                           const rowBg = isCobrado?'rgba(52,211,153,0.04)':isPast?'rgba(251,191,36,0.03)':'transparent';
-                          // Helper para renderizar celda editable
-                          const EditCell = ({flowObj, valor, colorVal, bgVal}) => {
-                            if(!flowObj) return <td style={{...tdP, color:'var(--text-muted)', background:bgVal}}><span style={{color:colorVal||'var(--text-muted)'}}>—</span></td>;
-                            const isEdit = editingCell?.id===flowObj.id;
-                            return(
-                              <td style={{...tdP, color:colorVal||'var(--accent)', background:bgVal, cursor:'pointer'}}
-                                onClick={()=>!isEdit&&setEditingCell({id:flowObj.id, value:String(valor)})}>
-                                {isEdit
-                                  ? <input autoFocus type="number" step="0.0001"
-                                      value={editingCell.value}
-                                      onChange={e=>setEditingCell(p=>({...p,value:e.target.value}))}
-                                      onBlur={e=>saveCellEdit(selected, flowObj.id, 'monto', e.target.value)}
-                                      onKeyDown={e=>{if(e.key==='Enter')e.target.blur();if(e.key==='Escape')setEditingCell(null);}}
-                                      style={{...inp,width:90,textAlign:'right',padding:'2px 6px'}}/>
-                                  : <span>{valor>0?fmtN(valor)+'%':'0,00%'}<span style={{fontSize:8,color:'var(--text-muted)',marginLeft:3}}>✎</span></span>
-                                }
-                              </td>
-                            );
-                          };
+                          const editAmort = editingCell?.id===row.amort?.id;
+                          const editInt   = editingCell?.id===row.cupon?.id;
                           return(
                             <tr key={row.date} style={{background:rowBg}}>
                               <td style={{...tdPL,color:'var(--text-muted)',fontSize:11}}>{i+1}</td>
@@ -2972,12 +2955,34 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
                                 {fmtD(row.date)}{isCobrado&&<span style={{fontSize:9,marginLeft:5,color:'var(--green)'}}>✓</span>}
                               </td>
                               <td style={{...tdP,color:'var(--text-muted)'}}>{dias}</td>
-                              {/* Amort — siempre editable con click */}
-                              <EditCell flowObj={row.amort} valor={row.amortPct} colorVal={row.amortPct>0?'var(--yellow)':'var(--text-muted)'} bgVal={undefined}/>
+                              {/* Amort — editable inline */}
+                              <td style={{...tdP,color:row.amortPct>0?'var(--yellow)':'var(--text-muted)',cursor:row.amort?'pointer':'default'}}
+                                onClick={()=>row.amort&&!editAmort&&setEditingCell({id:row.amort.id,value:String(row.amortPct)})}>
+                                {editAmort
+                                  ?<input autoFocus type="number" step="0.0001"
+                                      value={editingCell.value}
+                                      onChange={e=>setEditingCell(p=>({...p,value:e.target.value}))}
+                                      onBlur={e=>saveCellEdit(selected,row.amort.id,'monto',e.target.value)}
+                                      onKeyDown={e=>{if(e.key==='Enter')e.target.blur();if(e.key==='Escape')setEditingCell(null);}}
+                                      style={{...inp,width:80,textAlign:'right',padding:'2px 6px'}}/>
+                                  :<span>{row.amortPct>0?fmtN(row.amortPct)+'%':'0,00%'}{row.amort&&<span style={{fontSize:8,color:'var(--text-muted)',marginLeft:3}}>✎</span>}</span>
+                                }
+                              </td>
                               <td style={tdP}>{fmtN2(row.vnDespues)}%</td>
                               <td style={{...tdP,color:'var(--text-muted)'}}>{selMeta.tna}%</td>
-                              {/* Interés — siempre editable con click */}
-                              <EditCell flowObj={row.cupon} valor={row.interestPct} colorVal={'var(--accent)'} bgVal={undefined}/>
+                              {/* Interés — editable inline */}
+                              <td style={{...tdP,color:'var(--accent)',cursor:row.cupon?'pointer':'default'}}
+                                onClick={()=>row.cupon&&!editInt&&setEditingCell({id:row.cupon.id,value:String(row.interestPct)})}>
+                                {editInt
+                                  ?<input autoFocus type="number" step="0.0001"
+                                      value={editingCell.value}
+                                      onChange={e=>setEditingCell(p=>({...p,value:e.target.value}))}
+                                      onBlur={e=>saveCellEdit(selected,row.cupon.id,'monto',e.target.value)}
+                                      onKeyDown={e=>{if(e.key==='Enter')e.target.blur();if(e.key==='Escape')setEditingCell(null);}}
+                                      style={{...inp,width:80,textAlign:'right',padding:'2px 6px'}}/>
+                                  :<span>{row.interestPct>0?fmtN(row.interestPct)+'%':'—'}{row.cupon&&<span style={{fontSize:8,color:'var(--text-muted)',marginLeft:3}}>✎</span>}</span>
+                                }
+                              </td>
                               <td style={{...tdP,background:'rgba(251,191,36,0.04)',color:'var(--yellow)',fontWeight:row.amortPct>0?700:400}}>
                                 {row.amortPct>0?fmtN(row.amortPct):'—'}
                               </td>

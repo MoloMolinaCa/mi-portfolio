@@ -991,7 +991,7 @@ function inferCurrency(item, endpoint){
 }
 
 function Modal({h,port=[],onSave,onClose}){
-  const blank={ticker:"",name:"",type:"accion_ar",qty:"",buyPrice:"",buyCurrency:"ARS",buyDate:todayAR(),operacion:"compra",comision:""};
+  const blank={ticker:"",name:"",type:"accion_ar",qty:"",buyPrice:"",buyCurrency:"ARS",buyDate:todayAR(),operacion:"compra",comision:"",comisionPct:""};
   const [f,setF]=useState(h?{...h,operacion:"compra",buyPrice:""}:blank);
   const [tickerStatus,setTickerStatus]=useState(h?"confirmed":"idle");
   const [searchResults,setSearchResults]=useState([]); // lista de instrumentos encontrados
@@ -2759,6 +2759,11 @@ function App(){
     try{ localStorage.setItem("gal_trades_v3",JSON.stringify(trades)); }catch{}
   },[trades,storageReady]);
 
+  useEffect(()=>{
+    if(!storageReady) return;
+    try{ localStorage.setItem("gal_bond_flows_v1",JSON.stringify(bondFlows)); }catch{}
+  },[bondFlows,storageReady]);
+
   // ── Live prices ───────────────────────────────────────────────────────────
   const fxRate = liveFX[fx] || FX_FALLBACK[fx];
 
@@ -3128,6 +3133,7 @@ function App(){
           {/* Notificación flujos pendientes */}
           {(()=>{
             const todayN=todayAR();
+            if(!bondFlows||typeof bondFlows!=='object')return null;
             const bonos=port.filter(h=>h.type==='bono_ars'||h.type==='bono_usd');
             const pending=bonos.flatMap(b=>{
               const flows=bondFlows[b.ticker]||[];

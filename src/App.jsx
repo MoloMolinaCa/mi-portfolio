@@ -2523,7 +2523,7 @@ async function fetchBondFlows(ticker) {
   } catch { return null; }
 }
 
-function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
+function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historicos}) {
   const [selected, setSelected]       = useState(null);
   const [loadingTicker, setLoadingTicker] = useState(null);
   const [addingFlow, setAddingFlow]   = useState(null);
@@ -4075,7 +4075,7 @@ function App(){
             <OperacionesTab trades={trades} port={port} setTrades={setTrades} setPort={setPort} card={card} livePrices={livePrices}/>
           )}
           {tab==="flujos"&&(
-            <FlujoTab port={port} trades={trades} bondFlows={bondFlows} setBondFlows={setBondFlows} card={card} fxRate={fxRate}/>
+            <FlujoTab port={port} trades={trades} bondFlows={bondFlows} setBondFlows={setBondFlows} card={card} fxRate={fxRate} historicos={historicos}/>
           )}
 
         </div>

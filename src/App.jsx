@@ -2920,12 +2920,12 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
                 </>);
               })():(()=>{
                 // Lista próximos pagos
-                const proximos = proximosPagos.filter(p=>p.date>=todayStr2).slice(0,8);
+                const proximos = proximosPagos.filter(p=>p.date>=todayStr2);
                 return(<>
                   <div style={{fontSize:10,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:1,fontWeight:600,marginBottom:12}}>
                     Próximos cobros
                   </div>
-                  <div style={{display:'flex',flexDirection:'column',gap:1,overflowY:'auto',maxHeight:400}}>
+                  <div style={{display:'flex',flexDirection:'column',gap:1,overflowY:'auto',maxHeight:520}}>
                     {proximos.length===0
                       ? <div style={{color:'var(--text-muted)',fontSize:13}}>No hay flujos cargados.</div>
                       : proximos.map((p,i)=>{

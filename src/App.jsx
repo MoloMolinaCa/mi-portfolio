@@ -650,7 +650,8 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
           if(h.isLive){
             // historicos.json stores per-unit prices, liveMap must match
             // data912 returns per-100-laminas for bonds → divide by 100
-            livePricesMap[h.ticker]=h.currentPrice;
+            // bono_ars: data912 per 100 laminas, calcTWR qtyFactor=qty/100 expects per-unit → /100
+            livePricesMap[h.ticker]=h.type==="bono_ars"?h.currentPrice/100:h.currentPrice;
           }
         }
       }

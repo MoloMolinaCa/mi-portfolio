@@ -2387,7 +2387,6 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
   );
 }
 
-export default 
 // ── FlujoTab ─────────────────────────────────────────────────────────────────
 async function fetchBondFlows(ticker) {
   try {
@@ -2648,6 +2647,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
     </div>
   );
 }
+
 
 function App(){
   // ── State ────────────────────────────────────────────────────────────────
@@ -3384,3 +3384,5 @@ function App(){
     </>
   );
 }
+
+export default App;

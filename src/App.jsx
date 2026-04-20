@@ -2953,18 +2953,27 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate}) {
                                 {fmtD(row.date)}{isCobrado&&<span style={{fontSize:9,marginLeft:5,color:'var(--green)'}}>✓</span>}
                               </td>
                               <td style={{...tdP,color:'var(--text-muted)'}}>{dias}</td>
-                              {/* Amort — input siempre visible, estilo texto hasta focus */}
+                              {/* Amort — input siempre visible en todas las filas */}
                               <td style={{...tdP,color:row.amortPct>0?'var(--yellow)':'var(--text-muted)',padding:'4px 6px'}}>
-                                {row.amort
-                                  ?<input type="number" step="0.0001"
-                                      defaultValue={row.amortPct}
-                                      key={'a-'+row.amort.id+'-'+row.amort.monto}
-                                      onFocus={e=>{e.target.select();e.target.style.background='var(--bg-input)';e.target.style.color='var(--yellow)';e.target.style.border='1px solid var(--accent)';}}
-                                      onBlur={e=>{e.target.style.background='transparent';e.target.style.border='none';e.target.style.color=row.amortPct>0?'var(--yellow)':'var(--text-muted)';saveCellEdit(selected,row.amort.id,'monto',e.target.value);}}
-                                      onKeyDown={e=>{if(e.key==='Enter')e.target.blur();if(e.key==='Escape'){e.target.value=row.amort.monto;e.target.blur();}}}
-                                      style={{background:'transparent',border:'none',color:'inherit',fontFamily:"'DM Mono',monospace",fontSize:12,textAlign:'right',width:'100%',outline:'none',cursor:'pointer',borderRadius:4,padding:'2px 4px'}}/>
-                                  :<span style={{color:'var(--text-muted)'}}>—</span>
-                                }
+                                <input type="number" step="0.0001" min="0"
+                                    defaultValue={row.amortPct||0}
+                                    key={'a-'+(row.amort?.id||row.date)+'-'+row.amortPct}
+                                    onFocus={e=>{e.target.select();e.target.style.background='var(--bg-input)';e.target.style.color='var(--yellow)';e.target.style.border='1px solid var(--accent)';}}
+                                    onBlur={e=>{
+                                      e.target.style.background='transparent';e.target.style.border='none';
+                                      const val=parseFloat(e.target.value)||0;
+                                      e.target.style.color=val>0?'var(--yellow)':'var(--text-muted)';
+                                      if(row.amort){
+                                        // Editar amort existente
+                                        saveCellEdit(selected,row.amort.id,'monto',e.target.value);
+                                      } else if(val>0) {
+                                        // Crear amort nueva en esta fecha
+                                        const newId=Date.now()+Math.random();
+                                        setBondFlows(prev=>({...prev,[selected]:[...(prev[selected]||[]),{id:newId,date:row.date,tipo:'amortizacion',monto:val,cobrado:false,fechaCobro:null,fuente:'manual',nota:''}].sort((a,b)=>a.date.localeCompare(b.date))}));
+                                      }
+                                    }}
+                                    onKeyDown={e=>{if(e.key==='Enter')e.target.blur();if(e.key==='Escape'){e.target.value=row.amortPct||0;e.target.blur();}}}
+                                    style={{background:'transparent',border:'none',color:'inherit',fontFamily:"'DM Mono',monospace",fontSize:12,textAlign:'right',width:'100%',outline:'none',cursor:'pointer',borderRadius:4,padding:'2px 4px'}}/>
                               </td>
                               <td style={tdP}>{fmtN2(row.vnDespues)}%</td>
                               <td style={{...tdP,color:'var(--text-muted)'}}>{selMeta.tna}%</td>

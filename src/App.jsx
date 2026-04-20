@@ -72,7 +72,7 @@ const FCI_IDS = {
 const SEED_BOND_META = {
   "TZXD6": {adjustsBy:"CER", desc:"BONTES a Descuento CER V15/12/26 · Cupón 0% + ajuste CER · Ley Argentina"},
   "TZX27": {adjustsBy:"CER", desc:"BONO CER V30/06/27 · Cupón 2% s/VN ajustado · Ley Argentina"},
-  "AO27D": {adjustsBy:null,  desc:"Bono Tesoro 6% V29/10/27 · Cupón 3% semestral s/VN · Ley Nueva York"},
+  "AO27D": {adjustsBy:null,  desc:"Bono Tesoro 6% V29/10/27 · Cupón mensual 6% anual base 30/360 · Bullet al vencimiento · Ley Nueva York"},
   "GD38D": {adjustsBy:null,  desc:"Global 2038 · Cupón 3.625% anual (1.8125% semestral) · Ley Nueva York"},
   "TLCUD": {adjustsBy:null,  desc:"ON Telecom Argentina C28 05/03/29 · Cupón 7% anual (3.5% semestral) · Ley Argentina"},
 };
@@ -90,13 +90,30 @@ const SEED_BOND_FLOWS = {
     {id:1005,date:"2027-06-30",tipo:"amortizacion", monto:100.0,cobrado:false,fechaCobro:null,fuente:"auto",nota:"Amort. 100% VN ajustado"},
   ],
   "AO27D": [
-    // Bono Tesoro 6% V29/10/27: cupón 3% semestral, pagos 29/04 y 29/10
-    // Ya pasó el 29/04/2026 - marcado como cobrado
-    {id:1006,date:"2026-04-29",tipo:"cupon",        monto:3.0,  cobrado:true, fechaCobro:"2026-04-29",fuente:"auto",nota:"3% s/VN · 6% anual"},
-    {id:1007,date:"2026-10-29",tipo:"cupon",        monto:3.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"3% s/VN · 6% anual"},
-    {id:1008,date:"2027-04-29",tipo:"cupon",        monto:3.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"3% s/VN · 6% anual"},
-    {id:1009,date:"2027-10-29",tipo:"cupon",        monto:3.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"3% s/VN · 6% anual"},
-    {id:1010,date:"2027-10-29",tipo:"amortizacion", monto:100.0,cobrado:false,fechaCobro:null,fuente:"auto",nota:"Amort. 100% VN"},
+    // Bono Tesoro 6% V29/10/27 — cupón mensual, tasa 6% anual base 30/360
+    // Amortización bullet al vencimiento (cupón 20 · 29/10/2027)
+    // Cupón 1 (31/03/2026): cobrado. Cupón 2 en adelante: pendientes.
+    {id:1006,date:"2026-03-31",tipo:"cupon",        monto:0.5667,cobrado:true, fechaCobro:"2026-03-31",fuente:"auto",nota:"días: 34 · 6%×34/360"},
+    {id:1007,date:"2026-04-30",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"días: 30 · 6%×30/360"},
+    {id:1008,date:"2026-05-29",tipo:"cupon",        monto:0.4833,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"días: 29 · 6%×29/360"},
+    {id:1009,date:"2026-06-30",tipo:"cupon",        monto:0.5167,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"días: 31 · 6%×31/360"},
+    {id:1010,date:"2026-07-31",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"días: 30 · 6%×30/360"},
+    {id:1011,date:"2026-08-31",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"días: 30 · 6%×30/360"},
+    {id:1012,date:"2026-09-30",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"días: 30 · 6%×30/360"},
+    {id:1013,date:"2026-10-30",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"días: 30 · 6%×30/360"},
+    {id:1014,date:"2026-11-30",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"días: 30 · 6%×30/360"},
+    {id:1015,date:"2026-12-30",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"días: 30 · 6%×30/360"},
+    {id:1016,date:"2027-01-29",tipo:"cupon",        monto:0.4833,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"días: 29 · 6%×29/360"},
+    {id:1017,date:"2027-02-26",tipo:"cupon",        monto:0.4500,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"días: 27 · 6%×27/360"},
+    {id:1018,date:"2027-03-31",tipo:"cupon",        monto:0.5833,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"días: 35 · 6%×35/360"},
+    {id:1019,date:"2027-04-30",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"días: 30 · 6%×30/360"},
+    {id:1020,date:"2027-05-31",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"días: 30 · 6%×30/360"},
+    {id:1021,date:"2027-06-30",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"días: 30 · 6%×30/360"},
+    {id:1022,date:"2027-07-30",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"días: 30 · 6%×30/360"},
+    {id:1023,date:"2027-08-31",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"días: 30 · 6%×30/360"},
+    {id:1024,date:"2027-09-30",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"días: 30 · 6%×30/360"},
+    {id:1025,date:"2027-10-29",tipo:"cupon",        monto:0.4833,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"días: 29 · 6%×29/360"},
+    {id:1026,date:"2027-10-29",tipo:"amortizacion", monto:100.0, cobrado:false,fechaCobro:null,        fuente:"auto",nota:"Amort. 100% VN · bullet"},
   ],
   "GD38D": [
     // Global 2038: cupón 3.625% anual (1.8125% semestral sobre VN original)

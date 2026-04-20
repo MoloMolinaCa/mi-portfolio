@@ -43,6 +43,12 @@ const fmtU = (n,d=0) => new Intl.NumberFormat("es-AR",{style:"currency",currency
 const fmtA = (n) => new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:0}).format(n);
 const fmtP = (n) => `${n>=0?"+":""}${n.toFixed(2)}%`;
 const pc   = (n) => n>=0?"var(--green)":"var(--red)";
+// Fecha de hoy en horario Argentina (UTC-3)
+const todayAR = () => {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset() - 180); // forzar UTC-3
+  return d.toISOString().slice(0,10);
+};
 
 // ── Mapeo de tickers ─────────────────────────────────────────────────────────
 // data912: bonos, ONs, CEDEARs, acciones AR — precios en vivo (2h cache)
@@ -412,7 +418,7 @@ function Chart100({series}){
 // Los flujos no generan retorno — solo cambian la base del siguiente sub-período.
 function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRate, livePricesMap, customEnd=null){
   if(!dates||dates.length<2) return [];
-  const realTodayStr=new Date().toISOString().slice(0,10);
+  const realTodayStr=todayAR();
   const todayStr=customEnd&&customEnd<realTodayStr?null:realTodayStr; // null = don't use live prices
   const liveMap=(todayStr&&livePricesMap)||{};
 
@@ -513,7 +519,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
   const fmtD=s=>s?s.slice(8)+'/'+s.slice(5,7):'';
 
   const getDates=(p,hist,customStart=null,customEnd=null)=>{
-    const today=customEnd||new Date().toISOString().slice(0,10);
+    const today=customEnd||todayAR();
     const end=new Date(today);
     let periodStart;
     if(customStart){periodStart=new Date(customStart);}
@@ -565,7 +571,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
       const dates=getDates(p,_hist,customStart,customEnd);
       const cclBars=_getCCL(),mepBars=_getMEP(),sp500Bars=_getSPY(),spyByma=_getTicker("SPY")||[];
 
-      const realToday=new Date().toISOString().slice(0,10);
+      const realToday=todayAR();
       const todayStr=customEnd&&customEnd<realToday?null:realToday; // null = no live prices
 
       // Función que obtiene el precio de una barra, usando el valor live para hoy si está disponible
@@ -645,7 +651,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
 
       // Precios en vivo para el punto de hoy
       const livePricesMap={};
-      if(!customEnd||customEnd>=new Date().toISOString().slice(0,10)){
+      if(!customEnd||customEnd>=todayAR()){
         for(const h of en){
           if(h.isLive){
             // historicos.json stores per-unit prices, liveMap must match
@@ -658,7 +664,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
 
       // TWR — Time Weighted Return
       // Solo agregar "hoy" al final si no hay customEnd (o customEnd es hoy)
-      const realToday2=new Date().toISOString().slice(0,10);
+      const realToday2=todayAR();
       const datesWithToday=[...dates];
       if(!customEnd||customEnd>=realToday2){
         if(datesWithToday[datesWithToday.length-1]!==realToday2)datesWithToday.push(realToday2);
@@ -740,7 +746,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
       </div>
       {/* ── Scrubber ── */}
       {historicos&&(()=>{
-        const today=new Date().toISOString().slice(0,10);
+        const today=todayAR();
         const allBars=historicos?.CCL||[];
         if(allBars.length<2)return null;
         // Primera fecha: la primera con datos reales (CCL o primera compra)
@@ -987,7 +993,7 @@ function inferCurrency(item, endpoint){
 }
 
 function Modal({h,port=[],onSave,onClose}){
-  const blank={ticker:"",name:"",type:"accion_ar",qty:"",buyPrice:"",buyCurrency:"ARS",buyDate:new Date().toISOString().slice(0,10),operacion:"compra",comision:""};
+  const blank={ticker:"",name:"",type:"accion_ar",qty:"",buyPrice:"",buyCurrency:"ARS",buyDate:todayAR(),operacion:"compra",comision:""};
   const [f,setF]=useState(h?{...h,operacion:"compra",buyPrice:""}:blank);
   const [tickerStatus,setTickerStatus]=useState(h?"confirmed":"idle");
   const [searchResults,setSearchResults]=useState([]); // lista de instrumentos encontrados
@@ -1558,7 +1564,7 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
       const mepBars = _getMEP();
 
       // TWR — Time Weighted Return
-      const today = new Date().toISOString().slice(0,10);
+      const today = todayAR();
       const datesWithToday=[...dates];
       if(datesWithToday[datesWithToday.length-1]!==today)datesWithToday.push(today);
 
@@ -2533,7 +2539,7 @@ export default function App(){
     return acc;
   },{});
 
-  const today = new Date().toISOString().slice(0,10);
+  const today = todayAR();
   const en=port.map(h=>{
     const live=livePrices[h.ticker];
     const isBondH=h.type==="bono_ars"; // solo ARS cotiza por 100 laminas diferente al historico
@@ -2667,7 +2673,7 @@ export default function App(){
           const ts=Date.now();
           const live=livePrices[pos.ticker];
           const sellPrice=live?live.price:pos.currentPrice;
-          setTrades(t=>[...t,{id:ts,ticker:pos.ticker,tipo:"venta",qty:pos.qty,price:sellPrice,currency:pos.buyCurrency,date:new Date().toISOString().slice(0,10),ts,name:pos.name}]);
+          setTrades(t=>[...t,{id:ts,ticker:pos.ticker,tipo:"venta",qty:pos.qty,price:sellPrice,currency:pos.buyCurrency,date:todayAR(),ts,name:pos.name}]);
         }
         setPort(p=>p.filter(x=>x.id!==id));
       }
@@ -2676,7 +2682,7 @@ export default function App(){
     const existing=port.find(x=>x.id===h.id)||port.find(x=>x.ticker===h.ticker.toUpperCase());
     const ts=Date.now();
     const comision=h.comision?+h.comision:undefined;
-    const tradeBase={ticker:h.ticker.toUpperCase(),currency:h.buyCurrency,date:h.buyDate||new Date().toISOString().slice(0,10),ts,name:h.name,...(comision?{comision}:{})};
+    const tradeBase={ticker:h.ticker.toUpperCase(),currency:h.buyCurrency,date:h.buyDate||todayAR(),ts,name:h.name,...(comision?{comision}:{})};
     // Precio se guarda tal cual (data912 ya devuelve en laminas de 100)
     const priceToSave=+h.buyPrice;
     if(!existing){
@@ -2732,7 +2738,7 @@ export default function App(){
     const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
     const url=URL.createObjectURL(blob);
     const a=document.createElement("a"); a.href=url;
-    a.download=`movimientos_${new Date().toISOString().slice(0,10)}.csv`;
+    a.download=`movimientos_${todayAR()}.csv`;
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
   };
 
@@ -2864,7 +2870,7 @@ export default function App(){
               {(()=>{
                 // Rendimiento diario: usar liveChangePct de cada activo (viene de data912, es el cambio vs cierre anterior real)
                 // Esto es más preciso que comparar con el último bar del historicos.json
-                const todayKPI=new Date().toISOString().slice(0,10);
+                const todayKPI=todayAR();
                 let dayPnlUSD=0, baseValUSD=0;
                 for(const h of en){
                   // Solo activos con precio live y cambio % del día

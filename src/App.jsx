@@ -416,9 +416,9 @@ function Chart100({series}){
 // ── Time-Weighted Return (TWR) ────────────────────────────────────────────────
 // Para cada sub-período entre flujos, el retorno es valor_fin / valor_inicio.
 // Los flujos no generan retorno — solo cambian la base del siguiente sub-período.
-function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRate, livePricesMap, customEnd=null){
+function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRate, livePricesMap, customEnd=null, realTodayStr=null){
   if(!dates||dates.length<2) return [];
-  const realTodayStr=todayAR();
+  if(!realTodayStr){const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset()-180);realTodayStr=d.toISOString().slice(0,10);}
   const todayStr=customEnd&&customEnd<realTodayStr?null:realTodayStr; // null = don't use live prices
   const liveMap=(todayStr&&livePricesMap)||{};
 
@@ -671,7 +671,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
         if(datesWithToday[datesWithToday.length-1]!==realToday2)datesWithToday.push(realToday2);
       }
 
-      const port100=calcTWR(datesWithToday,trades,en,tickerBars,cclBars,mepBars,currency,fxRate,livePricesMap,customEnd);
+      const port100=calcTWR(datesWithToday,trades,en,tickerBars,cclBars,mepBars,currency,fxRate,livePricesMap,customEnd,realToday2);
 
       setChartData({
         port100,t10y100,spy100,ccl100,mep100,currency,

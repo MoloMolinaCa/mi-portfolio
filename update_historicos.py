@@ -124,46 +124,49 @@ def argentinadatos_get_fx(tipo, start, end):
         print(f"  ✗ {tipo}: {e}")
         return []
 
-def bcra_get_cer():
+def bcra_get_cer_xls():
     """
-    Descarga la serie CER desde la API oficial del BCRA (sin token, pública).
-    Variable 3540 = CER diario.
-    Pagina de a 3000 registros por año para obtener la serie completa.
-    Respuesta: {results:[{fecha,valor},...]}
+    Descarga el CER desde los XLS anuales del BCRA.
+    URL: https://www.bcra.gob.ar/pdfs/PublicacionesEstadisticas/cerAAAA.xls
+    Columna 4 = fecha (YYYYMMDD), columna 5 = valor CER.
+    Funciona sin token ni API key.
     """
+    try:
+        import io
+        import pandas as pd
+    except ImportError:
+        print("  ! CER XLS: pandas no disponible")
+        return []
+
     bars = []
     seen_dates = set()
-    # Descargar desde 2002 hasta hoy en bloques anuales
-    start_year = 2002
-    end_year = datetime.now().year
-    base_url = "https://api.bcra.gob.ar/estadisticas/v1/datosvariable/3540"
+    current_year = datetime.now().year
 
-    for year in range(start_year, end_year + 1):
-        desde = f"{year}-01-01"
-        hasta = f"{year}-12-31" if year < end_year else datetime.now().strftime("%Y-%m-%d")
-        url = f"{base_url}/{desde}/{hasta}"
+    # Descargar desde 2024 en adelante (antes ya está cubierto por estadisticasbcra)
+    for year in range(2024, current_year + 2):
+        url = f"https://www.bcra.gob.ar/pdfs/PublicacionesEstadisticas/cer{year}.xls"
         try:
-            r = requests.get(url, timeout=15, headers={"Accept": "application/json"})
+            r = requests.get(url, verify=False, timeout=15)
             if not r.ok:
-                print(f"  ! CER BCRA {year}: status {r.status_code}")
                 continue
-            data = r.json()
-            results = data.get("results", data.get("data", []))
-            for x in results:
-                date  = str(x.get("fecha", "")).strip()[:10]
-                valor = float(x.get("valor", 0))
-                if date and valor > 0 and date not in seen_dates:
-                    bars.append({"date": date, "close": round(valor, 6)})
-                    seen_dates.add(date)
+            df = pd.read_excel(io.BytesIO(r.content), engine='xlrd', header=None, skiprows=10)
+            df = df[[4, 5]].dropna()
+            df.columns = ['date', 'valor']
+            df['date'] = df['date'].astype(str).str.strip()
+            df = df[df['date'].str.match(r'\d{8}')]
+            df['date'] = pd.to_datetime(df['date'], format='%Y%m%d').dt.strftime('%Y-%m-%d')
+            df['valor'] = pd.to_numeric(df['valor'], errors='coerce')
+            df = df.dropna()
+            for _, row in df.iterrows():
+                if row['date'] not in seen_dates and row['valor'] > 0:
+                    bars.append({"date": row['date'], "close": round(row['valor'], 6)})
+                    seen_dates.add(row['date'])
+            print(f"  ✓ CER XLS {year}: {len(df)} pts")
         except Exception as e:
-            print(f"  ! CER BCRA {year}: {e}")
-        time.sleep(0.2)
+            print(f"  ! CER XLS {year}: {e}")
+        time.sleep(0.3)
 
     bars.sort(key=lambda x: x["date"])
-    if bars:
-        print(f"  ✓ CER (BCRA oficial): {len(bars)} pts, último: {bars[-1]}")
-    else:
-        print(f"  ✗ CER BCRA: sin datos")
     return bars
 
 
@@ -201,8 +204,8 @@ def estadisticasbcra_get_cer():
         return bars_bcra_privado
 
     # Si está desactualizado, complementar con BCRA oficial
-    print(f"  ⚠ estadisticasbcra cortado en {ultimo} — complementando con BCRA oficial")
-    bars_oficial = bcra_get_cer()
+    print(f"  ⚠ estadisticasbcra cortado en {ultimo} — complementando con XLS BCRA")
+    bars_oficial = bcra_get_cer_xls()
 
     if not bars_oficial:
         return bars_bcra_privado

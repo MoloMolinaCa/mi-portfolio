@@ -4110,8 +4110,17 @@ function App(){
                     trend:dayPct,
                   },
                 ];
+                // Próximo vencimiento de bonos
+                const allBonds = port.filter(h=>h.type==='bono_ars'||h.type==='bono_usd');
+                const proxVto = allBonds.flatMap(b=>{
+                  const flows = (bondFlows[b.ticker]||[]);
+                  return flows
+                    .filter(f=>!f.cobrado && f.date>=todayKPI && (f.tipo==='amortizacion'||f.tipo==='ambos'))
+                    .map(f=>({ticker:b.ticker, date:f.date, currency:b.buyCurrency, qty:b.qty, monto:f.monto}));
+                }).sort((a,b)=>a.date.localeCompare(b.date))[0];
+
                 return(
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,maxWidth:860}}>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr) auto",gap:12,maxWidth:1100,alignItems:"stretch"}}>
                     {kpis.map(k=>(
                       <div key={k.lbl} className="kpi-card" style={{
                         ...card,
@@ -4134,6 +4143,14 @@ function App(){
                         </div>
                       </div>
                     ))}
+                  {proxVto&&(
+                    <div style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderLeft:"3px solid var(--yellow)",borderRadius:10,padding:"16px 20px",display:"flex",flexDirection:"column",justifyContent:"center",gap:6,minWidth:160}}>
+                      <span style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1.2,fontWeight:600}}>Próx. vencimiento</span>
+                      <span style={{fontSize:20,fontWeight:700,color:"var(--yellow)",fontFamily:"'DM Mono',monospace"}}>{proxVto.ticker}</span>
+                      <span style={{fontSize:13,color:"var(--text-secondary)",fontFamily:"'DM Mono',monospace"}}>{proxVto.date.slice(8)+'/'+proxVto.date.slice(5,7)+'/'+proxVto.date.slice(0,4)}</span>
+                      <span style={{fontSize:11,color:"var(--text-muted)"}}>{Math.round((new Date(proxVto.date)-new Date(todayKPI))/(1000*60*60*24))} días</span>
+                    </div>
+                  )}
                   </div>
                 );
               })()}

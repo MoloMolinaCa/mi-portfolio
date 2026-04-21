@@ -1408,17 +1408,13 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
   const lbl = {fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,display:"block",marginBottom:5,fontWeight:600};
   const btn = (color) => ({background:color,border:"none",borderRadius:8,padding:"9px 20px",color:"#fff",cursor:"pointer",fontSize:13,fontWeight:600});
 
-  // Genera flujos a partir de params
-  const generateFlows = () => {
+  // Genera tabla de filas por fecha (una fila = una fecha, con amort y cupon)
+  const generateRows = () => {
     const {vto, tna, frecuencia, amortTipo, cuotas, emisionDate} = params;
     if(!vto || !tna) return null;
 
     const freqMonths = {mensual:1, trimestral:3, semestral:6, anual:12}[frecuencia] || 6;
     const tnaNum = parseFloat(tna)/100;
-    const flows = [];
-    let id = Date.now();
-
-    // Fecha de inicio = emisionDate o hoy
     const startDate = emisionDate ? new Date(emisionDate) : new Date();
     const endDate = new Date(vto);
 
@@ -1430,41 +1426,53 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
       couponDates.push(cur.toISOString().slice(0,10));
       cur.setMonth(cur.getMonth() + freqMonths);
     }
-    // Asegurar que la última fecha es el vto
     if(couponDates.length===0 || couponDates[couponDates.length-1] !== vto){
       couponDates.push(vto);
     }
 
-    // Calcular amortizaciones
-    const amortPorCuota = amortTipo==='bullet' ? 0 : (cuotas ? 100/parseInt(cuotas) : 0);
+    const amortPorCuota = amortTipo==='bullet' ? 0 : (cuotas ? parseFloat((100/parseInt(cuotas)).toFixed(6)) : 0);
     let vnResidual = 100;
-
-    // Calcular flujo de cupón para cada fecha
     let prevDate = emisionDate || startDate.toISOString().slice(0,10);
-    couponDates.forEach((dateStr, i) => {
+
+    const rows = couponDates.map((dateStr, i) => {
       const d1 = new Date(prevDate), d2 = new Date(dateStr);
       const dias = Math.round((d2-d1)/(1000*60*60*24));
-      const montoCupon = parseFloat((tnaNum * dias/360 * vnResidual).toFixed(6));
-
-      // Cupón
-      flows.push({id:id++, date:dateStr, tipo:'cupon', monto:montoCupon, cobrado:false, fechaCobro:null, fuente:'wizard', nota:`${dias}d · ${tna}%×${dias}/360 s/VN${vnResidual}`});
-
-      // Amortización
+      const cupon = parseFloat((tnaNum * dias/360 * vnResidual).toFixed(6));
       const esUltimo = i === couponDates.length-1;
-      const amortMonto = amortTipo==='bullet' ? (esUltimo ? 100 : 0) : (amortPorCuota > 0 ? parseFloat(amortPorCuota.toFixed(6)) : 0);
-      if(amortMonto > 0){
-        flows.push({id:id++, date:dateStr, tipo:'amortizacion', monto:amortMonto, cobrado:false, fechaCobro:null, fuente:'wizard', nota:`Amort. ${amortMonto.toFixed(4)}%`});
-        vnResidual = Math.max(0, parseFloat((vnResidual - amortMonto).toFixed(6)));
-      }
+      const amort = amortTipo==='bullet' ? (esUltimo ? 100 : 0) : amortPorCuota;
+      const row = {date:dateStr, dias, cupon, amort, vnResidual};
+      vnResidual = parseFloat(Math.max(0, vnResidual - amort).toFixed(6));
       prevDate = dateStr;
+      return row;
     });
+    return rows;
+  };
 
+  // Convierte las rows editables en flows para guardar
+  const rowsToFlows = (rows) => {
+    let id = Date.now();
+    const flows = [];
+    rows.forEach(row => {
+      if(row.cupon > 0){
+        flows.push({id:id++, date:row.date, tipo:'cupon', monto:row.cupon, cobrado:false, fechaCobro:null, fuente:'wizard', nota:`${row.dias}d · ${params.tna}%×${row.dias}/360`});
+      }
+      if(row.amort > 0){
+        flows.push({id:id++, date:row.date, tipo:'amortizacion', monto:row.amort, cobrado:false, fechaCobro:null, fuente:'wizard', nota:`Amort. ${row.amort.toFixed(4)}%`});
+      }
+    });
     return flows;
   };
 
+  // Mantener generateFlows para compatibilidad
+  const generateFlows = () => {
+    const rows = generateRows();
+    return rows ? rowsToFlows(rows) : null;
+  };
+
+  const [editRows, setEditRows] = useState(null); // filas editables por fecha
   const handleGenerate = () => {
-    const flows = generateFlows();
-    if(flows) setGeneratedFlows(flows);
+    const rows = generateRows();
+    if(rows){ setEditRows(rows); }
     setStep('review');
   };
 
@@ -1586,14 +1594,18 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
           </>
         )}
 
-        {/* PASO: REVIEW — revisar y editar flujos generados */}
-        {step==='review' && generatedFlows && (()=>{
-          const totalAmort = generatedFlows.filter(f=>f.tipo==='amortizacion').reduce((a,f)=>a+f.monto,0);
+        {/* PASO: REVIEW — una fila por fecha, columnas Fecha/Amort/Cupón editables */}
+        {step==='review' && editRows && (()=>{
+          const totalAmort = editRows.reduce((a,r)=>a+(parseFloat(r.amort)||0),0);
           const amortOk = Math.abs(totalAmort-100) < 0.01;
-          const inpS = {background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:5,padding:"3px 7px",color:"var(--text-primary)",fontSize:12,width:"100%"};
+          const inpS = {background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:5,padding:"3px 7px",color:"var(--text-primary)",fontSize:12,width:"100%",boxSizing:"border-box"};
+          const updateRow = (i, key, val) => {
+            const newRows = [...editRows];
+            newRows[i] = {...newRows[i], [key]: val};
+            setEditRows(newRows);
+          };
           return(
           <>
-            {/* Validación amort */}
             {!amortOk&&(
               <div style={{background:"rgba(248,113,113,0.1)",border:"1px solid rgba(248,113,113,0.3)",borderRadius:7,padding:"7px 12px",marginBottom:10,fontSize:12,color:"var(--red)"}}>
                 ⚠ Amortización total: <b>{totalAmort.toFixed(4)}%</b> — debe ser exactamente 100%
@@ -1604,53 +1616,39 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
                 ✓ Amortización total: 100%
               </div>
             )}
-            <div style={{maxHeight:300,overflowY:"auto",marginBottom:16}}>
+            <div style={{maxHeight:320,overflowY:"auto",marginBottom:16}}>
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                 <thead>
-                  <tr style={{borderBottom:"1px solid var(--border)"}}>
-                    {["Fecha","Tipo","Monto %VN",""].map(h=>(
-                      <th key={h} style={{padding:"6px 8px",textAlign:"left",fontSize:10,color:"var(--text-muted)",fontWeight:600,textTransform:"uppercase"}}>{h}</th>
-                    ))}
+                  <tr style={{borderBottom:"1px solid var(--border)",position:"sticky",top:0,background:"var(--bg-card)"}}>
+                    <th style={{padding:"6px 8px",textAlign:"left",fontSize:10,color:"var(--text-muted)",fontWeight:600,textTransform:"uppercase",minWidth:120}}>Fecha</th>
+                    <th style={{padding:"6px 8px",textAlign:"right",fontSize:10,color:"var(--yellow)",fontWeight:600,textTransform:"uppercase",minWidth:90}}>Amort. %</th>
+                    <th style={{padding:"6px 8px",textAlign:"right",fontSize:10,color:"var(--accent)",fontWeight:600,textTransform:"uppercase",minWidth:90}}>Cupón %</th>
+                    <th style={{padding:"6px 8px",width:28}}></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {generatedFlows.map((f,i)=>(
-                    <tr key={i} style={{borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
-                      {/* Fecha editable */}
-                      <td style={{padding:"4px 6px",minWidth:110}}>
-                        <input type="date" value={f.date}
-                          onChange={e=>{
-                            const newFlows=[...generatedFlows];
-                            newFlows[i]={...newFlows[i],date:e.target.value};
-                            setGeneratedFlows(newFlows);
-                          }}
+                  {editRows.map((row,i)=>(
+                    <tr key={i} style={{borderBottom:"1px solid rgba(255,255,255,0.04)",background:row.amort>0?"rgba(251,191,36,0.03)":"transparent"}}>
+                      <td style={{padding:"4px 6px"}}>
+                        <input type="date" value={row.date}
+                          onChange={e=>updateRow(i,'date',e.target.value)}
                           style={inpS}/>
                       </td>
                       <td style={{padding:"4px 6px"}}>
-                        <span style={{color:f.tipo==='amortizacion'?"var(--yellow)":"var(--accent)",fontWeight:600,fontSize:11}}>
-                          {f.tipo==='amortizacion'?'💰 Amort.':'🎫 Cupón'}
-                        </span>
+                        <input type="number" step="0.0001" min="0" max="100"
+                          value={row.amort}
+                          onChange={e=>updateRow(i,'amort',parseFloat(e.target.value)||0)}
+                          style={{...inpS,color:"var(--yellow)",fontWeight:600,textAlign:"right"}}/>
                       </td>
-                      {/* Monto — editable solo en amortizaciones */}
-                      <td style={{padding:"4px 6px",minWidth:100}}>
-                        {f.tipo==='amortizacion' ? (
-                          <input type="number" step="0.0001" min="0" max="100"
-                            value={f.monto}
-                            onChange={e=>{
-                              const val = parseFloat(e.target.value)||0;
-                              const newFlows=[...generatedFlows];
-                              newFlows[i]={...newFlows[i],monto:val};
-                              setGeneratedFlows(newFlows);
-                            }}
-                            style={{...inpS,color:"var(--yellow)",fontWeight:600}}/>
-                        ) : (
-                          <span style={{fontFamily:"'DM Mono',monospace",paddingLeft:7}}>{f.monto.toFixed(4)}%</span>
-                        )}
+                      <td style={{padding:"4px 6px"}}>
+                        <input type="number" step="0.0001" min="0"
+                          value={row.cupon}
+                          onChange={e=>updateRow(i,'cupon',parseFloat(e.target.value)||0)}
+                          style={{...inpS,color:"var(--accent)",textAlign:"right"}}/>
                       </td>
-                      {/* Eliminar fila */}
-                      <td style={{padding:"4px 6px",textAlign:"center"}}>
-                        <button onClick={()=>setGeneratedFlows(generatedFlows.filter((_,j)=>j!==i))}
-                          style={{background:"transparent",border:"none",color:"var(--text-muted)",cursor:"pointer",fontSize:14,padding:"2px 4px"}}>🗑</button>
+                      <td style={{padding:"4px 2px",textAlign:"center"}}>
+                        <button onClick={()=>setEditRows(editRows.filter((_,j)=>j!==i))}
+                          style={{background:"transparent",border:"none",color:"var(--text-muted)",cursor:"pointer",fontSize:13,padding:"2px 3px"}}>🗑</button>
                       </td>
                     </tr>
                   ))}
@@ -1658,11 +1656,11 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
               </table>
             </div>
             <div style={{display:"flex",gap:10,justifyContent:"space-between",alignItems:"center"}}>
-              <button onClick={()=>setStep('params')} style={{...btn("var(--bg-input)"),color:"var(--text-muted)",border:"1px solid var(--border)",fontSize:12}}>← Editar parámetros</button>
+              <button onClick={()=>setStep('params')} style={{...btn("var(--bg-input)"),color:"var(--text-muted)",border:"1px solid var(--border)",fontSize:12}}>← Parámetros</button>
               <div style={{display:"flex",gap:8}}>
-                <button onClick={onSkip} style={{...btn("var(--bg-input)"),color:"var(--text-muted)",border:"1px solid var(--border)",fontSize:12}}>Saltar por ahora</button>
-                <button onClick={()=>handleConfirm(generatedFlows)} disabled={!amortOk}
-                  style={{...btn(!amortOk?"rgba(59,130,246,0.3)":"var(--accent)"),cursor:!amortOk?"not-allowed":"pointer"}}>
+                <button onClick={onSkip} style={{...btn("var(--bg-input)"),color:"var(--text-muted)",border:"1px solid var(--border)",fontSize:12}}>Saltar</button>
+                <button onClick={()=>handleConfirm(rowsToFlows(editRows))} disabled={!amortOk}
+                  style={{...btn(!amortOk?"rgba(59,130,246,0.3)":"var(--accent)"),cursor:!amortOk?"not-allowed":"pointer",fontSize:13}}>
                   ✓ Confirmar y cargar
                 </button>
               </div>

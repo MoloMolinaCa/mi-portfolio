@@ -2046,7 +2046,7 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
   );
 }
 
-function OperacionesTab({trades,port,setTrades,setPort,card,livePrices}){
+function OperacionesTab({trades,port,setTrades,setPort,card,livePrices,darkMode}){
   const [editId,setEditId]=useState(null);
   const [editData,setEditData]=useState(null);
   const [confirmDelete,setConfirmDelete]=useState(null);
@@ -4216,7 +4216,7 @@ function App(){
 
           {/* OPERACIONES */}
           {tab==="operaciones"&&(
-            <OperacionesTab trades={trades} port={port} setTrades={setTrades} setPort={setPort} card={card} livePrices={livePrices}/>
+            <OperacionesTab trades={trades} port={port} setTrades={setTrades} setPort={setPort} card={card} livePrices={livePrices} darkMode={darkMode}/>
           )}
           {tab==="flujos"&&(
             <FlujoTab port={port} trades={trades} bondFlows={bondFlows} setBondFlows={setBondFlows} card={card} fxRate={fxRate} historicos={historicos}/>

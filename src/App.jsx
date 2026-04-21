@@ -2533,13 +2533,31 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
   const [editingCell, setEditingCell] = useState(null); // {id, field, value} — id del flow
   const [editingMeta, setEditingMeta] = useState(false);
   // bondMeta: {ticker:{tna, base}} — tna=% anual, base='30/360'|'dias/365'
-  const [bondMeta, setBondMeta] = useState({
+  const BOND_META_DEFAULT = {
     'AO27D': {tna:6,  base:'30/360', emisionDate:null},
     'GD38D': {tna:5,  base:'30/360', emisionDate:null},
     'TLCUD': {tna:7,  base:'30/360', emisionDate:null},
     'TZX27': {tna:2,  base:'30/360', emisionDate:'2022-12-30'},
     'TZXD6': {tna:0,  base:'30/360', emisionDate:'2022-03-15'},
+  };
+  const [bondMeta, setBondMetaState] = useState(()=>{
+    try{
+      const saved = localStorage.getItem('gal_bond_meta_v1');
+      if(saved){
+        const parsed = JSON.parse(saved);
+        // Merge con defaults para tickers nuevos
+        return {...BOND_META_DEFAULT, ...parsed};
+      }
+    }catch{}
+    return BOND_META_DEFAULT;
   });
+  const setBondMeta = (updater) => {
+    setBondMetaState(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      try{ localStorage.setItem('gal_bond_meta_v1', JSON.stringify(next)); }catch{}
+      return next;
+    });
+  };
   const [metaDraft, setMetaDraft] = useState({tna:'', base:'30/360', emisionDate:''});
   // CER: serie histórica {date:string, valor:number}[], cacheada en memoria
   // CER: se lee desde historicos.json — cargado por update_historicos.py
@@ -3295,7 +3313,8 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                           const rowBg = isCobrado?'rgba(52,211,153,0.04)':isPast?'rgba(251,191,36,0.03)':'transparent';
                           // CER de la fecha de pago
                           // getCER devuelve el último valor conocido <= fecha (o el más antiguo si no hay anterior)
-                          const cerPagoVal = (isCERBond&&cerSerie&&cerBaseVal2) ? getCER(cerSerie,row.date) : null;
+                          // CER de pago = CER de (fecha_pago - 10 días hábiles), o (hoy - 10hd) si es futuro
+                          const cerPagoVal = (isCERBond&&cerSerie&&cerBaseVal2) ? getCERMinus10(cerSerie,row.date) : null;
                           const coefCER = (cerBaseVal2&&cerPagoVal) ? cerPagoVal/cerBaseVal2 : null;
                           const vnAjust = coefCER ? 100*coefCER : null; // VN ajustado por cada 100 originales
                           // Interés ajustado CER

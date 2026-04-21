@@ -2617,13 +2617,15 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
   };
 
   // CER de 10 días hábiles antes de una fecha
-  // Si la fecha de referencia (fecha - 10hd) es futura → usar CER de hoy
+  // Si fecha-10hd es futura → usar CER de (hoy - 10 días hábiles)
   const getCERMinus10 = (serie, dateStr) => {
     if(!serie||!serie.length||!dateStr) return null;
     const todayStr = todayAR();
     const fechaRef = restarDiasHabilesSync(dateStr, 10);
-    // Si la fecha de referencia es futura, usar el CER de hoy
-    const fechaConsulta = fechaRef > todayStr ? todayStr : fechaRef;
+    // Si la fecha de referencia aún no llegó, usar hoy - 10 días hábiles
+    const fechaConsulta = fechaRef > todayStr
+      ? restarDiasHabilesSync(todayStr, 10)
+      : fechaRef;
     return getCER(serie, fechaConsulta);
   };
 

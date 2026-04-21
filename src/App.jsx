@@ -1106,6 +1106,252 @@ function inferCurrency(item, endpoint){
   return "ARS";
 }
 
+
+// ── BondWizard ────────────────────────────────────────────────────────────────
+// Wizard para cargar flujos de un bono/ON al dar de alta
+// Paso 1: si tiene SEED_BOND_FLOWS → mostrar para confirmar
+// Paso 2: si no → preguntar parámetros y generar flujos
+function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
+  const seedFlows = SEED_BOND_FLOWS[ticker]||null;
+  const seedMeta  = SEED_BOND_META[ticker]||null;
+
+  // Wizard manual
+  const [step, setStep] = useState(seedFlows ? 'confirm' : 'params');
+  const [params, setParams] = useState({
+    vto: '',
+    tna: '',
+    frecuencia: 'semestral',
+    amortTipo: 'bullet', // bullet | cuotas
+    cuotas: '',
+    emisionDate: '',
+    ajuste: 'ninguno', // ninguno | CER | UVA
+  });
+  const [generatedFlows, setGeneratedFlows] = useState(null);
+  const set = (k,v) => setParams(p=>({...p,[k]:v}));
+
+  const inp = {background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:8,padding:"8px 12px",color:"var(--text-primary)",fontSize:13,width:"100%"};
+  const lbl = {fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,display:"block",marginBottom:5,fontWeight:600};
+  const btn = (color) => ({background:color,border:"none",borderRadius:8,padding:"9px 20px",color:"#fff",cursor:"pointer",fontSize:13,fontWeight:600});
+
+  // Genera flujos a partir de params
+  const generateFlows = () => {
+    const {vto, tna, frecuencia, amortTipo, cuotas, emisionDate} = params;
+    if(!vto || !tna) return null;
+
+    const freqMonths = {mensual:1, trimestral:3, semestral:6, anual:12}[frecuencia] || 6;
+    const tnaNum = parseFloat(tna)/100;
+    const flows = [];
+    let id = Date.now();
+
+    // Fecha de inicio = emisionDate o hoy
+    const startDate = emisionDate ? new Date(emisionDate) : new Date();
+    const endDate = new Date(vto);
+
+    // Generar fechas de cupón
+    const couponDates = [];
+    const cur = new Date(startDate);
+    cur.setMonth(cur.getMonth() + freqMonths);
+    while(cur <= endDate){
+      couponDates.push(cur.toISOString().slice(0,10));
+      cur.setMonth(cur.getMonth() + freqMonths);
+    }
+    // Asegurar que la última fecha es el vto
+    if(couponDates.length===0 || couponDates[couponDates.length-1] !== vto){
+      couponDates.push(vto);
+    }
+
+    // Calcular amortizaciones
+    const amortPorCuota = amortTipo==='bullet' ? 0 : (cuotas ? 100/parseInt(cuotas) : 0);
+    let vnResidual = 100;
+
+    // Calcular flujo de cupón para cada fecha
+    let prevDate = emisionDate || startDate.toISOString().slice(0,10);
+    couponDates.forEach((dateStr, i) => {
+      const d1 = new Date(prevDate), d2 = new Date(dateStr);
+      const dias = Math.round((d2-d1)/(1000*60*60*24));
+      const montoCupon = parseFloat((tnaNum * dias/360 * vnResidual).toFixed(6));
+
+      // Cupón
+      flows.push({id:id++, date:dateStr, tipo:'cupon', monto:montoCupon, cobrado:false, fechaCobro:null, fuente:'wizard', nota:`${dias}d · ${tna}%×${dias}/360 s/VN${vnResidual}`});
+
+      // Amortización
+      const esUltimo = i === couponDates.length-1;
+      const amortMonto = amortTipo==='bullet' ? (esUltimo ? 100 : 0) : (amortPorCuota > 0 ? parseFloat(amortPorCuota.toFixed(6)) : 0);
+      if(amortMonto > 0){
+        flows.push({id:id++, date:dateStr, tipo:'amortizacion', monto:amortMonto, cobrado:false, fechaCobro:null, fuente:'wizard', nota:`Amort. ${amortMonto.toFixed(4)}%`});
+        vnResidual = Math.max(0, parseFloat((vnResidual - amortMonto).toFixed(6)));
+      }
+      prevDate = dateStr;
+    });
+
+    return flows;
+  };
+
+  const handleGenerate = () => {
+    const flows = generateFlows();
+    if(flows) setGeneratedFlows(flows);
+    setStep('review');
+  };
+
+  const handleConfirm = (flows) => {
+    onConfirm(flows);
+  };
+
+  return(
+    <div className={darkMode?"theme-dark":"theme-light"} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300}}>
+      <div style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:16,padding:28,width:560,maxWidth:"95vw",maxHeight:"90vh",overflowY:"auto"}}>
+
+        {/* Header */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+          <div>
+            <h3 style={{fontFamily:"Georgia,serif",fontSize:16,color:"var(--text-primary)",margin:0}}>
+              📋 Flujos de {ticker}
+            </h3>
+            <p style={{fontSize:11,color:"var(--text-muted)",margin:"4px 0 0"}}>
+              {step==='confirm' ? 'Encontré el schedule en el sistema. Confirmá antes de cargar.' :
+               step==='params'  ? 'No encontré el schedule. Ingresá los parámetros para generarlo.' :
+               'Revisá los flujos generados antes de confirmar.'}
+            </p>
+          </div>
+          <button onClick={onSkip} style={{background:"transparent",border:"none",color:"var(--text-muted)",cursor:"pointer",fontSize:20,lineHeight:1}}>×</button>
+        </div>
+
+        {/* PASO: CONFIRM — flujos del seed */}
+        {step==='confirm' && seedFlows && (
+          <>
+            {seedMeta?.desc && (
+              <div style={{background:"rgba(59,130,246,0.06)",border:"1px solid rgba(59,130,246,0.15)",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:12,color:"var(--text-secondary)"}}>
+                📌 {seedMeta.desc}
+              </div>
+            )}
+            <div style={{maxHeight:280,overflowY:"auto",marginBottom:16}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                <thead>
+                  <tr style={{borderBottom:"1px solid var(--border)"}}>
+                    {["Fecha","Tipo","Monto %VN"].map(h=>(
+                      <th key={h} style={{padding:"6px 10px",textAlign:"left",fontSize:10,color:"var(--text-muted)",fontWeight:600,textTransform:"uppercase"}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {seedFlows.map((f,i)=>(
+                    <tr key={i} style={{borderBottom:"1px solid var(--border)"}}>
+                      <td style={{padding:"6px 10px",fontFamily:"'DM Mono',monospace"}}>{f.date.slice(8)+'/'+f.date.slice(5,7)+'/'+f.date.slice(0,4)}</td>
+                      <td style={{padding:"6px 10px"}}>
+                        <span style={{color:f.tipo==='amortizacion'?"var(--yellow)":"var(--accent)",fontWeight:600}}>
+                          {f.tipo==='amortizacion'?'💰 Amort.':'🎫 Cupón'}
+                        </span>
+                      </td>
+                      <td style={{padding:"6px 10px",fontFamily:"'DM Mono',monospace",textAlign:"right"}}>{f.monto.toFixed(4)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+              <button onClick={onSkip} style={{...btn("var(--bg-input)"),color:"var(--text-muted)",border:"1px solid var(--border)"}}>Cargar manualmente</button>
+              <button onClick={()=>handleConfirm([...seedFlows])} style={btn("var(--accent)")}>✓ Confirmar y cargar</button>
+            </div>
+          </>
+        )}
+
+        {/* PASO: PARAMS — wizard manual */}
+        {step==='params' && (
+          <>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+              <div>
+                <span style={lbl}>Fecha de vencimiento</span>
+                <input type="date" value={params.vto} onChange={e=>set('vto',e.target.value)} style={inp}/>
+              </div>
+              <div>
+                <span style={lbl}>Fecha de emisión</span>
+                <input type="date" value={params.emisionDate} onChange={e=>set('emisionDate',e.target.value)} style={inp}/>
+              </div>
+              <div>
+                <span style={lbl}>Tasa anual (% TNA)</span>
+                <input type="number" step="0.01" placeholder="ej: 7" value={params.tna} onChange={e=>set('tna',e.target.value)} style={inp}/>
+              </div>
+              <div>
+                <span style={lbl}>Frecuencia de cupón</span>
+                <select value={params.frecuencia} onChange={e=>set('frecuencia',e.target.value)} style={inp}>
+                  <option value="mensual">Mensual</option>
+                  <option value="trimestral">Trimestral</option>
+                  <option value="semestral">Semestral</option>
+                  <option value="anual">Anual</option>
+                </select>
+              </div>
+              <div>
+                <span style={lbl}>Amortización</span>
+                <select value={params.amortTipo} onChange={e=>set('amortTipo',e.target.value)} style={inp}>
+                  <option value="bullet">Bullet (todo al vto)</option>
+                  <option value="cuotas">En cuotas iguales</option>
+                </select>
+              </div>
+              {params.amortTipo==='cuotas' && (
+                <div>
+                  <span style={lbl}>Cantidad de cuotas de amort.</span>
+                  <input type="number" min="1" placeholder="ej: 10" value={params.cuotas} onChange={e=>set('cuotas',e.target.value)} style={inp}/>
+                </div>
+              )}
+              <div>
+                <span style={lbl}>Ajuste de capital</span>
+                <select value={params.ajuste} onChange={e=>set('ajuste',e.target.value)} style={inp}>
+                  <option value="ninguno">Ninguno (tasa fija)</option>
+                  <option value="CER">CER</option>
+                  <option value="UVA">UVA</option>
+                </select>
+              </div>
+            </div>
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+              <button onClick={onSkip} style={{...btn("var(--bg-input)"),color:"var(--text-muted)",border:"1px solid var(--border)"}}>Saltar por ahora</button>
+              <button onClick={handleGenerate} disabled={!params.vto||!params.tna} style={{...btn(!params.vto||!params.tna?"rgba(59,130,246,0.3)":"var(--accent)"),cursor:!params.vto||!params.tna?"not-allowed":"pointer"}}>
+                Generar flujos →
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* PASO: REVIEW — revisar flujos generados */}
+        {step==='review' && generatedFlows && (
+          <>
+            <div style={{maxHeight:300,overflowY:"auto",marginBottom:16}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                <thead>
+                  <tr style={{borderBottom:"1px solid var(--border)"}}>
+                    {["Fecha","Tipo","Monto %VN","Nota"].map(h=>(
+                      <th key={h} style={{padding:"6px 10px",textAlign:"left",fontSize:10,color:"var(--text-muted)",fontWeight:600,textTransform:"uppercase"}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {generatedFlows.map((f,i)=>(
+                    <tr key={i} style={{borderBottom:"1px solid var(--border)"}}>
+                      <td style={{padding:"6px 10px",fontFamily:"'DM Mono',monospace"}}>{f.date.slice(8)+'/'+f.date.slice(5,7)+'/'+f.date.slice(0,4)}</td>
+                      <td style={{padding:"6px 10px"}}>
+                        <span style={{color:f.tipo==='amortizacion'?"var(--yellow)":"var(--accent)",fontWeight:600}}>
+                          {f.tipo==='amortizacion'?'💰 Amort.':'🎫 Cupón'}
+                        </span>
+                      </td>
+                      <td style={{padding:"6px 10px",fontFamily:"'DM Mono',monospace",textAlign:"right"}}>{f.monto.toFixed(4)}%</td>
+                      <td style={{padding:"6px 10px",fontSize:10,color:"var(--text-muted)"}}>{f.nota}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+              <button onClick={()=>setStep('params')} style={{...btn("var(--bg-input)"),color:"var(--text-muted)",border:"1px solid var(--border)"}}>← Editar parámetros</button>
+              <button onClick={onSkip} style={{...btn("var(--bg-input)"),color:"var(--text-muted)",border:"1px solid var(--border)"}}>Saltar por ahora</button>
+              <button onClick={()=>handleConfirm(generatedFlows)} style={btn("var(--accent)")}>✓ Confirmar y cargar</button>
+            </div>
+          </>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
 function Modal({h,port=[],onSave,onClose,darkMode=true}){
   const blank={ticker:"",name:"",type:"accion_ar",qty:"",buyPrice:"",buyCurrency:"ARS",buyDate:todayAR(),operacion:"compra",comision:"",comisionPct:""};
   const [f,setF]=useState(h?{...h,operacion:"compra",buyPrice:""}:blank);
@@ -3597,6 +3843,7 @@ function App(){
   },[]);
   const [tab,setTab]           = useState("dashboard");
   const [modal,setModal]       = useState(null);
+  const [bondWizard,setBondWizard] = useState(null); // {ticker, onConfirm}
   const [ventaResult,setVentaResult] = useState(null);
   const [fx,setFx]             = useState("CCL");
   const [liveFX,setLiveFX]     = useState(FX_FALLBACK);
@@ -3848,6 +4095,13 @@ function App(){
       });
       // Auto-descarga portfolio_tickers.json para subir al repo
       setTimeout(()=>downloadPortfolioTickers(newTrades),300);
+      // Si es bono/ON sin flujos cargados → disparar wizard
+      const isBond = h.type==='bono_ars'||h.type==='bono_usd';
+      const yaFlows = bondFlows[h.ticker.toUpperCase()]?.length > 0;
+      if(isBond && !yaFlows){
+        const tkr = h.ticker.toUpperCase();
+        setTimeout(()=>setBondWizard({ticker:tkr}), 200);
+      }
     } else if(h.operacion==="venta"){
       const sellQty=+h.qty; const sellPrice=+h.buyPrice;
       const buyLots=trades.filter(t=>t.ticker===h.ticker.toUpperCase()&&t.tipo==="compra").sort((a,b)=>a.ts-b.ts);
@@ -4289,6 +4543,17 @@ function App(){
       )}
 
       {modal&&<Modal h={modal==="add"?null:modal} port={port} onSave={saveOrDelete} onClose={()=>setModal(null)} darkMode={darkMode}/>}
+      {bondWizard&&(
+        <BondWizard
+          ticker={bondWizard.ticker}
+          darkMode={darkMode}
+          onConfirm={(flows)=>{
+            setBondFlows(prev=>({...prev,[bondWizard.ticker]:flows}));
+            setBondWizard(null);
+          }}
+          onSkip={()=>setBondWizard(null)}
+        />
+      )}
     </>
   );
 }

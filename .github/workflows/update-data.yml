@@ -18,7 +18,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Instalar dependencias
-        run: pip install requests yfinance pandas urllib3
+        run: pip install requests yfinance pandas urllib3 xlrd
       - name: Correr script
         run: python update_historicos.py
         env:

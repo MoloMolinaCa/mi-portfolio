@@ -124,37 +124,99 @@ def argentinadatos_get_fx(tipo, start, end):
         print(f"  ✗ {tipo}: {e}")
         return []
 
+def bcra_get_cer():
+    """
+    Descarga la serie CER desde la API oficial del BCRA (sin token, pública).
+    Variable 3540 = CER diario.
+    Pagina de a 3000 registros por año para obtener la serie completa.
+    Respuesta: {results:[{fecha,valor},...]}
+    """
+    bars = []
+    seen_dates = set()
+    # Descargar desde 2002 hasta hoy en bloques anuales
+    start_year = 2002
+    end_year = datetime.now().year
+    base_url = "https://api.bcra.gob.ar/estadisticas/v3.0/datosvariable/3540"
+
+    for year in range(start_year, end_year + 1):
+        desde = f"{year}-01-01"
+        hasta = f"{year}-12-31" if year < end_year else datetime.now().strftime("%Y-%m-%d")
+        url = f"{base_url}/{desde}/{hasta}"
+        try:
+            r = requests.get(url, timeout=15, headers={"Accept": "application/json"})
+            if not r.ok:
+                print(f"  ! CER BCRA {year}: status {r.status_code}")
+                continue
+            data = r.json()
+            results = data.get("results", data.get("data", []))
+            for x in results:
+                date  = str(x.get("fecha", "")).strip()[:10]
+                valor = float(x.get("valor", 0))
+                if date and valor > 0 and date not in seen_dates:
+                    bars.append({"date": date, "close": round(valor, 6)})
+                    seen_dates.add(date)
+        except Exception as e:
+            print(f"  ! CER BCRA {year}: {e}")
+        time.sleep(0.2)
+
+    bars.sort(key=lambda x: x["date"])
+    if bars:
+        print(f"  ✓ CER (BCRA oficial): {len(bars)} pts, último: {bars[-1]}")
+    else:
+        print(f"  ✗ CER BCRA: sin datos")
+    return bars
+
+
 def estadisticasbcra_get_cer():
     """
-    Descarga la serie completa del CER desde estadisticasbcra.com.
-    Respuesta: [{d: "YYYY-MM-DD", v: valor}, ...]
-    Se guarda en historicos["cer"] como [{date, close}] igual que el resto.
+    Descarga la serie CER desde estadisticasbcra.com (requiere token).
+    Fallback: si no trae datos recientes, complementa con BCRA oficial.
     """
-    if not CER_TOKEN:
-        print("  ⚠ CER: CER_TOKEN no configurado — saltando")
-        return []
-    try:
-        r = requests.get(
-            "https://api.estadisticasbcra.com/cer",
-            headers={"Authorization": f"Bearer {CER_TOKEN}"},
-            timeout=15
-        )
-        if not r.ok:
-            print(f"  ✗ CER: status {r.status_code}")
-            return []
-        arr = r.json()
-        bars = []
-        for x in arr:
-            date  = str(x.get("d", "")).strip()
-            valor = float(x.get("v", 0))
-            if date and valor > 0:
-                bars.append({"date": date, "close": round(valor, 6)})
-        bars.sort(key=lambda x: x["date"])
-        print(f"  ✓ CER (estadisticasbcra): {len(bars)} pts, último: {bars[-1] if bars else '—'}")
-        return bars
-    except Exception as e:
-        print(f"  ✗ CER: {e}")
-        return []
+    bars_bcra_privado = []
+    if CER_TOKEN:
+        try:
+            r = requests.get(
+                "https://api.estadisticasbcra.com/cer",
+                headers={"Authorization": f"Bearer {CER_TOKEN}"},
+                timeout=15
+            )
+            if r.ok:
+                arr = r.json()
+                for x in arr:
+                    date  = str(x.get("d", "")).strip()
+                    valor = float(x.get("v", 0))
+                    if date and valor > 0:
+                        bars_bcra_privado.append({"date": date, "close": round(valor, 6)})
+                bars_bcra_privado.sort(key=lambda x: x["date"])
+        except Exception as e:
+            print(f"  ! estadisticasbcra.com: {e}")
+
+    # Verificar si los datos llegan hasta hoy (menos de 30 días de atraso)
+    today = datetime.now().strftime("%Y-%m-%d")
+    cutoff = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+    ultimo = bars_bcra_privado[-1]["date"] if bars_bcra_privado else ""
+
+    if ultimo >= cutoff:
+        print(f"  ✓ CER (estadisticasbcra): {len(bars_bcra_privado)} pts, último: {bars_bcra_privado[-1]}")
+        return bars_bcra_privado
+
+    # Si está desactualizado, complementar con BCRA oficial
+    print(f"  ⚠ estadisticasbcra cortado en {ultimo} — complementando con BCRA oficial")
+    bars_oficial = bcra_get_cer()
+
+    if not bars_oficial:
+        return bars_bcra_privado
+
+    # Merge: usar privado como base, agregar fechas nuevas del oficial
+    seen = {b["date"] for b in bars_bcra_privado}
+    combined = list(bars_bcra_privado)
+    for b in bars_oficial:
+        if b["date"] not in seen:
+            combined.append(b)
+            seen.add(b["date"])
+    combined.sort(key=lambda x: x["date"])
+    print(f"  ✓ CER combinado: {len(combined)} pts, último: {combined[-1]}")
+    return combined
 
 def merge_bars(existing, new_bars):
     """Combina barras existentes con nuevas, sin duplicar fechas. Gana la nueva."""

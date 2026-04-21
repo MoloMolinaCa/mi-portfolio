@@ -2821,17 +2821,34 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
       if(f.tipo==='amortizacion'){byDate[f.date].hasAmort=true;byDate[f.date].montoAmort+=f.monto;}
       else{byDate[f.date].hasCupon=true;byDate[f.date].montoCupon+=f.monto;}
     });
+    const meta = bondMeta[b.ticker]||{};
+    const isCER = (SEED_BOND_META[b.ticker]?.adjustsBy==='CER') && cerSerie;
+    const cerBase = isCER && meta.emisionDate ? getCERMinus10(cerSerie, meta.emisionDate) : null;
+
     return Object.values(byDate)
       .filter(r=>!r.cobrado&&r.date>=today)
-      .map(r=>({
-        ticker:b.ticker, name:b.name, currency:b.buyCurrency,
-        date:r.date, monto:r.monto,
-        montoCupon:r.montoCupon, montoAmort:r.montoAmort,
-        hasAmort:r.hasAmort, hasCupon:r.hasCupon,
-        total:r.monto*(b.qty/100),
-        totalCupon:r.montoCupon*(b.qty/100),
-        totalAmort:r.montoAmort*(b.qty/100),
-      }));
+      .map(r=>{
+        let total, totalCupon, totalAmort;
+        if(isCER && cerBase){
+          const cerPago = getCERMinus10(cerSerie, r.date);
+          const coef = cerPago && cerBase ? cerPago/cerBase : 1;
+          totalAmort = r.montoAmort * coef * b.qty / 100;
+          // Para interés CER usamos una aproximación: monto% × coef × qty/100
+          totalCupon = r.montoCupon * coef * b.qty / 100;
+          total = totalAmort + totalCupon;
+        } else {
+          total      = r.monto*(b.qty/100);
+          totalCupon = r.montoCupon*(b.qty/100);
+          totalAmort = r.montoAmort*(b.qty/100);
+        }
+        return {
+          ticker:b.ticker, name:b.name, currency:b.buyCurrency,
+          date:r.date, monto:r.monto,
+          montoCupon:r.montoCupon, montoAmort:r.montoAmort,
+          hasAmort:r.hasAmort, hasCupon:r.hasCupon,
+          total, totalCupon, totalAmort,
+        };
+      });
   }).sort((a,b)=>a.date.localeCompare(b.date)||a.ticker.localeCompare(b.ticker));
   const [calMonth, setCalMonth] = useState(new Date());
   const [calSelectedDate, setCalSelectedDate] = useState(null);

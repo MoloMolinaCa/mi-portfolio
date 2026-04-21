@@ -4115,8 +4115,8 @@ function App(){
                 const proxVto = allBonds.flatMap(b=>{
                   const flows = (bondFlows[b.ticker]||[]);
                   return flows
-                    .filter(f=>!f.cobrado && f.date>=todayKPI && (f.tipo==='amortizacion'||f.tipo==='ambos'))
-                    .map(f=>({ticker:b.ticker, date:f.date, currency:b.buyCurrency, qty:b.qty, monto:f.monto}));
+                    .filter(f=>!f.cobrado && f.date>=todayKPI)
+                    .map(f=>({ticker:b.ticker, date:f.date, currency:b.buyCurrency, qty:b.qty, monto:f.monto, tipo:f.tipo}));
                 }).sort((a,b)=>a.date.localeCompare(b.date))[0];
 
                 return(

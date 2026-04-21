@@ -3435,10 +3435,35 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                         const cobrado   = (row.cupon?.cobrado??!row.cupon) && (row.amort?.cobrado??!row.amort);
                         const hasAmort  = !!row.amort;
                         const hasCupon  = !!row.cupon;
-                        const montoAmort= hasAmort?(adjustsBy?row.amort.monto*coef:row.amort.monto):0;
-                        const montoInt  = hasCupon?(adjustsBy?row.cupon.monto*coef:row.cupon.monto):0;
-                        const montoTotal= montoAmort+montoInt;
-                        const totalCobro= montoTotal*(selBond.qty/100);
+                        // Para bonos CER: cobro = VN ajustado × qty / 100
+                        // VN ajustado = vnDespues (o vnAntes para amort) × coefCER
+                        const isCERRow = adjustsBy==='CER' && cerSerie;
+                        const cerPagoRow = isCERRow ? getCERMinus10(cerSerie, row.date) : null;
+                        const cerBaseRow = isCERRow && selMeta.emisionDate ? getCERMinus10(cerSerie, selMeta.emisionDate) : null;
+                        const coefCERRow = (cerPagoRow && cerBaseRow) ? cerPagoRow/cerBaseRow : null;
+
+                        // Amortización: monto% × VN ajustado × qty/100
+                        const montoAmortBase = hasAmort ? row.amort.monto : 0;
+                        const montoIntBase   = hasCupon ? row.cupon.monto : 0;
+
+                        let totalCobro;
+                        if(isCERRow && coefCERRow){
+                          // Amort: montoAmortBase% × 100 × coefCER × qty/100 = montoAmortBase × coefCER × qty/100
+                          const cobroAmort = montoAmortBase * coefCERRow * selBond.qty / 100;
+                          // Interés: sobre VN ajustado antes del pago
+                          const vnAjustAntes = row.vnAntes * coefCERRow;
+                          const divisorBase  = selMeta.base==='30/360' ? 360 : 365;
+                          const diasRow      = row.dias30360 || 0;
+                          const cobroInt = hasCupon
+                            ? (selMeta.tna/100) * (diasRow/divisorBase) * vnAjustAntes * selBond.qty / 100
+                            : 0;
+                          totalCobro = cobroAmort + cobroInt;
+                        } else {
+                          const montoAmort= hasAmort?(adjustsBy?row.amort.monto*coef:row.amort.monto):0;
+                          const montoInt  = hasCupon?(adjustsBy?row.cupon.monto*coef:row.cupon.monto):0;
+                          totalCobro = (montoAmort+montoInt)*(selBond.qty/100);
+                        }
+                        const montoTotal= (montoAmortBase+montoIntBase); // para mostrar % VN
                         const tipoLabel = hasAmort&&hasCupon?'💰+🎫 Amort.+Cupón':hasAmort?'💰 Amort.':'🎫 Cupón';
                         const tipoColor = hasAmort?'var(--yellow)':'var(--accent)';
                         return(

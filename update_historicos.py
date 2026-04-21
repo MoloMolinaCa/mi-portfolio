@@ -136,7 +136,7 @@ def bcra_get_cer():
     # Descargar desde 2002 hasta hoy en bloques anuales
     start_year = 2002
     end_year = datetime.now().year
-    base_url = "https://api.bcra.gob.ar/estadisticas/v3.0/datosvariable/3540"
+    base_url = "https://api.bcra.gob.ar/estadisticas/v1/datosvariable/3540"
 
     for year in range(start_year, end_year + 1):
         desde = f"{year}-01-01"

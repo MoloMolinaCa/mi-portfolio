@@ -2551,6 +2551,9 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
   },[historicos]);
   const cerLoading = false; // siempre listo (viene del JSON)
   const fetchCER = ()=>{}; // no-op, ya no se necesita
+  // Feriados argentinos: {año: Set<'YYYY-MM-DD'>}
+  const [feriados, setFeriados] = useState({});
+  const feriadosRef = React.useRef({});
 
   // Buscar el último CER conocido <= dateStr (si no hay, devuelve el más antiguo disponible)
   const getCER = (serie, dateStr) => {
@@ -2561,13 +2564,74 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
     return serie[0].valor;
   };
 
+  // Fetch feriados de un año desde argentinadatos
+  const fetchFeriados = async (year) => {
+    if(feriadosRef.current[year]) return feriadosRef.current[year];
+    try {
+      const r = await fetch(`https://api.argentinadatos.com/v1/feriados/${year}`, {signal:AbortSignal.timeout(5000)});
+      if(r.ok){
+        const data = await r.json();
+        const set = new Set((Array.isArray(data)?data:[]).map(f=>(f.fecha||f.date||'').slice(0,10)).filter(Boolean));
+        feriadosRef.current[year] = set;
+        setFeriados(prev=>({...prev,[year]:set}));
+        return set;
+      }
+    } catch{}
+    feriadosRef.current[year] = new Set();
+    return new Set();
+  };
+
+  // Restar N días hábiles a una fecha (lunes-viernes, excluyendo feriados AR)
+  const restarDiasHabiles = async (dateStr, n) => {
+    const d = new Date(dateStr);
+    let restantes = n;
+    while(restantes > 0){
+      d.setDate(d.getDate()-1);
+      const dow = d.getDay(); // 0=dom, 6=sab
+      if(dow===0||dow===6) continue;
+      const year = d.getFullYear();
+      const feriadosAnio = feriadosRef.current[year] || await fetchFeriados(year);
+      const ds = d.toISOString().slice(0,10);
+      if(feriadosAnio.has(ds)) continue;
+      restantes--;
+    }
+    return d.toISOString().slice(0,10);
+  };
+
+  // Versión sincrónica con feriados ya cargados en cache
+  const restarDiasHabilesSync = (dateStr, n) => {
+    const d = new Date(dateStr);
+    let restantes = n;
+    let maxIter = 100; // evitar loop infinito
+    while(restantes > 0 && maxIter-- > 0){
+      d.setDate(d.getDate()-1);
+      const dow = d.getDay();
+      if(dow===0||dow===6) continue;
+      const year = d.getFullYear();
+      const feriadosAnio = feriadosRef.current[year] || new Set();
+      const ds = d.toISOString().slice(0,10);
+      if(feriadosAnio.has(ds)) continue;
+      restantes--;
+    }
+    return d.toISOString().slice(0,10);
+  };
+
   // CER de 10 días hábiles antes de una fecha
+  // Si la fecha de referencia (fecha - 10hd) es futura → usar CER de hoy
   const getCERMinus10 = (serie, dateStr) => {
     if(!serie||!serie.length||!dateStr) return null;
-    const d = new Date(dateStr);
-    d.setDate(d.getDate()-10);
-    return getCER(serie, d.toISOString().slice(0,10));
+    const todayStr = todayAR();
+    const fechaRef = restarDiasHabilesSync(dateStr, 10);
+    // Si la fecha de referencia es futura, usar el CER de hoy
+    const fechaConsulta = fechaRef > todayStr ? todayStr : fechaRef;
+    return getCER(serie, fechaConsulta);
   };
+
+  // Pre-cargar feriados de los años relevantes al montar
+  useEffect(()=>{
+    const currentYear = new Date().getFullYear();
+    [currentYear-1, currentYear, currentYear+1].forEach(y => fetchFeriados(y));
+  },[]);
 
   // Calcular flujos CER ajustados para un bono
   // Para cada cupón: interés = tasa × (CER_pago/CER_base) × VN_original × días/base

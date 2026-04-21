@@ -1311,41 +1311,90 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
           </>
         )}
 
-        {/* PASO: REVIEW — revisar flujos generados */}
-        {step==='review' && generatedFlows && (
+        {/* PASO: REVIEW — revisar y editar flujos generados */}
+        {step==='review' && generatedFlows && (()=>{
+          const totalAmort = generatedFlows.filter(f=>f.tipo==='amortizacion').reduce((a,f)=>a+f.monto,0);
+          const amortOk = Math.abs(totalAmort-100) < 0.01;
+          const inpS = {background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:5,padding:"3px 7px",color:"var(--text-primary)",fontSize:12,width:"100%"};
+          return(
           <>
+            {/* Validación amort */}
+            {!amortOk&&(
+              <div style={{background:"rgba(248,113,113,0.1)",border:"1px solid rgba(248,113,113,0.3)",borderRadius:7,padding:"7px 12px",marginBottom:10,fontSize:12,color:"var(--red)"}}>
+                ⚠ Amortización total: <b>{totalAmort.toFixed(4)}%</b> — debe ser exactamente 100%
+              </div>
+            )}
+            {amortOk&&(
+              <div style={{background:"rgba(52,211,153,0.07)",border:"1px solid rgba(52,211,153,0.2)",borderRadius:7,padding:"7px 12px",marginBottom:10,fontSize:12,color:"var(--green)"}}>
+                ✓ Amortización total: 100%
+              </div>
+            )}
             <div style={{maxHeight:300,overflowY:"auto",marginBottom:16}}>
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                 <thead>
                   <tr style={{borderBottom:"1px solid var(--border)"}}>
-                    {["Fecha","Tipo","Monto %VN","Nota"].map(h=>(
-                      <th key={h} style={{padding:"6px 10px",textAlign:"left",fontSize:10,color:"var(--text-muted)",fontWeight:600,textTransform:"uppercase"}}>{h}</th>
+                    {["Fecha","Tipo","Monto %VN",""].map(h=>(
+                      <th key={h} style={{padding:"6px 8px",textAlign:"left",fontSize:10,color:"var(--text-muted)",fontWeight:600,textTransform:"uppercase"}}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {generatedFlows.map((f,i)=>(
-                    <tr key={i} style={{borderBottom:"1px solid var(--border)"}}>
-                      <td style={{padding:"6px 10px",fontFamily:"'DM Mono',monospace"}}>{f.date.slice(8)+'/'+f.date.slice(5,7)+'/'+f.date.slice(0,4)}</td>
-                      <td style={{padding:"6px 10px"}}>
-                        <span style={{color:f.tipo==='amortizacion'?"var(--yellow)":"var(--accent)",fontWeight:600}}>
+                    <tr key={i} style={{borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
+                      {/* Fecha editable */}
+                      <td style={{padding:"4px 6px",minWidth:110}}>
+                        <input type="date" value={f.date}
+                          onChange={e=>{
+                            const newFlows=[...generatedFlows];
+                            newFlows[i]={...newFlows[i],date:e.target.value};
+                            setGeneratedFlows(newFlows);
+                          }}
+                          style={inpS}/>
+                      </td>
+                      <td style={{padding:"4px 6px"}}>
+                        <span style={{color:f.tipo==='amortizacion'?"var(--yellow)":"var(--accent)",fontWeight:600,fontSize:11}}>
                           {f.tipo==='amortizacion'?'💰 Amort.':'🎫 Cupón'}
                         </span>
                       </td>
-                      <td style={{padding:"6px 10px",fontFamily:"'DM Mono',monospace",textAlign:"right"}}>{f.monto.toFixed(4)}%</td>
-                      <td style={{padding:"6px 10px",fontSize:10,color:"var(--text-muted)"}}>{f.nota}</td>
+                      {/* Monto — editable solo en amortizaciones */}
+                      <td style={{padding:"4px 6px",minWidth:100}}>
+                        {f.tipo==='amortizacion' ? (
+                          <input type="number" step="0.0001" min="0" max="100"
+                            value={f.monto}
+                            onChange={e=>{
+                              const val = parseFloat(e.target.value)||0;
+                              const newFlows=[...generatedFlows];
+                              newFlows[i]={...newFlows[i],monto:val};
+                              setGeneratedFlows(newFlows);
+                            }}
+                            style={{...inpS,color:"var(--yellow)",fontWeight:600}}/>
+                        ) : (
+                          <span style={{fontFamily:"'DM Mono',monospace",paddingLeft:7}}>{f.monto.toFixed(4)}%</span>
+                        )}
+                      </td>
+                      {/* Eliminar fila */}
+                      <td style={{padding:"4px 6px",textAlign:"center"}}>
+                        <button onClick={()=>setGeneratedFlows(generatedFlows.filter((_,j)=>j!==i))}
+                          style={{background:"transparent",border:"none",color:"var(--text-muted)",cursor:"pointer",fontSize:14,padding:"2px 4px"}}>🗑</button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-              <button onClick={()=>setStep('params')} style={{...btn("var(--bg-input)"),color:"var(--text-muted)",border:"1px solid var(--border)"}}>← Editar parámetros</button>
-              <button onClick={onSkip} style={{...btn("var(--bg-input)"),color:"var(--text-muted)",border:"1px solid var(--border)"}}>Saltar por ahora</button>
-              <button onClick={()=>handleConfirm(generatedFlows)} style={btn("var(--accent)")}>✓ Confirmar y cargar</button>
+            <div style={{display:"flex",gap:10,justifyContent:"space-between",alignItems:"center"}}>
+              <button onClick={()=>setStep('params')} style={{...btn("var(--bg-input)"),color:"var(--text-muted)",border:"1px solid var(--border)",fontSize:12}}>← Editar parámetros</button>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={onSkip} style={{...btn("var(--bg-input)"),color:"var(--text-muted)",border:"1px solid var(--border)",fontSize:12}}>Saltar por ahora</button>
+                <button onClick={()=>handleConfirm(generatedFlows)} disabled={!amortOk}
+                  style={{...btn(!amortOk?"rgba(59,130,246,0.3)":"var(--accent)"),cursor:!amortOk?"not-allowed":"pointer"}}>
+                  ✓ Confirmar y cargar
+                </button>
+              </div>
             </div>
           </>
-        )}
+          );
+        })()}
 
       </div>
     </div>

@@ -1084,7 +1084,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
     if(!historicos||Object.keys(historicos).length===0)return;
     const p=PERIODS.find(x=>x.key===period);
     if(p)load(p,historicos,scrubStart,scrubEnd);
-  },[liveFX,liveSP500,historicos,trades]);
+  },[liveFX,liveSP500,livePrices,historicos,trades]);
 
   const cd=chartData;
   const series=cd?[

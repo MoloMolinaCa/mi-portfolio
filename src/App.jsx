@@ -725,7 +725,7 @@ function Chart100({series}){
   const yTicks=Array.from({length:6},(_,i)=>minV+(maxV-minV)*i/5);
   const xLabels=[0,Math.floor(n/4),Math.floor(n/2),Math.floor(3*n/4),n-1].filter((v,i,a)=>a.indexOf(v)===i&&v<n);
   const fmtD=s=>s?s.slice(8)+'/'+s.slice(5,7):'';
-  const LABELS={port:"Portfolio",spy:"S&P 500",ccl:"CCL",mep:"MEP",t10y:"T10Y",uva:"UVA"};
+  const LABELS={port:"Portfolio",spy:"S&P 500",ccl:"CCL",mep:"MEP",t10y:"T10Y",uva:"UVA",cer:"CER"};
   const onMove=(e)=>{
     const rect=e.currentTarget.getBoundingClientRect();
     const svgX=(e.clientX-rect.left)*(W/rect.width);
@@ -902,6 +902,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
   const [uvaTasa,setUvaTasa]=useState(2.5);
   const uvaTasaRef = React.useRef(2.5);
   useEffect(()=>{ uvaTasaRef.current = uvaTasa; },[uvaTasa]);
+  const [showCER,setShowCER]=useState(false);
   const [chartData,setChartData]=useState(null);
   const [loading,setLoading]=useState(false);
   const [scrubStart,setScrubStart]=useState(null); // ISO date string or null
@@ -1082,8 +1083,24 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
         }
       }
 
+      // CER benchmark — solo en modo ARS
+      let cer100 = null;
+      if(currency==="ARS" && hist?.cer?.length){
+        const cerBars = hist.cer;
+        const startIdx = cerBars.findIndex(x=>x.date>=datesWithToday[0]);
+        const cerStart = startIdx>=0 ? cerBars[startIdx] : cerBars[0];
+        if(cerStart){
+          cer100 = datesWithToday.map(d=>{
+            const cerBar = cerBars.filter(x=>x.date<=d);
+            const cerVal = cerBar.length ? cerBar[cerBar.length-1].close : cerStart.close;
+            const val = (cerVal/cerStart.close) * 100;
+            return {date:d, val:parseFloat(val.toFixed(4))};
+          });
+        }
+      }
+
       setChartData({
-        port100,t10y100,spy100,ccl100,mep100,uva100,currency,
+        port100,t10y100,spy100,ccl100,mep100,uva100,cer100,currency,
         portBase:null,
         startDate:dates[0],endDate:datesWithToday[datesWithToday.length-1],
         portRet:port100.length>0?(port100[port100.length-1].val-100).toFixed(2):"0.00",
@@ -1105,7 +1122,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
     if(!historicos||Object.keys(historicos).length===0)return;
     const p=PERIODS.find(x=>x.key===period);
     if(p)load(p,historicos,scrubStart,scrubEnd);
-  },[liveFX,liveSP500,livePricesAll,historicos,trades,showUVA,uvaTasa]);
+  },[liveFX,liveSP500,livePricesAll,historicos,trades,showUVA,uvaTasa,showCER]);
 
   const cd=chartData;
   const series=cd?[
@@ -1115,6 +1132,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
     ...(cd.ccl100?[{key:"ccl",data:cd.ccl100,color:"#A78BFA",bold:false}]:[]),
     ...(cd.mep100?[{key:"mep",data:cd.mep100,color:"#F472B6",bold:false}]:[]),
     ...(showUVA&&cd.uva100?[{key:"uva",data:cd.uva100,color:"#FB923C",bold:false}]:[]),
+    ...(showCER&&cd.cer100?[{key:"cer",data:cd.cer100,color:"#A3E635",bold:false}]:[]),
   ]:[];
 
   return(
@@ -1134,7 +1152,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
           {cd?.currency!=="ARS"&&cd?.t10y100&&<span style={{fontSize:10,color:"var(--yellow)"}}>— T10Y</span>}
           {cd?.ccl100&&<span style={{fontSize:10,color:"#A78BFA"}}>— CCL</span>}
           {cd?.mep100&&<span style={{fontSize:10,color:"#F472B6"}}>— MEP</span>}
-          {/* UVA benchmark — solo en ARS */}
+          {/* UVA y CER benchmarks — solo en ARS */}
           {currency==="ARS"&&(
             <span style={{display:"flex",alignItems:"center",gap:4,marginLeft:4}}>
               <button onClick={()=>setShowUVA(v=>!v)}
@@ -1151,6 +1169,11 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
                   <span style={{fontSize:10,color:"#FB923C"}}>% anual</span>
                 </span>
               )}
+              <button onClick={()=>setShowCER(v=>!v)}
+                style={{padding:"2px 8px",borderRadius:5,border:"1px solid rgba(163,230,53,0.4)",cursor:"pointer",fontSize:10,
+                  background:showCER?"rgba(163,230,53,0.15)":"transparent",color:showCER?"#A3E635":"var(--text-muted)"}}>
+                — CER
+              </button>
             </span>
           )}
         </div>

@@ -3074,78 +3074,335 @@ function DayMoversWidget({en, historicos, fxRate, livePrices, card, hideAmounts=
 }
 
 
-function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAmounts=false}){
+function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAmounts=false, trades=[]}) {
+  const PERIODS_AN = [
+    {key:"todo",  label:"Todo el período", days:null, start:"2026-01-01"},
+    {key:"ytd",   label:"YTD",             days:null, ytd:true},
+    {key:"90d",   label:"90 días",          days:90},
+    {key:"30d",   label:"30 días",          days:30},
+  ];
+  const [period, setPeriod] = useState("todo");
   const fmtU=(n,d=0)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"USD",maximumFractionDigits:d}).format(n);
-  const fmtA=(n)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:0}).format(n);
-  const fmtP=(n)=>`${n>=0?"+":""}${n.toFixed(2)}%`;
+  const fmtP=(n,d=2)=>`${n>=0?"+":""}${parseFloat(n).toFixed(d)}%`;
   const pc=(n)=>n>=0?"var(--green)":"var(--red)";
 
-  const withDayReturn=useMemo(()=>{
-    return en.map(h=>{
-      const hasLive=!!(livePrices&&livePrices[h.ticker]);
-      const bars=historicos?.[h.ticker]||[];
-      const prevBar=bars.length?bars[bars.length-1]:null;
-      const prevPrice=prevBar?.close||null;
-      const currPrice=h.currentPrice;
-      let dayPct=null,dayPnlUSD=null;
-      if(prevPrice&&prevPrice>0&&currPrice){
-        dayPct=((currPrice-prevPrice)/prevPrice)*100;
+  // Calcular fecha de inicio del período
+  const getPeriodStart = (p) => {
+    const today = todayAR();
+    if(p.start) return p.start;
+    if(p.ytd) return today.slice(0,4)+"-01-01";
+    if(p.days){ const d=new Date(today); d.setDate(d.getDate()-p.days); return d.toISOString().slice(0,10); }
+    return "2026-01-01";
+  };
+  const selP = PERIODS_AN.find(p=>p.key===period)||PERIODS_AN[0];
+  const startDate = getPeriodStart(selP);
+  const endDate = todayAR();
+
+  // Calcular retorno de un activo en el período
+  const calcReturn = (ticker, buyCurrency) => {
+    const bars = historicos?.[ticker]||[];
+    if(!bars.length) return null;
+    const startBar = bars.filter(b=>b.date>=startDate)[0];
+    const endBar = bars.filter(b=>b.date<=endDate).pop();
+    if(!startBar||!endBar) return null;
+    return ((endBar.close - startBar.close)/startBar.close)*100;
+  };
+
+  // Calcular max drawdown y max rally en un serie de barras
+  const calcExtremes = (bars, start, end) => {
+    const filtered = bars.filter(b=>b.date>=start&&b.date<=end);
+    if(filtered.length < 2) return null;
+    let maxDD=0, maxRally=0, peak=filtered[0].close, trough=filtered[0].close;
+    let ddStart="",ddEnd="",ddTrough="",rallyStart="",rallyEnd="",rallyPeak="";
+    let peakDate=filtered[0].date, troughDate=filtered[0].date;
+    let rallyBase=filtered[0].close, rallyBaseDate=filtered[0].date;
+
+    for(const b of filtered){
+      if(b.close>peak){
+        peak=b.close; peakDate=b.date; trough=b.close; troughDate=b.date;
+      }
+      const dd=(b.close-peak)/peak*100;
+      if(dd<maxDD){ maxDD=dd; ddStart=peakDate; ddTrough=b.date; trough=b.close; troughDate=b.date; }
+      if(b.close<rallyBase){ rallyBase=b.close; rallyBaseDate=b.date; }
+      const rally=(b.close-rallyBase)/rallyBase*100;
+      if(rally>maxRally){ maxRally=rally; rallyStart=rallyBaseDate; rallyEnd=b.date; }
+    }
+    return {maxDD, maxRally, ddStart, ddTrough, rallyStart, rallyEnd};
+  };
+
+  // Portfolio como serie diaria aproximada (usando CCL para convertir bonos ARS)
+  const portSeries = useMemo(()=>{
+    const cclBars = historicos?.CCL||[];
+    const allDates = [...new Set(
+      en.flatMap(h=>(historicos?.[h.ticker]||[]).map(b=>b.date))
+    )].filter(d=>d>=startDate&&d<=endDate).sort();
+
+    return allDates.map(date=>{
+      let totalUSD=0;
+      for(const h of en){
+        const bars=historicos?.[h.ticker]||[];
+        const bar=bars.filter(b=>b.date<=date).pop();
+        if(!bar) continue;
         const isBond=h.type==="bono_usd"||h.type==="bono_ars";
         const qtyFactor=isBond?h.qty/100:h.qty;
-        const valNow=h.buyCurrency==="USD"?currPrice*qtyFactor:currPrice*qtyFactor/fxRate;
-        const valPrev=h.buyCurrency==="USD"?prevPrice*qtyFactor:prevPrice*qtyFactor/fxRate;
-        dayPnlUSD=valNow-valPrev;
+        if(h.buyCurrency==="USD"){ totalUSD+=bar.close*qtyFactor; }
+        else {
+          const cclBar=cclBars.filter(b=>b.date<=date).pop();
+          const ccl=cclBar?.close||fxRate;
+          totalUSD+=bar.close*qtyFactor/ccl;
+        }
       }
-      return{...h,dayPct,dayPnlUSD,hasLive,prevPrice};
-    }).filter(h=>h.dayPct!=null);
-  },[en,historicos,fxRate,livePrices]);
+      return {date, close:totalUSD};
+    });
+  },[en, historicos, startDate, endDate, fxRate]);
 
-  const sorted=[...withDayReturn].sort((a,b)=>b.dayPct-a.dayPct);
+  // Contribución al rendimiento
+  const contributions = useMemo(()=>{
+    const cclBars = historicos?.CCL||[];
+    return en.map(h=>{
+      const bars = historicos?.[h.ticker]||[];
+      const startBar = bars.filter(b=>b.date>=startDate)[0];
+      const endBar = [...bars].filter(b=>b.date<=endDate).pop();
+      if(!startBar||!endBar) return null;
+      const isBond=h.type==="bono_usd"||h.type==="bono_ars";
+      const qtyFactor=isBond?h.qty/100:h.qty;
+      const getUSD=(price,date)=>{
+        if(h.buyCurrency==="USD") return price*qtyFactor;
+        const cclBar=cclBars.filter(b=>b.date<=date).pop();
+        return price*qtyFactor/(cclBar?.close||fxRate);
+      };
+      const valStart=getUSD(startBar.close,startBar.date);
+      const valEnd=getUSD(endBar.close,endBar.date);
+      const retPct=((endBar.close-startBar.close)/startBar.close)*100;
+      const pnlUSD=valEnd-valStart;
+      return {...h, retPct, pnlUSD, valStart, valEnd};
+    }).filter(Boolean).sort((a,b)=>Math.abs(b.pnlUSD)-Math.abs(a.pnlUSD));
+  },[en,historicos,startDate,endDate,fxRate]);
+
+  const totalPnlUSD = contributions.reduce((a,c)=>a+c.pnlUSD,0);
+
+  // Extremos del portfolio y S&P
+  const portExtremes = useMemo(()=>calcExtremes(portSeries,startDate,endDate),[portSeries,startDate,endDate]);
+  const spBars = historicos?.sp500||[];
+  const spExtremes = useMemo(()=>calcExtremes(spBars,startDate,endDate),[spBars,startDate,endDate]);
+  const spReturn = calcReturn("sp500","USD");
+
+  // Distribución de retornos diarios del portfolio
+  const dailyReturns = useMemo(()=>{
+    const rets=[];
+    for(let i=1;i<portSeries.length;i++){
+      if(portSeries[i-1].close>0) rets.push(((portSeries[i].close-portSeries[i-1].close)/portSeries[i-1].close)*100);
+    }
+    return rets;
+  },[portSeries]);
+
+  const fmtDate = d=>d?d.slice(8)+"/"+d.slice(5,7)+"/"+d.slice(0,4):"—";
+  const btnStyle = (active)=>({
+    padding:"4px 12px",borderRadius:6,border:"1px solid var(--border)",cursor:"pointer",fontSize:11,fontWeight:active?700:400,
+    background:active?"var(--accent)":"var(--bg-input)",color:active?"#fff":"var(--text-secondary)"
+  });
+  const sectionTitle = (t)=>(
+    <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1.2,fontWeight:600,marginBottom:12}}>{t}</div>
+  );
 
   return(
     <div className="fi" style={{display:"grid",gap:16}}>
 
-      {/* Ranking completo */}
-      <div style={{...card,overflow:"hidden"}}>
-        <div style={{padding:"12px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <span style={{fontWeight:700,fontSize:13}}>Todos los activos · rendimiento del día</span>
-          <span style={{fontSize:11,color:"var(--text-muted)"}}>{sorted.length} instrumentos</span>
+      {/* Selector de período */}
+      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+        {PERIODS_AN.map(p=>(
+          <button key={p.key} onClick={()=>setPeriod(p.key)} style={btnStyle(period===p.key)}>{p.label}</button>
+        ))}
+        <span style={{fontSize:11,color:"var(--text-muted)",marginLeft:8}}>{fmtDate(startDate)} → {fmtDate(endDate)}</span>
+      </div>
+
+      {/* Fila superior: Extremos Portfolio + S&P */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+
+        {/* Portfolio extremos */}
+        <div style={{...card,padding:"16px 20px"}}>
+          {sectionTitle("Portfolio · máximas variaciones")}
+          {portExtremes ? (
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              <div style={{background:"rgba(248,113,113,0.07)",border:"1px solid rgba(248,113,113,0.2)",borderRadius:8,padding:"12px 14px"}}>
+                <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Mayor caída</div>
+                <div style={{fontSize:22,fontWeight:700,color:"var(--red)",fontFamily:"'DM Mono',monospace"}}>{fmtP(portExtremes.maxDD)}</div>
+                <div style={{fontSize:11,color:"var(--text-muted)",marginTop:4}}>
+                  {fmtDate(portExtremes.ddStart)} → {fmtDate(portExtremes.ddTrough)}
+                </div>
+              </div>
+              <div style={{background:"rgba(52,211,153,0.07)",border:"1px solid rgba(52,211,153,0.2)",borderRadius:8,padding:"12px 14px"}}>
+                <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Mayor rally</div>
+                <div style={{fontSize:22,fontWeight:700,color:"var(--green)",fontFamily:"'DM Mono',monospace"}}>{fmtP(portExtremes.maxRally)}</div>
+                <div style={{fontSize:11,color:"var(--text-muted)",marginTop:4}}>
+                  {fmtDate(portExtremes.rallyStart)} → {fmtDate(portExtremes.rallyEnd)}
+                </div>
+              </div>
+            </div>
+          ) : <div style={{color:"var(--text-muted)",fontSize:12}}>Sin datos suficientes</div>}
         </div>
+
+        {/* S&P extremos */}
+        <div style={{...card,padding:"16px 20px"}}>
+          {sectionTitle("S&P 500 · máximas variaciones")}
+          {spExtremes ? (
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              <div style={{background:"rgba(248,113,113,0.07)",border:"1px solid rgba(248,113,113,0.2)",borderRadius:8,padding:"12px 14px"}}>
+                <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Mayor caída</div>
+                <div style={{fontSize:22,fontWeight:700,color:"var(--red)",fontFamily:"'DM Mono',monospace"}}>{fmtP(spExtremes.maxDD)}</div>
+                <div style={{fontSize:11,color:"var(--text-muted)",marginTop:4}}>
+                  {fmtDate(spExtremes.ddStart)} → {fmtDate(spExtremes.ddTrough)}
+                </div>
+              </div>
+              <div style={{background:"rgba(52,211,153,0.07)",border:"1px solid rgba(52,211,153,0.2)",borderRadius:8,padding:"12px 14px"}}>
+                <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Mayor rally</div>
+                <div style={{fontSize:22,fontWeight:700,color:"var(--green)",fontFamily:"'DM Mono',monospace"}}>{fmtP(spExtremes.maxRally)}</div>
+                <div style={{fontSize:11,color:"var(--text-muted)",marginTop:4}}>
+                  {fmtDate(spExtremes.rallyStart)} → {fmtDate(spExtremes.rallyEnd)}
+                </div>
+              </div>
+            </div>
+          ) : <div style={{color:"var(--text-muted)",fontSize:12}}>Sin datos suficientes</div>}
+        </div>
+      </div>
+
+      {/* Contribución al rendimiento */}
+      <div style={{...card,padding:"16px 20px"}}>
+        {sectionTitle("Contribución al rendimiento del período")}
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
             <thead>
               <tr style={{borderBottom:"1px solid var(--border)"}}>
-                {["#","Ticker","Nombre","Tipo","Prev. cierre","Precio actual","Rend. día","P&L día (USD)","P&L total (USD)"].map((h,i)=>(
-                  <th key={i} style={{padding:"8px 12px",textAlign:i>=6?"right":"left",fontSize:10,color:"var(--text-muted)",fontWeight:500,textTransform:"uppercase",letterSpacing:0.8,whiteSpace:"nowrap"}}>{h}</th>
+                {["Activo","Tipo","Rend. período","P&L USD","Contribución","Barra"].map((h,i)=>(
+                  <th key={i} style={{padding:"6px 12px",textAlign:i>=2?"right":"left",fontSize:10,color:"var(--text-muted)",fontWeight:600,textTransform:"uppercase",letterSpacing:0.8,whiteSpace:"nowrap"}}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {sorted.map((h,i)=>(
-                <tr key={h.ticker} style={{borderTop:"1px solid var(--border)"}}>
-                  <td style={{padding:"10px 12px",color:"var(--text-muted)",fontSize:11}}>{i+1}</td>
-                  <td style={{padding:"10px 12px",fontWeight:700,fontFamily:"monospace",color:"var(--accent)"}}>{h.ticker}</td>
-                  <td style={{padding:"10px 12px",color:"var(--text-secondary)",maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.name}</td>
-                  <td style={{padding:"10px 12px",color:"var(--text-muted)",fontSize:11}}>{ASSET_TYPES[h.type]?.icon} {ASSET_TYPES[h.type]?.label}</td>
-                  <td style={{padding:"10px 12px",textAlign:"right",color:"var(--text-muted)",fontSize:11}}>{h.buyCurrency==="USD"?fmtU(h.prevPrice,4):fmtA(h.prevPrice)}</td>
-                  <td style={{padding:"10px 12px",textAlign:"right",fontSize:11}}>
-                    {h.buyCurrency==="USD"?fmtU(h.currentPrice,4):fmtA(h.currentPrice)}
-                    {h.hasLive&&<span style={{display:"block",fontSize:9,color:"var(--green)"}}>● live</span>}
-                  </td>
-                  <td style={{padding:"10px 12px",textAlign:"right",fontWeight:700,color:pc(h.dayPct)}}>{fmtP(h.dayPct)}</td>
-                  <td style={{padding:"10px 12px",textAlign:"right",color:pc(h.dayPnlUSD||0)}}>{hideAmounts?"••••":(h.dayPnlUSD!=null?(h.dayPnlUSD>=0?"+":"")+fmtU(h.dayPnlUSD,0):"—")}</td>
-                  <td style={{padding:"10px 12px",textAlign:"right",color:pc(h.pnlUSD)}}>{hideAmounts?"••••":fmtU(h.pnlUSD,0)}</td>
-                </tr>
-              ))}
+              {contributions.map(h=>{
+                const contrib = totalPnlUSD!==0 ? (h.pnlUSD/Math.abs(totalPnlUSD))*100 : 0;
+                const barW = Math.min(100,Math.abs(contrib));
+                return(
+                  <tr key={h.ticker} style={{borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
+                    <td style={{padding:"8px 12px"}}>
+                      <span style={{fontWeight:700,fontFamily:"'DM Mono',monospace",color:"var(--accent)",fontSize:12}}>{h.ticker}</span>
+                      <span style={{fontSize:10,color:"var(--text-muted)",marginLeft:8,display:"none"}}>{h.name}</span>
+                    </td>
+                    <td style={{padding:"8px 12px",fontSize:10,color:"var(--text-muted)"}}>{ASSET_TYPES[h.type]?.icon} {ASSET_TYPES[h.type]?.label}</td>
+                    <td style={{padding:"8px 12px",textAlign:"right",fontWeight:600,color:pc(h.retPct)}}>{fmtP(h.retPct)}</td>
+                    <td style={{padding:"8px 12px",textAlign:"right",color:pc(h.pnlUSD)}}>{hideAmounts?"••••":(h.pnlUSD>=0?"+":"")+fmtU(h.pnlUSD,0)}</td>
+                    <td style={{padding:"8px 12px",textAlign:"right",fontWeight:600,color:pc(contrib)}}>{fmtP(contrib)}</td>
+                    <td style={{padding:"8px 12px",width:120}}>
+                      <div style={{height:6,borderRadius:3,background:"var(--bg-input)",overflow:"hidden"}}>
+                        <div style={{height:"100%",width:barW+"%",background:contrib>=0?"var(--green)":"var(--red)",borderRadius:3,transition:"width 0.3s"}}/>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr style={{borderTop:"1px solid var(--border)"}}>
+                <td colSpan={3} style={{padding:"8px 12px",fontWeight:700,fontSize:12}}>Total</td>
+                <td style={{padding:"8px 12px",textAlign:"right",fontWeight:700,color:pc(totalPnlUSD)}}>{hideAmounts?"••••":(totalPnlUSD>=0?"+":"")+fmtU(totalPnlUSD,0)}</td>
+                <td colSpan={2}/>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      {/* Distribución de retornos diarios */}
+      <div style={{...card,padding:"16px 20px"}}>
+        {sectionTitle("Distribución de retornos diarios del portfolio")}
+        {(()=>{
+          if(dailyReturns.length<5) return <div style={{color:"var(--text-muted)",fontSize:12}}>Sin datos suficientes</div>;
+          const avg = dailyReturns.reduce((a,b)=>a+b,0)/dailyReturns.length;
+          const std = Math.sqrt(dailyReturns.reduce((a,b)=>a+(b-avg)**2,0)/dailyReturns.length);
+          const pos = dailyReturns.filter(r=>r>0).length;
+          const neg = dailyReturns.filter(r=>r<0).length;
+          const maxR = Math.max(...dailyReturns);
+          const minR = Math.min(...dailyReturns);
+          // Histograma — 12 buckets
+          const buckets = 12;
+          const bucketW = (maxR-minR)/buckets;
+          const hist = Array(buckets).fill(0);
+          dailyReturns.forEach(r=>{ const i=Math.min(buckets-1,Math.floor((r-minR)/bucketW)); hist[i]++; });
+          const maxH = Math.max(...hist);
+          return(
+            <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:20,alignItems:"start"}}>
+              {/* Histograma */}
+              <div>
+                <div style={{display:"flex",alignItems:"flex-end",gap:2,height:80}}>
+                  {hist.map((h,i)=>{
+                    const bucketMid = minR + bucketW*(i+0.5);
+                    const isPos = bucketMid>=0;
+                    return(
+                      <div key={i} title={`${(minR+bucketW*i).toFixed(2)}% a ${(minR+bucketW*(i+1)).toFixed(2)}%: ${h} días`}
+                        style={{flex:1,height:(h/maxH*80)+"px",background:isPos?"var(--green)":"var(--red)",borderRadius:"2px 2px 0 0",opacity:0.7,cursor:"pointer"}}/>
+                    );
+                  })}
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",marginTop:4,fontSize:9,color:"var(--text-muted)"}}>
+                  <span>{minR.toFixed(1)}%</span><span>0%</span><span>{maxR.toFixed(1)}%</span>
+                </div>
+              </div>
+              {/* Stats */}
+              <div style={{display:"grid",gap:8,minWidth:160}}>
+                {[
+                  {l:"Días positivos",v:`${pos} (${(pos/dailyReturns.length*100).toFixed(0)}%)`,c:"var(--green)"},
+                  {l:"Días negativos",v:`${neg} (${(neg/dailyReturns.length*100).toFixed(0)}%)`,c:"var(--red)"},
+                  {l:"Retorno promedio",v:fmtP(avg),c:pc(avg)},
+                  {l:"Volatilidad diaria",v:fmtP(std),c:"var(--text-secondary)"},
+                  {l:"Mejor día",v:fmtP(maxR),c:"var(--green)"},
+                  {l:"Peor día",v:fmtP(minR),c:"var(--red)"},
+                ].map(({l,v,c})=>(
+                  <div key={l} style={{display:"flex",justifyContent:"space-between",gap:12,fontSize:11}}>
+                    <span style={{color:"var(--text-muted)"}}>{l}</span>
+                    <span style={{fontWeight:600,color:c,fontFamily:"'DM Mono',monospace"}}>{v}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* Ranking por período */}
+      <div style={{...card,padding:"16px 20px"}}>
+        {sectionTitle("Ranking de activos · rendimiento del período")}
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead>
+              <tr style={{borderBottom:"1px solid var(--border)"}}>
+                {["#","Ticker","Nombre","Tipo","Precio inicio","Precio actual","Rend. período","P&L USD","vs S&P"].map((h,i)=>(
+                  <th key={i} style={{padding:"6px 12px",textAlign:i>=4?"right":"left",fontSize:10,color:"var(--text-muted)",fontWeight:600,textTransform:"uppercase",letterSpacing:0.8,whiteSpace:"nowrap"}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {[...contributions].sort((a,b)=>b.retPct-a.retPct).map((h,i)=>{
+                const vsSP = spReturn!=null ? h.retPct - spReturn : null;
+                const startBar=(historicos?.[h.ticker]||[]).filter(b=>b.date>=startDate)[0];
+                return(
+                  <tr key={h.ticker} style={{borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
+                    <td style={{padding:"8px 12px",color:"var(--text-muted)",fontSize:11}}>{i+1}</td>
+                    <td style={{padding:"8px 12px",fontWeight:700,fontFamily:"'DM Mono',monospace",color:"var(--accent)"}}>{h.ticker}</td>
+                    <td style={{padding:"8px 12px",color:"var(--text-secondary)",maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontSize:11}}>{h.name}</td>
+                    <td style={{padding:"8px 12px",fontSize:10,color:"var(--text-muted)"}}>{ASSET_TYPES[h.type]?.icon}</td>
+                    <td style={{padding:"8px 12px",textAlign:"right",color:"var(--text-muted)",fontSize:11,fontFamily:"'DM Mono',monospace"}}>{startBar?fmtU(startBar.close,2):"—"}</td>
+                    <td style={{padding:"8px 12px",textAlign:"right",fontSize:11,fontFamily:"'DM Mono',monospace"}}>{fmtU(h.currentPrice,2)}</td>
+                    <td style={{padding:"8px 12px",textAlign:"right",fontWeight:700,color:pc(h.retPct)}}>{fmtP(h.retPct)}</td>
+                    <td style={{padding:"8px 12px",textAlign:"right",color:pc(h.pnlUSD)}}>{hideAmounts?"••••":(h.pnlUSD>=0?"+":"")+fmtU(h.pnlUSD,0)}</td>
+                    <td style={{padding:"8px 12px",textAlign:"right",color:vsSP!=null?pc(vsSP):"var(--text-muted)",fontWeight:600}}>{vsSP!=null?fmtP(vsSP):"—"}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* RankingWidget por período */}
-      <div style={{...card,overflow:"hidden"}}>
-        <RankingWidget en={en} historicos={historicos} fxRate={fxRate} currency={currency}/>
-      </div>
     </div>
   );
 }
@@ -4866,7 +5123,7 @@ function App(){
 
           {/* ANÁLISIS */}
           {tab==="analisis"&&(
-            <AnalisisTab en={enGrouped} historicos={historicos} fxRate={fxRate} currency={fx} card={card} livePrices={livePrices} hideAmounts={hideAmounts}/>
+            <AnalisisTab en={enGrouped} historicos={historicos} fxRate={fxRate} currency={fx} card={card} livePrices={livePrices} hideAmounts={hideAmounts} trades={trades}/>
           )}
 
           {/* OPERACIONES */}

@@ -725,7 +725,7 @@ function Chart100({series}){
   const yTicks=Array.from({length:6},(_,i)=>minV+(maxV-minV)*i/5);
   const xLabels=[0,Math.floor(n/4),Math.floor(n/2),Math.floor(3*n/4),n-1].filter((v,i,a)=>a.indexOf(v)===i&&v<n);
   const fmtD=s=>s?s.slice(8)+'/'+s.slice(5,7):'';
-  const LABELS={port:"Portfolio",spy:"S&P 500",ccl:"CCL",mep:"MEP",t10y:"T10Y"};
+  const LABELS={port:"Portfolio",spy:"S&P 500",ccl:"CCL",mep:"MEP",t10y:"T10Y",uva:"UVA"};
   const onMove=(e)=>{
     const rect=e.currentTarget.getBoundingClientRect();
     const svgX=(e.clientX-rect.left)*(W/rect.width);
@@ -1061,8 +1061,25 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
 
       const port100=calcTWR(datesWithToday,trades,en,tickerBars,cclBars,mepBars,currency,fxRate,livePricesMap,customEnd,realToday2);
 
+      // UVA benchmark — solo en modo ARS
+      let uva100 = null;
+      if(currency==="ARS" && hist?.uva?.length){
+        const uvaBars = hist.uva;
+        const startIdx = uvaBars.findIndex(x=>x.date>=datesWithToday[0]);
+        const uvaStart = startIdx>=0 ? uvaBars[startIdx] : uvaBars[0];
+        if(uvaStart){
+          uva100 = datesWithToday.map(d=>{
+            const uvaBar = uvaBars.filter(x=>x.date<=d);
+            const uvaVal = uvaBar.length ? uvaBar[uvaBar.length-1].close : uvaStart.close;
+            const dias = Math.round((new Date(d)-new Date(uvaStart.date))/(1000*60*60*24));
+            const val = (uvaVal/uvaStart.close) * (1 + (uvaTasaRef.current/100) * dias/365) * 100;
+            return {date:d, val:parseFloat(val.toFixed(4))};
+          });
+        }
+      }
+
       setChartData({
-        port100,t10y100,spy100,ccl100,mep100,currency,
+        port100,t10y100,spy100,ccl100,mep100,uva100,currency,
         portBase:null,
         startDate:dates[0],endDate:datesWithToday[datesWithToday.length-1],
         portRet:port100.length>0?(port100[port100.length-1].val-100).toFixed(2):"0.00",
@@ -1084,7 +1101,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
     if(!historicos||Object.keys(historicos).length===0)return;
     const p=PERIODS.find(x=>x.key===period);
     if(p)load(p,historicos,scrubStart,scrubEnd);
-  },[liveFX,liveSP500,livePrices,historicos,trades]);
+  },[liveFX,liveSP500,livePrices,historicos,trades,showUVA,uvaTasa]);
 
   const cd=chartData;
   const series=cd?[
@@ -1093,6 +1110,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
     ...(cd.currency==="ARS"&&cd.t10y100?[{key:"t10y",data:cd.t10y100,color:"var(--yellow)",bold:false}]:[]),
     ...(cd.ccl100?[{key:"ccl",data:cd.ccl100,color:"#A78BFA",bold:false}]:[]),
     ...(cd.mep100?[{key:"mep",data:cd.mep100,color:"#F472B6",bold:false}]:[]),
+    ...(showUVA&&cd.uva100?[{key:"uva",data:cd.uva100,color:"#FB923C",bold:false}]:[]),
   ]:[];
 
   return(
@@ -1112,6 +1130,25 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
           {cd?.currency==="ARS"&&<span style={{fontSize:10,color:"var(--yellow)"}}>— T10Y</span>}
           {cd?.ccl100&&<span style={{fontSize:10,color:"#A78BFA"}}>— CCL</span>}
           {cd?.mep100&&<span style={{fontSize:10,color:"#F472B6"}}>— MEP</span>}
+          {/* UVA benchmark — solo en ARS */}
+          {currency==="ARS"&&(
+            <span style={{display:"flex",alignItems:"center",gap:4,marginLeft:4}}>
+              <button onClick={()=>setShowUVA(v=>!v)}
+                style={{padding:"2px 8px",borderRadius:5,border:"1px solid rgba(251,146,60,0.4)",cursor:"pointer",fontSize:10,
+                  background:showUVA?"rgba(251,146,60,0.2)":"transparent",color:showUVA?"#FB923C":"var(--text-muted)"}}>
+                — UVA
+              </button>
+              {showUVA&&(
+                <span style={{display:"flex",alignItems:"center",gap:2}}>
+                  <span style={{fontSize:10,color:"#FB923C"}}>+</span>
+                  <input type="number" min="0" max="20" step="0.1" value={uvaTasa}
+                    onChange={e=>{setUvaTasa(parseFloat(e.target.value)||0); const p=PERIODS.find(x=>x.key===period); if(p)setTimeout(()=>load(p,historicos,scrubStart,scrubEnd),50);}}
+                    style={{width:42,background:"var(--bg-input)",border:"1px solid rgba(251,146,60,0.4)",borderRadius:4,padding:"1px 4px",color:"#FB923C",fontSize:10,textAlign:"center"}}/>
+                  <span style={{fontSize:10,color:"#FB923C"}}>% anual</span>
+                </span>
+              )}
+            </span>
+          )}
         </div>
         <div style={{display:"flex",gap:4,alignItems:"center"}}>
           {PERIODS.map(p=>(
@@ -2053,6 +2090,8 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
   ];
   const [period,setPeriod]=useState("90d");
   const [currency,setCurrency]=useState("USD_CCL"); // "ARS" | "USD_CCL" | "USD_MEP"
+  const [showUVA,setShowUVA]=useState(false);
+  const [uvaTasa,setUvaTasa]=useState(2.5); // spread sobre UVA, editable
   const [chartData,setChartData]=useState(null);
   const [loading,setLoading]=useState(false);
   const [err,setErr]=useState("");
@@ -4202,6 +4241,8 @@ function App(){
   const fxRate = liveFX[fx] || FX_FALLBACK[fx];
 
   const portRef = React.useRef(port);
+  const uvaTasaRef = React.useRef(uvaTasa);
+  useEffect(()=>{ uvaTasaRef.current = uvaTasa; },[uvaTasa]);
   useEffect(()=>{ portRef.current = port; },[port]);
 
   const refreshPrices = async (activeTickers_) => {

@@ -1169,12 +1169,14 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
                   <span style={{fontSize:10,color:"#FB923C"}}>% anual</span>
                 </span>
               )}
-              <button onClick={()=>setShowCER(v=>!v)}
-                style={{padding:"2px 8px",borderRadius:5,border:"1px solid rgba(163,230,53,0.4)",cursor:"pointer",fontSize:10,
-                  background:showCER?"rgba(163,230,53,0.15)":"transparent",color:showCER?"#A3E635":"var(--text-muted)"}}>
-                — CER
-              </button>
             </span>
+          )}
+          {currency==="ARS"&&(
+            <button onClick={()=>setShowCER(v=>!v)}
+              style={{padding:"2px 8px",borderRadius:5,border:"1px solid rgba(163,230,53,0.4)",cursor:"pointer",fontSize:10,marginLeft:4,
+                background:showCER?"rgba(163,230,53,0.15)":"transparent",color:showCER?"#A3E635":"var(--text-muted)"}}>
+              — CER
+            </button>
           )}
         </div>
         <div style={{display:"flex",gap:4,alignItems:"center"}}>

@@ -898,6 +898,10 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
   const PERIODS=[{key:"mtd",label:"MTD",days:null,mtd:true},{key:"30d",label:"30d",days:30},{key:"90d",label:"90d",days:90},{key:"ytd",label:"YTD",days:null},{key:"1y",label:"1 año",days:365},{key:"3y",label:"3 años",days:1095}];
   const [period,setPeriod]=useState("90d");
   const [currency,setCurrency]=useState("USD_CCL");
+  const [showUVA,setShowUVA]=useState(false);
+  const [uvaTasa,setUvaTasa]=useState(2.5);
+  const uvaTasaRef = React.useRef(2.5);
+  useEffect(()=>{ uvaTasaRef.current = uvaTasa; },[uvaTasa]);
   const [chartData,setChartData]=useState(null);
   const [loading,setLoading]=useState(false);
   const [scrubStart,setScrubStart]=useState(null); // ISO date string or null
@@ -2090,10 +2094,6 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
   ];
   const [period,setPeriod]=useState("90d");
   const [currency,setCurrency]=useState("USD_CCL"); // "ARS" | "USD_CCL" | "USD_MEP"
-  const [showUVA,setShowUVA]=useState(false);
-  const [uvaTasa,setUvaTasa]=useState(2.5);
-  const uvaTasaRef = React.useRef(2.5);
-  useEffect(()=>{ uvaTasaRef.current = uvaTasa; },[uvaTasa]);
 
   const [chartData,setChartData]=useState(null);
   const [loading,setLoading]=useState(false);

@@ -3144,16 +3144,23 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
     return {maxDD, ddStart, ddTrough, ddRecovery, ddDays, recDays, maxRally, rallyStart, rallyEnd, rallyDays};
   };
 
-  // Portfolio como serie diaria aproximada (usando CCL para convertir bonos ARS)
+  // Portfolio como serie diaria — usa trades para saber qué posiciones había en cada fecha
   const portSeries = useMemo(()=>{
     const cclBars = historicos?.CCL||[];
+    // Fecha de la primera compra (inicio real del portfolio)
+    const firstBuy = trades.filter(t=>t.tipo==="compra").sort((a,b)=>a.date.localeCompare(b.date))[0]?.date||startDate;
+    const serieStart = firstBuy > startDate ? firstBuy : startDate;
+
     const allDates = [...new Set(
       en.flatMap(h=>(historicos?.[h.ticker]||[]).map(b=>b.date))
-    )].filter(d=>d>=startDate&&d<=endDate).sort();
+    )].filter(d=>d>=serieStart&&d<=endDate).sort();
 
     return allDates.map(date=>{
       let totalUSD=0;
       for(const h of en){
+        // Solo incluir el activo si ya había sido comprado en esta fecha
+        const buyDate = trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra").sort((a,b)=>a.date.localeCompare(b.date))[0]?.date;
+        if(!buyDate||buyDate>date) continue;
         const bars=historicos?.[h.ticker]||[];
         const bar=bars.filter(b=>b.date<=date).pop();
         if(!bar) continue;
@@ -3167,8 +3174,8 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
         }
       }
       return {date, close:totalUSD};
-    });
-  },[en, historicos, startDate, endDate, fxRate]);
+    }).filter(p=>p.close>0);
+  },[en, historicos, trades, startDate, endDate, fxRate]);
 
   // Contribución al rendimiento
   const contributions = useMemo(()=>{

@@ -1364,10 +1364,11 @@ function inferType(item, endpoint){
   if(endpoint==="arg_cedears") return "cedear";
   if(endpoint==="arg_stocks")  return "accion_ar";
   if(endpoint==="arg_bonds"||endpoint==="arg_corp"){
+    // Solo el sufijo D o C indica que cotiza en USD (cable/MEP/CCL)
+    // No usar descripción — bonos CER como TZX28 dicen "U$S" pero son ARS
     const endsD = ticker.endsWith("D");
     const endsC = ticker.endsWith("C");
-    const descUSD = (item.description||item.name||"").toUpperCase().match(/U\$S|USD/);
-    return (endsD||endsC||descUSD) ? "bono_usd" : "bono_ars";
+    return (endsD||endsC) ? "bono_usd" : "bono_ars";
   }
   return "accion_ar";
 }
@@ -2007,7 +2008,8 @@ function Modal({h,port=[],onSave,onClose,darkMode=true}){
                       onChange={e=>{
                         const pct=+e.target.value;
                         set("comisionPct",pct);
-                        const bruto=+f.qty*+f.buyPrice;
+                        const isBondC=f.type==="bono_ars"||f.type==="bono_usd";
+                        const bruto=+f.qty*(isBondC?+f.buyPrice/100:+f.buyPrice);
                         if(bruto>0)set("comision",+(bruto*pct/100).toFixed(2));
                       }}
                       placeholder="0.00"
@@ -2020,7 +2022,8 @@ function Modal({h,port=[],onSave,onClose,darkMode=true}){
                 <span style={{fontSize:11,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Monto neto</span>
                 <span style={{fontSize:16,fontWeight:700,color:f.operacion==="venta"?"var(--red)":"var(--green)"}}>
                   {(()=>{
-                    const bruto=+f.qty*+f.buyPrice;
+                    const isBondN=f.type==="bono_ars"||f.type==="bono_usd";
+                    const bruto=+f.qty*(isBondN?+f.buyPrice/100:+f.buyPrice);
                     const com=+f.comision||0;
                     const neto=f.operacion==="venta"?bruto-com:bruto+com;
                     return f.buyCurrency==="USD"?`USD ${neto.toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}`:`$ ${neto.toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}`;

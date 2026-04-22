@@ -898,7 +898,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
   const PERIODS=[{key:"mtd",label:"MTD",days:null,mtd:true},{key:"30d",label:"30d",days:30},{key:"90d",label:"90d",days:90},{key:"ytd",label:"YTD",days:null},{key:"1y",label:"1 año",days:365},{key:"3y",label:"3 años",days:1095}];
   const [period,setPeriod]=useState("90d");
   const [currency,setCurrency]=useState("USD_CCL");
-  const [showUVA,setShowUVA]=useState(false);
+  const [showUVA,setShowUVA]=useState(true);
   const [uvaTasa,setUvaTasa]=useState(2.5);
   const uvaTasaRef = React.useRef(2.5);
   useEffect(()=>{ uvaTasaRef.current = uvaTasa; },[uvaTasa]);
@@ -2306,7 +2306,7 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
   const series = cd ? [
     {key:"port", data:cd.port100, color:"var(--green)",  bold:true},
     ...(cd.spy100  ? [{key:"spy",  data:cd.spy100,  color:"#60A5FA", bold:false}] : []),
-    ...(cd.currency==="ARS" ? [{key:"t10y", data:cd.t10y100, color:"var(--yellow)", bold:false}] : []),
+    ...(cd.currency!=="ARS" ? [{key:"t10y", data:cd.t10y100, color:"var(--yellow)", bold:false}] : []),
     ...(cd.ccl100  ? [{key:"ccl",  data:cd.ccl100,  color:"#A78BFA", bold:false}] : []),
     ...(cd.mep100  ? [{key:"mep",  data:cd.mep100,  color:"#F472B6", bold:false}] : []),
   ] : [];
@@ -2349,7 +2349,7 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
               <span style={{color:"var(--text-muted)",fontSize:10}}>|</span>
               <span style={{color:"var(--green)"}}>— Portfolio</span>
               {cd?.spy100&&<span style={{color:"#60A5FA"}}>— S&amp;P 500</span>}
-              {cd?.currency==="ARS"&&<span style={{color:"var(--yellow)"}}>— T10Y</span>}
+              {cd?.currency!=="ARS"&&<span style={{color:"var(--yellow)"}}>— T10Y</span>}
               {cd?.ccl100&&<span style={{color:"#A78BFA"}}>— CCL</span>}
               {cd?.mep100&&<span style={{color:"#F472B6"}}>— MEP</span>}
             </div>

@@ -1544,12 +1544,12 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
           <>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
               <div>
-                <span style={lbl}>Fecha de vencimiento</span>
-                <input type="date" value={params.vto} onChange={e=>set('vto',e.target.value)} style={inp}/>
-              </div>
-              <div>
                 <span style={lbl}>Fecha de emisión</span>
                 <input type="date" value={params.emisionDate} onChange={e=>set('emisionDate',e.target.value)} style={inp}/>
+              </div>
+              <div>
+                <span style={lbl}>Fecha de vencimiento</span>
+                <input type="date" value={params.vto} onChange={e=>set('vto',e.target.value)} style={inp}/>
               </div>
               <div>
                 <span style={lbl}>Tasa anual (% TNA)</span>
@@ -1951,27 +1951,6 @@ function Modal({h,port=[],onSave,onClose,darkMode=true}){
             </div>
           </div>
 
-          {/* TC PARA BONOS DUALES — cuando se compra en ARS un bono que tiene versión D */}
-          {f.operacion==="compra" && f.buyCurrency==="ARS" && (f.type==="bono_usd"||f.type==="bono_ars") && (
-            <div style={{background:"rgba(249,115,22,0.07)",border:"1px solid rgba(249,115,22,0.25)",borderRadius:8,padding:"12px 14px"}}>
-              <div style={{fontSize:11,color:"#F97316",fontWeight:600,marginBottom:8}}>💱 Bono con cotización en USD — ingresá el TC para registrar el equivalente en dólares</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-                <label style={{display:"flex",flexDirection:"column",gap:4}}>
-                  <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>TC al momento de compra</span>
-                  <input type="number" min="0" value={f.tcCompra||""} onChange={e=>set("tcCompra",e.target.value)}
-                    placeholder="ej: 1460" style={inp}/>
-                </label>
-                <div style={{display:"flex",flexDirection:"column",gap:4}}>
-                  <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Equivalente en USD</span>
-                  <div style={{...inp,background:"var(--bg-card)",color:"var(--green)",fontWeight:700,display:"flex",alignItems:"center"}}>
-                    {f.qty>0&&f.buyPrice>0&&f.tcCompra>0
-                      ? fmtU((+f.qty*+f.buyPrice)/(+f.tcCompra),2)
-                      : <span style={{color:"var(--text-muted)"}}>—</span>}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
 
           {f.qty>0&&f.buyPrice>0&&(
             <div style={{background:"var(--bg-input)",borderRadius:8,padding:"10px 14px"}}>

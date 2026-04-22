@@ -2091,7 +2091,10 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
   const [period,setPeriod]=useState("90d");
   const [currency,setCurrency]=useState("USD_CCL"); // "ARS" | "USD_CCL" | "USD_MEP"
   const [showUVA,setShowUVA]=useState(false);
-  const [uvaTasa,setUvaTasa]=useState(2.5); // spread sobre UVA, editable
+  const [uvaTasa,setUvaTasa]=useState(2.5);
+  const uvaTasaRef = React.useRef(2.5);
+  useEffect(()=>{ uvaTasaRef.current = uvaTasa; },[uvaTasa]);
+
   const [chartData,setChartData]=useState(null);
   const [loading,setLoading]=useState(false);
   const [err,setErr]=useState("");
@@ -4241,8 +4244,7 @@ function App(){
   const fxRate = liveFX[fx] || FX_FALLBACK[fx];
 
   const portRef = React.useRef(port);
-  const uvaTasaRef = React.useRef(uvaTasa);
-  useEffect(()=>{ uvaTasaRef.current = uvaTasa; },[uvaTasa]);
+
   useEffect(()=>{ portRef.current = port; },[port]);
 
   const refreshPrices = async (activeTickers_) => {

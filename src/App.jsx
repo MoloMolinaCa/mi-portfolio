@@ -1111,7 +1111,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
   const series=cd?[
     {key:"port",data:cd.port100,color:"var(--green)",bold:true},
     ...(cd.spy100?[{key:"spy",data:cd.spy100,color:"#60A5FA",bold:false}]:[]),
-    ...(cd.currency==="ARS"&&cd.t10y100?[{key:"t10y",data:cd.t10y100,color:"var(--yellow)",bold:false}]:[]),
+    ...(cd.currency!=="ARS"&&cd.t10y100?[{key:"t10y",data:cd.t10y100,color:"var(--yellow)",bold:false}]:[]),
     ...(cd.ccl100?[{key:"ccl",data:cd.ccl100,color:"#A78BFA",bold:false}]:[]),
     ...(cd.mep100?[{key:"mep",data:cd.mep100,color:"#F472B6",bold:false}]:[]),
     ...(showUVA&&cd.uva100?[{key:"uva",data:cd.uva100,color:"#FB923C",bold:false}]:[]),
@@ -1131,7 +1131,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
           <span style={{color:"var(--text-muted)",fontSize:10}}>|</span>
           <span style={{fontSize:10,color:"var(--green)"}}>— Portfolio</span>
           {cd?.spy100&&<span style={{fontSize:10,color:"#60A5FA"}}>— S&amp;P 500</span>}
-          {cd?.currency==="ARS"&&<span style={{fontSize:10,color:"var(--yellow)"}}>— T10Y</span>}
+          {cd?.currency!=="ARS"&&cd?.t10y100&&<span style={{fontSize:10,color:"var(--yellow)"}}>— T10Y</span>}
           {cd?.ccl100&&<span style={{fontSize:10,color:"#A78BFA"}}>— CCL</span>}
           {cd?.mep100&&<span style={{fontSize:10,color:"#F472B6"}}>— MEP</span>}
           {/* UVA benchmark — solo en ARS */}

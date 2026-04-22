@@ -3108,26 +3108,40 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
     return ((endBar.close - startBar.close)/startBar.close)*100;
   };
 
-  // Calcular max drawdown y max rally en un serie de barras
+  // Calcular max drawdown y max rally correctamente
   const calcExtremes = (bars, start, end) => {
-    const filtered = bars.filter(b=>b.date>=start&&b.date<=end);
-    if(filtered.length < 2) return null;
-    let maxDD=0, maxRally=0, peak=filtered[0].close, trough=filtered[0].close;
-    let ddStart="",ddEnd="",ddTrough="",rallyStart="",rallyEnd="",rallyPeak="";
-    let peakDate=filtered[0].date, troughDate=filtered[0].date;
-    let rallyBase=filtered[0].close, rallyBaseDate=filtered[0].date;
+    const f = bars.filter(b=>b.date>=start&&b.date<=end);
+    if(f.length < 2) return null;
 
-    for(const b of filtered){
-      if(b.close>peak){
-        peak=b.close; peakDate=b.date; trough=b.close; troughDate=b.date;
-      }
+    // Max Drawdown: caída desde un pico hasta el valle subsiguiente
+    let maxDD=0, ddStart="", ddTrough="", ddRecovery="";
+    let peak=f[0].close, peakDate=f[0].date;
+    for(const b of f){
+      if(b.close>peak){ peak=b.close; peakDate=b.date; }
       const dd=(b.close-peak)/peak*100;
-      if(dd<maxDD){ maxDD=dd; ddStart=peakDate; ddTrough=b.date; trough=b.close; troughDate=b.date; }
-      if(b.close<rallyBase){ rallyBase=b.close; rallyBaseDate=b.date; }
-      const rally=(b.close-rallyBase)/rallyBase*100;
-      if(rally>maxRally){ maxRally=rally; rallyStart=rallyBaseDate; rallyEnd=b.date; }
+      if(dd<maxDD){ maxDD=dd; ddStart=peakDate; ddTrough=b.date; }
     }
-    return {maxDD, maxRally, ddStart, ddTrough, rallyStart, rallyEnd};
+    // Días de recuperación: desde el trough hasta que vuelve al nivel del pico
+    if(ddTrough){
+      const troughBar=f.find(b=>b.date===ddTrough);
+      const peakVal=f.find(b=>b.date===ddStart)?.close||peak;
+      const recovery=f.filter(b=>b.date>ddTrough&&b.close>=peakVal)[0];
+      ddRecovery=recovery?recovery.date:"";
+    }
+    const ddDays = ddStart&&ddTrough ? Math.round((new Date(ddTrough)-new Date(ddStart))/(1000*60*60*24)) : 0;
+    const recDays = ddTrough&&ddRecovery ? Math.round((new Date(ddRecovery)-new Date(ddTrough))/(1000*60*60*24)) : null;
+
+    // Max Rally: suba desde un valle hasta el pico subsiguiente (sin overlap con el DD)
+    let maxRally=0, rallyStart="", rallyEnd="";
+    let trough2=f[0].close, troughDate2=f[0].date;
+    for(const b of f){
+      if(b.close<trough2){ trough2=b.close; troughDate2=b.date; }
+      const rally=(b.close-trough2)/trough2*100;
+      if(rally>maxRally){ maxRally=rally; rallyStart=troughDate2; rallyEnd=b.date; }
+    }
+    const rallyDays = rallyStart&&rallyEnd ? Math.round((new Date(rallyEnd)-new Date(rallyStart))/(1000*60*60*24)) : 0;
+
+    return {maxDD, ddStart, ddTrough, ddRecovery, ddDays, recDays, maxRally, rallyStart, rallyEnd, rallyDays};
   };
 
   // Portfolio como serie diaria aproximada (usando CCL para convertir bonos ARS)
@@ -3218,52 +3232,48 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
 
       {/* Fila superior: Extremos Portfolio + S&P */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-
-        {/* Portfolio extremos */}
-        <div style={{...card,padding:"16px 20px"}}>
-          {sectionTitle("Portfolio · máximas variaciones")}
-          {portExtremes ? (
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-              <div style={{background:"rgba(248,113,113,0.07)",border:"1px solid rgba(248,113,113,0.2)",borderRadius:8,padding:"12px 14px"}}>
-                <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Mayor caída</div>
-                <div style={{fontSize:22,fontWeight:700,color:"var(--red)",fontFamily:"'DM Mono',monospace"}}>{fmtP(portExtremes.maxDD)}</div>
-                <div style={{fontSize:11,color:"var(--text-muted)",marginTop:4}}>
-                  {fmtDate(portExtremes.ddStart)} → {fmtDate(portExtremes.ddTrough)}
+        {[
+          {label:"📊 Mi Portfolio", ex:portExtremes},
+          {label:"🇺🇸 S&P 500",      ex:spExtremes},
+        ].map(({label,ex})=>(
+          <div key={label} style={{...card,padding:"16px 20px"}}>
+            <div style={{fontSize:12,fontWeight:700,color:"var(--text-primary)",marginBottom:12}}>{label}</div>
+            {ex ? (
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                {/* Mayor caída */}
+                <div style={{background:"rgba(248,113,113,0.07)",border:"1px solid rgba(248,113,113,0.2)",borderRadius:8,padding:"12px 14px"}}>
+                  <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Mayor caída</div>
+                  <div style={{fontSize:22,fontWeight:700,color:"var(--red)",fontFamily:"'DM Mono',monospace"}}>{fmtP(ex.maxDD)}</div>
+                  <div style={{fontSize:10,color:"var(--text-muted)",marginTop:6}}>
+                    <span>{fmtDate(ex.ddStart)}</span>
+                    <span style={{margin:"0 4px"}}>→</span>
+                    <span>{fmtDate(ex.ddTrough)}</span>
+                  </div>
+                  <div style={{fontSize:10,color:"var(--text-muted)",marginTop:3}}>
+                    {ex.ddDays} días de caída
+                  </div>
+                  {ex.recDays!=null
+                    ? <div style={{fontSize:10,color:"var(--green)",marginTop:3}}>✓ Recuperó en {ex.recDays} días</div>
+                    : ex.ddTrough ? <div style={{fontSize:10,color:"var(--yellow)",marginTop:3}}>⏳ Sin recuperar aún</div> : null
+                  }
+                </div>
+                {/* Mayor rally */}
+                <div style={{background:"rgba(52,211,153,0.07)",border:"1px solid rgba(52,211,153,0.2)",borderRadius:8,padding:"12px 14px"}}>
+                  <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Mayor rally</div>
+                  <div style={{fontSize:22,fontWeight:700,color:"var(--green)",fontFamily:"'DM Mono',monospace"}}>{fmtP(ex.maxRally)}</div>
+                  <div style={{fontSize:10,color:"var(--text-muted)",marginTop:6}}>
+                    <span>{fmtDate(ex.rallyStart)}</span>
+                    <span style={{margin:"0 4px"}}>→</span>
+                    <span>{fmtDate(ex.rallyEnd)}</span>
+                  </div>
+                  <div style={{fontSize:10,color:"var(--text-muted)",marginTop:3}}>
+                    {ex.rallyDays} días de suba
+                  </div>
                 </div>
               </div>
-              <div style={{background:"rgba(52,211,153,0.07)",border:"1px solid rgba(52,211,153,0.2)",borderRadius:8,padding:"12px 14px"}}>
-                <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Mayor rally</div>
-                <div style={{fontSize:22,fontWeight:700,color:"var(--green)",fontFamily:"'DM Mono',monospace"}}>{fmtP(portExtremes.maxRally)}</div>
-                <div style={{fontSize:11,color:"var(--text-muted)",marginTop:4}}>
-                  {fmtDate(portExtremes.rallyStart)} → {fmtDate(portExtremes.rallyEnd)}
-                </div>
-              </div>
-            </div>
-          ) : <div style={{color:"var(--text-muted)",fontSize:12}}>Sin datos suficientes</div>}
-        </div>
-
-        {/* S&P extremos */}
-        <div style={{...card,padding:"16px 20px"}}>
-          {sectionTitle("S&P 500 · máximas variaciones")}
-          {spExtremes ? (
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-              <div style={{background:"rgba(248,113,113,0.07)",border:"1px solid rgba(248,113,113,0.2)",borderRadius:8,padding:"12px 14px"}}>
-                <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Mayor caída</div>
-                <div style={{fontSize:22,fontWeight:700,color:"var(--red)",fontFamily:"'DM Mono',monospace"}}>{fmtP(spExtremes.maxDD)}</div>
-                <div style={{fontSize:11,color:"var(--text-muted)",marginTop:4}}>
-                  {fmtDate(spExtremes.ddStart)} → {fmtDate(spExtremes.ddTrough)}
-                </div>
-              </div>
-              <div style={{background:"rgba(52,211,153,0.07)",border:"1px solid rgba(52,211,153,0.2)",borderRadius:8,padding:"12px 14px"}}>
-                <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Mayor rally</div>
-                <div style={{fontSize:22,fontWeight:700,color:"var(--green)",fontFamily:"'DM Mono',monospace"}}>{fmtP(spExtremes.maxRally)}</div>
-                <div style={{fontSize:11,color:"var(--text-muted)",marginTop:4}}>
-                  {fmtDate(spExtremes.rallyStart)} → {fmtDate(spExtremes.rallyEnd)}
-                </div>
-              </div>
-            </div>
-          ) : <div style={{color:"var(--text-muted)",fontSize:12}}>Sin datos suficientes</div>}
-        </div>
+            ) : <div style={{color:"var(--text-muted)",fontSize:12}}>Sin datos suficientes</div>}
+          </div>
+        ))}
       </div>
 
       {/* Contribución al rendimiento */}
@@ -3312,56 +3322,144 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
         </div>
       </div>
 
-      {/* Distribución de retornos diarios */}
+      {/* Retornos diarios — versión legible */}
       <div style={{...card,padding:"16px 20px"}}>
-        {sectionTitle("Distribución de retornos diarios del portfolio")}
+        {sectionTitle("Estadísticas de retornos diarios")}
         {(()=>{
           if(dailyReturns.length<5) return <div style={{color:"var(--text-muted)",fontSize:12}}>Sin datos suficientes</div>;
           const avg = dailyReturns.reduce((a,b)=>a+b,0)/dailyReturns.length;
           const std = Math.sqrt(dailyReturns.reduce((a,b)=>a+(b-avg)**2,0)/dailyReturns.length);
           const pos = dailyReturns.filter(r=>r>0).length;
-          const neg = dailyReturns.filter(r=>r<0).length;
+          const neg = dailyReturns.filter(r=>r<=0).length;
           const maxR = Math.max(...dailyReturns);
           const minR = Math.min(...dailyReturns);
-          // Histograma — 12 buckets
-          const buckets = 12;
-          const bucketW = (maxR-minR)/buckets;
-          const hist = Array(buckets).fill(0);
-          dailyReturns.forEach(r=>{ const i=Math.min(buckets-1,Math.floor((r-minR)/bucketW)); hist[i]++; });
-          const maxH = Math.max(...hist);
+          const volAnual = std * Math.sqrt(252);
+          const pctPos = (pos/dailyReturns.length*100).toFixed(0);
+
+          // Agrupar por rangos simples
+          const rangos = [
+            {l:"< -2%",    count:dailyReturns.filter(r=>r<-2).length,    c:"#ef4444"},
+            {l:"-2% a -1%",count:dailyReturns.filter(r=>r>=-2&&r<-1).length, c:"#f87171"},
+            {l:"-1% a 0%", count:dailyReturns.filter(r=>r>=-1&&r<0).length,  c:"#fca5a5"},
+            {l:"0% a +1%", count:dailyReturns.filter(r=>r>=0&&r<1).length,   c:"#86efac"},
+            {l:"+1% a +2%",count:dailyReturns.filter(r=>r>=1&&r<2).length,   c:"#4ade80"},
+            {l:"> +2%",    count:dailyReturns.filter(r=>r>=2).length,     c:"#22c55e"},
+          ];
+          const maxCount = Math.max(...rangos.map(r=>r.count));
+
           return(
-            <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:20,alignItems:"start"}}>
-              {/* Histograma */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
+              {/* Barras por rango */}
               <div>
-                <div style={{display:"flex",alignItems:"flex-end",gap:2,height:80}}>
-                  {hist.map((h,i)=>{
-                    const bucketMid = minR + bucketW*(i+0.5);
-                    const isPos = bucketMid>=0;
-                    return(
-                      <div key={i} title={`${(minR+bucketW*i).toFixed(2)}% a ${(minR+bucketW*(i+1)).toFixed(2)}%: ${h} días`}
-                        style={{flex:1,height:(h/maxH*80)+"px",background:isPos?"var(--green)":"var(--red)",borderRadius:"2px 2px 0 0",opacity:0.7,cursor:"pointer"}}/>
-                    );
-                  })}
-                </div>
-                <div style={{display:"flex",justifyContent:"space-between",marginTop:4,fontSize:9,color:"var(--text-muted)"}}>
-                  <span>{minR.toFixed(1)}%</span><span>0%</span><span>{maxR.toFixed(1)}%</span>
+                <div style={{fontSize:10,color:"var(--text-muted)",marginBottom:10,textTransform:"uppercase",letterSpacing:1}}>Días por rango de retorno</div>
+                <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                  {rangos.map(({l,count,c})=>(
+                    <div key={l} style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:11,color:"var(--text-muted)",minWidth:80,textAlign:"right"}}>{l}</span>
+                      <div style={{flex:1,height:18,background:"var(--bg-input)",borderRadius:4,overflow:"hidden"}}>
+                        <div style={{height:"100%",width:`${maxCount>0?(count/maxCount*100):0}%`,background:c,borderRadius:4,transition:"width 0.3s"}}/>
+                      </div>
+                      <span style={{fontSize:11,fontWeight:600,color:c,minWidth:28,textAlign:"right"}}>{count}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
-              {/* Stats */}
-              <div style={{display:"grid",gap:8,minWidth:160}}>
-                {[
-                  {l:"Días positivos",v:`${pos} (${(pos/dailyReturns.length*100).toFixed(0)}%)`,c:"var(--green)"},
-                  {l:"Días negativos",v:`${neg} (${(neg/dailyReturns.length*100).toFixed(0)}%)`,c:"var(--red)"},
-                  {l:"Retorno promedio",v:fmtP(avg),c:pc(avg)},
-                  {l:"Volatilidad diaria",v:fmtP(std),c:"var(--text-secondary)"},
-                  {l:"Mejor día",v:fmtP(maxR),c:"var(--green)"},
-                  {l:"Peor día",v:fmtP(minR),c:"var(--red)"},
-                ].map(({l,v,c})=>(
-                  <div key={l} style={{display:"flex",justifyContent:"space-between",gap:12,fontSize:11}}>
-                    <span style={{color:"var(--text-muted)"}}>{l}</span>
-                    <span style={{fontWeight:600,color:c,fontFamily:"'DM Mono',monospace"}}>{v}</span>
-                  </div>
-                ))}
+              {/* KPIs */}
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:2}}>Métricas clave</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                  {[
+                    {l:"Días positivos", v:`${pos} (${pctPos}%)`, c:"var(--green)"},
+                    {l:"Días negativos", v:`${neg} (${(100-parseInt(pctPos))}%)`, c:"var(--red)"},
+                    {l:"Retorno promedio", v:fmtP(avg), c:pc(avg)},
+                    {l:"Volatilidad anualizada", v:fmtP(volAnual), c:"var(--text-secondary)"},
+                    {l:"Mejor día", v:fmtP(maxR), c:"var(--green)"},
+                    {l:"Peor día", v:fmtP(minR), c:"var(--red)"},
+                  ].map(({l,v,c})=>(
+                    <div key={l} style={{background:"var(--bg-input)",borderRadius:7,padding:"8px 10px"}}>
+                      <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8,marginBottom:3}}>{l}</div>
+                      <div style={{fontSize:14,fontWeight:700,color:c,fontFamily:"'DM Mono',monospace"}}>{v}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* Correlación entre activos */}
+      <div style={{...card,padding:"16px 20px"}}>
+        {sectionTitle("Correlación entre activos · retornos diarios")}
+        {(()=>{
+          // Solo activos con suficientes datos en el período
+          const activos = en.filter(h=>{
+            const bars=(historicos?.[h.ticker]||[]).filter(b=>b.date>=startDate&&b.date<=endDate);
+            return bars.length>=10;
+          }).slice(0,8); // máximo 8 para que entre en pantalla
+
+          if(activos.length<2) return <div style={{color:"var(--text-muted)",fontSize:12}}>Se necesitan al menos 2 activos con datos</div>;
+
+          // Calcular retornos diarios por activo
+          const rets = activos.map(h=>{
+            const bars=(historicos?.[h.ticker]||[]).filter(b=>b.date>=startDate&&b.date<=endDate).sort((a,b)=>a.date.localeCompare(b.date));
+            const r=[];
+            for(let i=1;i<bars.length;i++) r.push((bars[i].close-bars[i-1].close)/bars[i-1].close);
+            return {ticker:h.ticker, rets:r};
+          });
+
+          // Matriz de correlación
+          const corr = (a,b) => {
+            const n=Math.min(a.length,b.length);
+            if(n<3) return null;
+            const ax=a.slice(-n), bx=b.slice(-n);
+            const ma=ax.reduce((s,v)=>s+v,0)/n, mb=bx.reduce((s,v)=>s+v,0)/n;
+            let num=0,da=0,db=0;
+            for(let i=0;i<n;i++){ num+=(ax[i]-ma)*(bx[i]-mb); da+=(ax[i]-ma)**2; db+=(bx[i]-mb)**2; }
+            return da&&db ? num/Math.sqrt(da*db) : null;
+          };
+
+          const corrColor = (v) => {
+            if(v===null) return "var(--bg-input)";
+            const abs=Math.abs(v);
+            if(v>0.7) return `rgba(52,211,153,${0.3+abs*0.5})`;
+            if(v>0.3) return `rgba(52,211,153,${0.1+abs*0.3})`;
+            if(v<-0.7) return `rgba(248,113,113,${0.3+abs*0.5})`;
+            if(v<-0.3) return `rgba(248,113,113,${0.1+abs*0.3})`;
+            return "rgba(255,255,255,0.05)";
+          };
+
+          return(
+            <div style={{overflowX:"auto"}}>
+              <table style={{borderCollapse:"collapse",fontSize:11}}>
+                <thead>
+                  <tr>
+                    <th style={{padding:"6px 10px",width:60}}/>
+                    {activos.map(h=>(
+                      <th key={h.ticker} style={{padding:"6px 10px",textAlign:"center",color:"var(--accent)",fontFamily:"'DM Mono',monospace",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>{h.ticker}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {activos.map((ha,i)=>(
+                    <tr key={ha.ticker}>
+                      <td style={{padding:"4px 10px",color:"var(--accent)",fontFamily:"'DM Mono',monospace",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>{ha.ticker}</td>
+                      {activos.map((hb,j)=>{
+                        const v = i===j ? 1 : corr(rets[i].rets, rets[j].rets);
+                        return(
+                          <td key={hb.ticker} style={{padding:"4px 8px",textAlign:"center",background:corrColor(v),borderRadius:4,fontSize:11,fontWeight:i===j?700:400,color:i===j?"var(--text-primary)":v!=null?(Math.abs(v)>0.5?"var(--text-primary)":"var(--text-secondary)"):"var(--text-muted)"}}>
+                            {v!=null ? (i===j?"1.00":v.toFixed(2)) : "—"}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div style={{marginTop:10,display:"flex",gap:16,fontSize:10,color:"var(--text-muted)"}}>
+                <span><span style={{color:"var(--green)"}}>■</span> Alta correlación positiva (&gt;0.7)</span>
+                <span><span style={{color:"var(--red)"}}>■</span> Alta correlación negativa (&lt;-0.7)</span>
+                <span><span style={{color:"var(--text-muted)"}}>■</span> Sin correlación relevante</span>
               </div>
             </div>
           );

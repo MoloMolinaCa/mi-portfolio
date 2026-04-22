@@ -3144,37 +3144,30 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
     return {maxDD, ddStart, ddTrough, ddRecovery, ddDays, recDays, maxRally, rallyStart, rallyEnd, rallyDays};
   };
 
-  // Portfolio como serie diaria — usa trades para saber qué posiciones había en cada fecha
+  // Portfolio TWR — misma lógica que el gráfico principal
   const portSeries = useMemo(()=>{
-    const cclBars = historicos?.CCL||[];
-    // Fecha de la primera compra (inicio real del portfolio)
-    const firstBuy = trades.filter(t=>t.tipo==="compra").sort((a,b)=>a.date.localeCompare(b.date))[0]?.date||startDate;
-    const serieStart = firstBuy > startDate ? firstBuy : startDate;
+    if(!historicos||!Object.keys(historicos).length) return [];
+    const cclBars  = historicos?.CCL||[];
+    const mepBars  = historicos?.MEP||[];
 
+    // Construir tickerBars
+    const tickerBars = {};
+    en.forEach(h=>{ const b=historicos?.[h.ticker]; if(b) tickerBars[h.ticker]=b; });
+
+    // Fechas del período
     const allDates = [...new Set(
       en.flatMap(h=>(historicos?.[h.ticker]||[]).map(b=>b.date))
-    )].filter(d=>d>=serieStart&&d<=endDate).sort();
+    )].filter(d=>d>=startDate&&d<=endDate).sort();
+    if(allDates.length<2) return [];
+    if(allDates[allDates.length-1]!==endDate) allDates.push(endDate);
 
-    return allDates.map(date=>{
-      let totalUSD=0;
-      for(const h of en){
-        // Solo incluir el activo si ya había sido comprado en esta fecha
-        const buyDate = trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra").sort((a,b)=>a.date.localeCompare(b.date))[0]?.date;
-        if(!buyDate||buyDate>date) continue;
-        const bars=historicos?.[h.ticker]||[];
-        const bar=bars.filter(b=>b.date<=date).pop();
-        if(!bar) continue;
-        const isBond=h.type==="bono_usd"||h.type==="bono_ars";
-        const qtyFactor=isBond?h.qty/100:h.qty;
-        if(h.buyCurrency==="USD"){ totalUSD+=bar.close*qtyFactor; }
-        else {
-          const cclBar=cclBars.filter(b=>b.date<=date).pop();
-          const ccl=cclBar?.close||fxRate;
-          totalUSD+=bar.close*qtyFactor/ccl;
-        }
-      }
-      return {date, close:totalUSD};
-    }).filter(p=>p.close>0);
+    // Precios live para hoy
+    const livePricesMap={};
+    en.forEach(h=>{ if(h.isLive) livePricesMap[h.ticker]=h.currentPrice; });
+
+    const twr = calcTWR(allDates, trades, en, tickerBars, cclBars, mepBars, "USD_CCL", fxRate, livePricesMap, null, endDate);
+    // Convertir de base-100 a {date, close} para reutilizar calcExtremes
+    return twr.map(p=>({date:p.date, close:p.val}));
   },[en, historicos, trades, startDate, endDate, fxRate]);
 
   // Contribución al rendimiento

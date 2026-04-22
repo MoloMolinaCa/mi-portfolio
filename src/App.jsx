@@ -896,13 +896,34 @@ function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRa
 
 function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=false,livePricesAll={},onExpand=null}){
   const PERIODS=[{key:"mtd",label:"MTD",days:null,mtd:true},{key:"30d",label:"30d",days:30},{key:"90d",label:"90d",days:90},{key:"ytd",label:"YTD",days:null},{key:"1y",label:"1 año",days:365},{key:"3y",label:"3 años",days:1095}];
-  const [period,setPeriod]=useState("90d");
-  const [currency,setCurrency]=useState("USD_CCL");
-  const [showUVA,setShowUVA]=useState(true);
-  const [uvaTasa,setUvaTasa]=useState(2.5);
-  const uvaTasaRef = React.useRef(2.5);
+  // Persistir preferencias del gráfico en localStorage
+  const _chartPrefs = ()=>{ try{ return JSON.parse(localStorage.getItem('gal_chart_prefs_v1')||'{}'); }catch{ return {}; } };
+  const [period,setPeriodRaw]=useState(()=>_chartPrefs().period||"90d");
+  const [currency,setCurrencyRaw]=useState(()=>_chartPrefs().currency||"USD_CCL");
+  const [showUVA,setShowUVARaw]=useState(()=>_chartPrefs().showUVA??true);
+  const [uvaTasa,setUvaTasaRaw]=useState(()=>_chartPrefs().uvaTasa??2.5);
+  const uvaTasaRef = React.useRef(uvaTasa);
   useEffect(()=>{ uvaTasaRef.current = uvaTasa; },[uvaTasa]);
-  const [showCER,setShowCER]=useState(false);
+  const [showCER,setShowCERRaw]=useState(()=>_chartPrefs().showCER??false);
+  const [showSP,setShowSPRaw]=useState(()=>_chartPrefs().showSP??true);
+  const [showCCL,setShowCCLRaw]=useState(()=>_chartPrefs().showCCL??true);
+  const [showMEP,setShowMEPRaw]=useState(()=>_chartPrefs().showMEP??false);
+
+  // Guardar preferencias al cambiar
+  const savePrefs = (patch) => {
+    try{
+      const cur = _chartPrefs();
+      localStorage.setItem('gal_chart_prefs_v1', JSON.stringify({...cur,...patch}));
+    }catch{}
+  };
+  const setPeriod = v => { setPeriodRaw(v); savePrefs({period:v}); };
+  const setCurrency = v => { setCurrencyRaw(v); savePrefs({currency:v}); };
+  const setShowUVA = fn => setShowUVARaw(prev=>{ const v=typeof fn==='function'?fn(prev):fn; savePrefs({showUVA:v}); return v; });
+  const setUvaTasa = v => { setUvaTasaRaw(v); savePrefs({uvaTasa:v}); };
+  const setShowCER = fn => setShowCERRaw(prev=>{ const v=typeof fn==='function'?fn(prev):fn; savePrefs({showCER:v}); return v; });
+  const setShowSP  = fn => setShowSPRaw(prev=>{ const v=typeof fn==='function'?fn(prev):fn; savePrefs({showSP:v}); return v; });
+  const setShowCCL = fn => setShowCCLRaw(prev=>{ const v=typeof fn==='function'?fn(prev):fn; savePrefs({showCCL:v}); return v; });
+  const setShowMEP = fn => setShowMEPRaw(prev=>{ const v=typeof fn==='function'?fn(prev):fn; savePrefs({showMEP:v}); return v; });
   const [chartData,setChartData]=useState(null);
   const [loading,setLoading]=useState(false);
   const [scrubStart,setScrubStart]=useState(null); // ISO date string or null
@@ -1127,10 +1148,10 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
   const cd=chartData;
   const series=cd?[
     {key:"port",data:cd.port100,color:"var(--green)",bold:true},
-    ...(cd.spy100?[{key:"spy",data:cd.spy100,color:"#60A5FA",bold:false}]:[]),
-    ...(cd.currency!=="ARS"&&cd.t10y100?[{key:"t10y",data:cd.t10y100,color:"var(--yellow)",bold:false}]:[]),
-    ...(cd.ccl100?[{key:"ccl",data:cd.ccl100,color:"#A78BFA",bold:false}]:[]),
-    ...(cd.mep100?[{key:"mep",data:cd.mep100,color:"#F472B6",bold:false}]:[]),
+    ...(showSP&&cd.spy100?[{key:"spy",data:cd.spy100,color:"#60A5FA",bold:false}]:[]),
+    ...(showSP&&cd.currency!=="ARS"&&cd.t10y100?[{key:"t10y",data:cd.t10y100,color:"var(--yellow)",bold:false}]:[]),
+    ...(showCCL&&cd.ccl100?[{key:"ccl",data:cd.ccl100,color:"#A78BFA",bold:false}]:[]),
+    ...(showMEP&&cd.mep100?[{key:"mep",data:cd.mep100,color:"#F472B6",bold:false}]:[]),
     ...(showUVA&&cd.uva100?[{key:"uva",data:cd.uva100,color:"#FB923C",bold:false}]:[]),
     ...(showCER&&cd.cer100?[{key:"cer",data:cd.cer100,color:"#A3E635",bold:false}]:[]),
   ]:[];
@@ -1148,36 +1169,45 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
           ))}
           <span style={{color:"var(--text-muted)",fontSize:10}}>|</span>
           <span style={{fontSize:10,color:"var(--green)"}}>— Portfolio</span>
-          {cd?.spy100&&<span style={{fontSize:10,color:"#60A5FA"}}>— S&amp;P 500</span>}
-          {cd?.currency!=="ARS"&&cd?.t10y100&&<span style={{fontSize:10,color:"var(--yellow)"}}>— T10Y</span>}
-          {cd?.ccl100&&<span style={{fontSize:10,color:"#A78BFA"}}>— CCL</span>}
-          {cd?.mep100&&<span style={{fontSize:10,color:"#F472B6"}}>— MEP</span>}
-          {/* UVA y CER benchmarks — solo en ARS */}
-          {currency==="ARS"&&(
-            <span style={{display:"flex",alignItems:"center",gap:4,marginLeft:4}}>
+          {/* Benchmarks toggleables */}
+          {cd?.spy100&&<button onClick={()=>setShowSP(v=>!v)}
+            style={{padding:"2px 8px",borderRadius:5,border:"1px solid rgba(96,165,250,0.4)",cursor:"pointer",fontSize:10,
+              background:showSP?"rgba(96,165,250,0.15)":"transparent",color:showSP?"#60A5FA":"var(--text-muted)"}}>
+            — S&P 500
+          </button>}
+          {cd?.ccl100&&<button onClick={()=>setShowCCL(v=>!v)}
+            style={{padding:"2px 8px",borderRadius:5,border:"1px solid rgba(167,139,250,0.4)",cursor:"pointer",fontSize:10,
+              background:showCCL?"rgba(167,139,250,0.15)":"transparent",color:showCCL?"#A78BFA":"var(--text-muted)"}}>
+            — CCL
+          </button>}
+          {cd?.mep100&&<button onClick={()=>setShowMEP(v=>!v)}
+            style={{padding:"2px 8px",borderRadius:5,border:"1px solid rgba(244,114,182,0.4)",cursor:"pointer",fontSize:10,
+              background:showMEP?"rgba(244,114,182,0.15)":"transparent",color:showMEP?"#F472B6":"var(--text-muted)"}}>
+            — MEP
+          </button>}
+          {cd?.currency!=="ARS"&&cd?.t10y100&&showSP&&<span style={{fontSize:10,color:"var(--yellow)"}}>— T10Y</span>}
+          {/* UVA y CER — solo en ARS */}
+          {currency==="ARS"&&<>
+            <span style={{display:"flex",alignItems:"center",gap:2}}>
               <button onClick={()=>setShowUVA(v=>!v)}
                 style={{padding:"2px 8px",borderRadius:5,border:"1px solid rgba(251,146,60,0.4)",cursor:"pointer",fontSize:10,
                   background:showUVA?"rgba(251,146,60,0.2)":"transparent",color:showUVA?"#FB923C":"var(--text-muted)"}}>
                 — UVA
               </button>
-              {showUVA&&(
-                <span style={{display:"flex",alignItems:"center",gap:2}}>
-                  <span style={{fontSize:10,color:"#FB923C"}}>+</span>
-                  <input type="number" min="0" max="20" step="0.1" value={uvaTasa}
-                    onChange={e=>{setUvaTasa(parseFloat(e.target.value)||0); const p=PERIODS.find(x=>x.key===period); if(p)setTimeout(()=>load(p,historicos,scrubStart,scrubEnd),50);}}
-                    style={{width:42,background:"var(--bg-input)",border:"1px solid rgba(251,146,60,0.4)",borderRadius:4,padding:"1px 4px",color:"#FB923C",fontSize:10,textAlign:"center"}}/>
-                  <span style={{fontSize:10,color:"#FB923C"}}>% anual</span>
-                </span>
-              )}
+              {showUVA&&<>
+                <span style={{fontSize:10,color:"#FB923C"}}>+</span>
+                <input type="number" min="0" max="20" step="0.1" value={uvaTasa}
+                  onChange={e=>{setUvaTasa(parseFloat(e.target.value)||0); const p=PERIODS.find(x=>x.key===period); if(p)setTimeout(()=>load(p,historicos,scrubStart,scrubEnd),50);}}
+                  style={{width:42,background:"var(--bg-input)",border:"1px solid rgba(251,146,60,0.4)",borderRadius:4,padding:"1px 4px",color:"#FB923C",fontSize:10,textAlign:"center"}}/>
+                <span style={{fontSize:10,color:"#FB923C"}}>% anual</span>
+              </>}
             </span>
-          )}
-          {currency==="ARS"&&(
             <button onClick={()=>setShowCER(v=>!v)}
-              style={{padding:"2px 8px",borderRadius:5,border:"1px solid rgba(163,230,53,0.4)",cursor:"pointer",fontSize:10,marginLeft:4,
+              style={{padding:"2px 8px",borderRadius:5,border:"1px solid rgba(163,230,53,0.4)",cursor:"pointer",fontSize:10,
                 background:showCER?"rgba(163,230,53,0.15)":"transparent",color:showCER?"#A3E635":"var(--text-muted)"}}>
               — CER
             </button>
-          )}
+          </>}
         </div>
         <div style={{display:"flex",gap:4,alignItems:"center"}}>
           {PERIODS.map(p=>(

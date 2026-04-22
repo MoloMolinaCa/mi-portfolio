@@ -170,6 +170,31 @@ def bcra_get_cer_xls():
     return bars
 
 
+def argentinadatos_get_uva():
+    """Descarga la serie UVA desde argentinadatos.com. Respuesta: [{fecha, valor}]"""
+    try:
+        r = requests.get(
+            "https://api.argentinadatos.com/v1/finanzas/indices/uva",
+            timeout=15
+        )
+        if not r.ok:
+            print(f"  ✗ UVA: status {r.status_code}")
+            return []
+        arr = r.json()
+        bars = []
+        for x in arr:
+            date  = str(x.get("fecha", "")).strip()[:10]
+            valor = float(x.get("valor", 0))
+            if date and valor > 0:
+                bars.append({"date": date, "close": round(valor, 6)})
+        bars.sort(key=lambda x: x["date"])
+        print(f"  ✓ UVA (argentinadatos): {len(bars)} pts, último: {bars[-1] if bars else '—'}")
+        return bars
+    except Exception as e:
+        print(f"  ✗ UVA: {e}")
+        return []
+
+
 def estadisticasbcra_get_cer():
     """
     Descarga la serie CER desde estadisticasbcra.com (requiere token).
@@ -283,6 +308,12 @@ def main():
     cer = estadisticasbcra_get_cer()
     if cer:
         result["cer"] = merge_bars(result.get("cer", []), cer)
+
+    # UVA histórico
+    print("\n── UVA (argentinadatos) ──────────────")
+    uva = argentinadatos_get_uva()
+    if uva:
+        result["uva"] = merge_bars(result.get("uva", []), uva)
 
     # Guardar
     os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)

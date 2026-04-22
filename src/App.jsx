@@ -4397,8 +4397,7 @@ function App(){
         setTimeout(()=>refreshPrices(allTickers),100);
         return newPort;
       });
-      // Auto-descarga portfolio_tickers.json para subir al repo
-      setTimeout(()=>downloadPortfolioTickers(newTrades),300);
+      // portfolio_tickers.json se descarga manualmente desde el botón CSV
       // Si es bono/ON sin flujos cargados → disparar wizard
       const isBond = h.type==='bono_ars'||h.type==='bono_usd';
       const yaFlows = bondFlows[h.ticker.toUpperCase()]?.length > 0;

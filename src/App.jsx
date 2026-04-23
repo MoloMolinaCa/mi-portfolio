@@ -3701,7 +3701,8 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
   const [selected, setSelected]       = useState(null);
   const [loadingTicker, setLoadingTicker] = useState(null);
   const [addingFlow, setAddingFlow]   = useState(null);
-  const [newFlow, setNewFlow]         = useState({date:'',tipo:'cupon',amort:'',nota:''});
+  const [newFlow, setNewFlow]         = useState({date:'',tipo:'cupon',amort:'',nota:'',cuponMonto:''});
+  const [editingRowIds, setEditingRowIds] = useState(null); // ids de flows que se están editando
   const [viewMode, setViewMode]       = useState('micobro');
   const [cerCoef, setCerCoef]         = useState({});
   const [editingCell, setEditingCell] = useState(null); // {id, field, value} — id del flow
@@ -3983,6 +3984,26 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
     }
     setBondFlows(prev => ({...prev, [addingFlow]: [...(prev[addingFlow]||[]), ...flowsToAdd].sort((a,b)=>a.date.localeCompare(b.date))}));
     setNewFlow({date:'',tipo:'cupon',amort:'',nota:''});
+  };
+
+  // Guarda edición de una fila existente (reemplaza los flows con los mismos IDs)
+  const saveEditFlow = () => {
+    if(!newFlow.date || !editingRowIds) return;
+    const amortVal  = parseFloat(newFlow.amort)||0;
+    const cuponVal  = parseFloat(newFlow.cuponMonto)||0;
+    const dateCalcVal = newFlow.dateCalc || newFlow.date;
+    setBondFlows(prev => {
+      const flows = (prev[addingFlow]||[]).map(f => {
+        if(!editingRowIds.includes(f.id)) return f;
+        if(f.tipo==='amortizacion') return {...f, date:newFlow.date, dateCalc:dateCalcVal, monto:amortVal, nota:newFlow.nota||f.nota};
+        if(f.tipo==='cupon')        return {...f, date:newFlow.date, dateCalc:dateCalcVal, monto:cuponVal, nota:newFlow.nota||f.nota};
+        return f;
+      });
+      return {...prev, [addingFlow]: flows.sort((a,b)=>a.date.localeCompare(b.date))};
+    });
+    setEditingRowIds(null);
+    setAddingFlow(null);
+    setNewFlow({date:'',tipo:'cupon',amort:'',nota:'',cuponMonto:''});
   };
 
   // ── Próximos pagos — todos los pagos futuros de todos los bonos, ordenados cronológicamente
@@ -4413,11 +4434,19 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
 
             {/* Form agregar pago */}
             {addingFlow===selected&&(
-              <div style={{background:'rgba(59,130,246,0.06)',border:'1px solid rgba(59,130,246,0.15)',borderRadius:10,padding:'14px 16px',marginBottom:12,display:'flex',gap:10,alignItems:'flex-end',flexWrap:'wrap'}}>
+              <div style={{background:editingRowIds?'rgba(96,165,250,0.06)':'rgba(59,130,246,0.06)',border:`1px solid ${editingRowIds?'rgba(96,165,250,0.3)':'rgba(59,130,246,0.15)'}`,borderRadius:10,padding:'14px 16px',marginBottom:12,display:'flex',gap:10,alignItems:'flex-end',flexWrap:'wrap'}}>
+                {editingRowIds&&<div style={{width:'100%',fontSize:11,color:'#60A5FA',fontWeight:600,marginBottom:2}}>✏️ Editando fila — modificá los campos y guardá</div>}
+                {/* F. Pago */}
                 <div style={{display:'flex',flexDirection:'column',gap:4,minWidth:130}}>
-                  <span style={{fontSize:10,color:'var(--text-muted)'}}>Fecha</span>
+                  <span style={{fontSize:10,color:'var(--text-muted)'}}>F. Pago</span>
                   <input type="date" value={newFlow.date} onChange={e=>setNewFlow(p=>({...p,date:e.target.value}))} style={inp}/>
                 </div>
+                {/* F. Teórica */}
+                <div style={{display:'flex',flexDirection:'column',gap:4,minWidth:130}}>
+                  <span style={{fontSize:10,color:'var(--text-muted)'}}>F. Teórica (cálculo)</span>
+                  <input type="date" value={newFlow.dateCalc||newFlow.date} onChange={e=>setNewFlow(p=>({...p,dateCalc:e.target.value}))} style={{...inp,color:'var(--text-secondary)'}}/>
+                </div>
+                {/* Tipo */}
                 <div style={{display:'flex',flexDirection:'column',gap:4,minWidth:140}}>
                   <span style={{fontSize:10,color:'var(--text-muted)'}}>Tipo</span>
                   <select value={newFlow.tipo} onChange={e=>setNewFlow(p=>({...p,tipo:e.target.value}))} style={inp}>
@@ -4426,37 +4455,45 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                     <option value="ambos">💰+🎫 Amort.+Cupón</option>
                   </select>
                 </div>
+                {/* Amort */}
                 {(newFlow.tipo==='amortizacion'||newFlow.tipo==='ambos')&&(
-                  <div style={{display:'flex',flexDirection:'column',gap:4,minWidth:120}}>
+                  <div style={{display:'flex',flexDirection:'column',gap:4,minWidth:110}}>
                     <span style={{fontSize:10,color:'var(--text-muted)'}}>Amort. % VN</span>
                     <input type="number" step="0.0001" value={newFlow.amort} onChange={e=>setNewFlow(p=>({...p,amort:e.target.value}))} placeholder="ej: 4.5455" style={inp}/>
                   </div>
                 )}
+                {/* Cupón — editable si modo edición, calculado si modo nuevo */}
+                {(newFlow.tipo==='cupon'||newFlow.tipo==='ambos')&&(
+                  <div style={{display:'flex',flexDirection:'column',gap:4,minWidth:110}}>
+                    <span style={{fontSize:10,color:'var(--text-muted)'}}>{editingRowIds?'Cupón % VN':'Interés calculado'}</span>
+                    {editingRowIds
+                      ? <input type="number" step="0.000001" value={newFlow.cuponMonto} onChange={e=>setNewFlow(p=>({...p,cuponMonto:e.target.value}))} placeholder="ej: 3.25" style={{...inp,color:'var(--accent)',fontWeight:700}}/>
+                      : <div style={{...inp,background:'transparent',color:'var(--accent)',fontWeight:700,textAlign:'right'}}>
+                          {(()=>{
+                            if(!newFlow.date) return '—';
+                            const meta2 = bondMeta[addingFlow]||{tna:0,base:'30/360'};
+                            const flows2 = (bondFlows[addingFlow]||[]).sort((a,b)=>a.date.localeCompare(b.date));
+                            let vn2=100;
+                            flows2.forEach(f=>{if(f.date<newFlow.date&&f.tipo==='amortizacion')vn2=Math.max(0,vn2-f.monto);});
+                            const prevDates2=[...new Set(flows2.map(f=>f.date))].filter(d=>d<newFlow.date).sort();
+                            const prev2=prevDates2.length?prevDates2[prevDates2.length-1]:newFlow.date;
+                            const dc=meta2.base==='30/360'?dias30_360(prev2,newFlow.date):diasReales(prev2,newFlow.date);
+                            return fmtN(calcInteres(meta2.tna,meta2.base,dc,vn2))+'%';
+                          })()}
+                        </div>
+                    }
+                  </div>
+                )}
+                {/* Nota */}
                 <div style={{display:'flex',flexDirection:'column',gap:4,minWidth:130}}>
                   <span style={{fontSize:10,color:'var(--text-muted)'}}>Nota (opcional)</span>
                   <input value={newFlow.nota} onChange={e=>setNewFlow(p=>({...p,nota:e.target.value}))} placeholder="ej: cuota 5/22" style={inp}/>
                 </div>
-                <div style={{display:'flex',flexDirection:'column',gap:4,fontSize:10,color:'var(--text-muted)'}}>
-                  <span>Interés calculado</span>
-                  <div style={{...inp,background:'transparent',color:'var(--accent)',fontWeight:700,minWidth:80,textAlign:'right'}}>
-                    {(()=>{
-                      if(!newFlow.date||(newFlow.tipo==='amortizacion')) return '—';
-                      const meta2 = bondMeta[addingFlow]||{tna:0,base:'30/360'};
-                      const flows2 = (bondFlows[addingFlow]||[]).sort((a,b)=>a.date.localeCompare(b.date));
-                      let vn2=100;
-                      flows2.forEach(f=>{if(f.date<newFlow.date&&f.tipo==='amortizacion')vn2=Math.max(0,vn2-f.monto);});
-                      const prevDates2=[...new Set(flows2.map(f=>f.date))].filter(d=>d<newFlow.date).sort();
-                      const prev2=prevDates2.length?prevDates2[prevDates2.length-1]:newFlow.date;
-                      const dc=meta2.base==='30/360'?dias30_360(prev2,newFlow.date):diasReales(prev2,newFlow.date);
-                      return fmtN(calcInteres(meta2.tna,meta2.base,dc,vn2))+'%';
-                    })()}
-                  </div>
-                </div>
-                <button onClick={addNewFlow}
+                <button onClick={editingRowIds ? saveEditFlow : addNewFlow}
                   style={{background:'var(--accent)',border:'none',borderRadius:8,padding:'7px 16px',color:'#fff',cursor:'pointer',fontSize:13,fontWeight:600}}>
-                  Guardar
+                  {editingRowIds ? '✓ Guardar cambios' : 'Guardar'}
                 </button>
-                <button onClick={()=>setAddingFlow(null)}
+                <button onClick={()=>{setAddingFlow(null);setEditingRowIds(null);setNewFlow({date:'',tipo:'cupon',amort:'',nota:'',cuponMonto:'',dateCalc:''});}}
                   style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:8,padding:'7px 12px',color:'var(--text-muted)',cursor:'pointer',fontSize:13}}>
                   Cancelar
                 </button>
@@ -4529,8 +4566,8 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                               <td style={{...tdPL,fontWeight:600,color:isCobrado?'var(--green)':isPast?'var(--yellow)':'var(--text-primary)'}}>
                                 {fmtD(row.date)}{isCobrado&&<span style={{fontSize:9,marginLeft:5,color:'var(--green)'}}>✓</span>}
                               </td>
-                              <td style={{...tdPL,fontSize:10,color:'var(--text-muted)'}}>
-                                {row.dateCalc && row.dateCalc!==row.date ? fmtD(row.dateCalc) : <span style={{opacity:0.3}}>—</span>}
+                              <td style={{...tdPL,fontSize:10,color:row.dateCalc&&row.dateCalc!==row.date?'var(--text-secondary)':'var(--text-muted)'}}>
+                                {fmtD(row.dateCalc||row.date)}
                               </td>
                               <td style={{...tdP,color:'var(--text-muted)'}}>{dias}</td>
                               {/* Amort — input siempre visible en todas las filas */}
@@ -4599,17 +4636,19 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                               </td>
                               <td style={{...tdP,textAlign:'center',whiteSpace:'nowrap'}}>
                                 <button onClick={()=>{
-                                    // Abrir fila de addingFlow con los datos pre-cargados de esta fila
                                     setAddingFlow(selected);
-                                    const f = row.cupon||row.amort;
+                                    setEditingRowIds(row.ids);
+                                    const tipoKey = row.cupon&&row.amort?'ambos':row.amort?'amortizacion':'cupon';
                                     setNewFlow({
-                                      date: f?.date||row.date,
-                                      tipo: row.cupon&&row.amort?'amort_cupon':row.amort?'amortizacion':'cupon',
-                                      amort: row.amort?.monto||'',
-                                      nota: f?.nota||''
+                                      date:      row.date,
+                                      dateCalc:  row.dateCalc||row.date,
+                                      tipo:      tipoKey,
+                                      amort:     row.amort?.monto!=null?String(row.amort.monto):'',
+                                      cuponMonto:row.cupon?.monto!=null?String(row.cupon.monto):'',
+                                      nota:      (row.cupon||row.amort)?.nota||''
                                     });
                                   }}
-                                  title="Editar" style={{background:'transparent',border:'none',cursor:'pointer',color:'var(--text-muted)',fontSize:11,padding:'0 2px'}}>✏️</button>
+                                  title="Editar" style={{background:'transparent',border:'none',cursor:'pointer',color:'#60A5FA',fontSize:11,padding:'0 2px'}}>✏️</button>
                                 <button onClick={()=>deleteRow(selected,row.ids)}
                                   title="Eliminar" style={{background:'transparent',border:'none',cursor:'pointer',color:'var(--red)',fontSize:12,padding:'0 2px'}}>🗑</button>
                               </td>

@@ -1538,6 +1538,20 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
   const lbl = {fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,display:"block",marginBottom:5,fontWeight:600};
   const btn = (color) => ({background:color,border:"none",borderRadius:8,padding:"9px 20px",color:"#fff",cursor:"pointer",fontSize:13,fontWeight:600});
 
+  // ── Helpers de cálculo (mirror de FlujoTab) ──────────────────────────────
+  const dias30_360wiz = (d1str, d2str) => {
+    const a=new Date(d1str+'T12:00:00'), b=new Date(d2str+'T12:00:00');
+    const [y1,m1,day1]=[a.getFullYear(),a.getMonth()+1,a.getDate()];
+    const [y2,m2,day2]=[b.getFullYear(),b.getMonth()+1,b.getDate()];
+    const D1=Math.min(day1,30);
+    const D2=(day1>=30&&day2===31)?30:day2;
+    return (y2-y1)*360+(m2-m1)*30+(D2-D1);
+  };
+  const diasRealesWiz = (d1str, d2str) =>
+    Math.max(0, Math.round((new Date(d2str+'T12:00:00')-new Date(d1str+'T12:00:00'))/(1000*60*60*24)));
+  const calcDiasWiz = (base, d1str, d2str) =>
+    base==='30/360' ? dias30_360wiz(d1str,d2str) : diasRealesWiz(d1str,d2str);
+
   // Genera tabla de filas — dos fechas por fila:
   //   dateCalc: fecha teórica (para cálculo de días/intereses, puede ser inhábil)
   //   datePago: siguiente día hábil (fecha efectiva de cobro)
@@ -1589,8 +1603,7 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
     let prevCalcDate = emisionDate || primerCupon;
 
     const rows = calcDates.map((dateCalc, i) => {
-      const d1 = new Date(prevCalcDate+'T12:00:00'), d2 = new Date(dateCalc+'T12:00:00');
-      const dias = Math.max(0, Math.round((d2-d1)/(1000*60*60*24)));
+      const dias = calcDiasWiz(params.base, prevCalcDate, dateCalc);
       const cupon = parseFloat((tnaNum * dias/divisor * vnResidual).toFixed(6));
       const esUltimo = i === calcDates.length-1;
       const amort = amortTipo==='bullet' ? (esUltimo ? 100 : 0) : amortPorCuota;
@@ -1647,8 +1660,7 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
       let vnResidual = 100;
       const newRows = sorted.map((row) => {
         const calcDate = row.dateCalc || row.date;
-        const d1 = new Date(prevDate+'T12:00:00'), d2 = new Date(calcDate+'T12:00:00');
-        const dias = Math.max(0, Math.round((d2-d1)/(1000*60*60*24)));
+        const dias = calcDiasWiz(params.base, prevDate, calcDate);
         const cupon = parseFloat((tnaNum * dias/divisorR * vnResidual).toFixed(6));
         const newRow = {...row, dias, cupon};
         vnResidual = parseFloat(Math.max(0, vnResidual - (parseFloat(row.amort)||0)).toFixed(6));

@@ -3353,6 +3353,16 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
       return price*qtyF/(cclBar?.close||fxRate);
     };
 
+    // Helper: precio más cercano a una fecha (maneja feriados/fines de semana)
+    const closestPrice = (bars, dateStr) => {
+      if(!bars||!bars.length) return null;
+      // Preferir el último bar <= dateStr (precio de cierre anterior)
+      const before = bars.filter(b=>b.date<=dateStr);
+      if(before.length) return before[before.length-1].close;
+      // Si no hay barra anterior, usar la más cercana posterior
+      return bars[0].close;
+    };
+
     // Reconstruir qty de cada ticker al inicio del período desde trades
     const qtyAtStart = {};
     const allTickers = [...new Set(en.map(h=>h.ticker))];
@@ -3383,13 +3393,15 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
 
       if(qtyStart > 0){
         // Tenía posición al inicio — base = precio al startDate
-        const startBar = bars.filter(b=>b.date>=startDate)[0];
-        if(startBar){
-          basePrice = startBar.close;
-          baseDate  = startBar.date;
+        const startPrice = closestPrice(bars, startDate);
+        if(startPrice){
+          basePrice = startPrice;
+          // Buscar la fecha real de la barra usada
+          const before = bars.filter(b=>b.date<=startDate);
+          baseDate  = before.length ? before[before.length-1].date : startDate;
           qtyBase   = qtyStart;
         } else {
-          // Sin historial para ese período — usar precio de compra
+          // Sin historial — usar precio de compra
           basePrice = h.buyPrice||0;
           baseDate  = startDate;
           qtyBase   = qtyStart;

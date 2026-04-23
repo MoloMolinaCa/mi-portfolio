@@ -3408,17 +3408,24 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
           usedBuyPrice = true;
         }
       } else {
-        // Comprado durante el período — base = precio promedio de compras en el período
-        const periodBuys = trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra"&&t.date>=startDate&&t.date<=endDate);
-        if(!periodBuys.length){ basePrice=h.buyPrice||0; usedBuyPrice=true; }
-        else {
+        // Comprado durante el período — base para retPct = precio histórico al inicio si existe
+        // (para mostrar cómo se movió el activo en el período aunque no lo tuvieras)
+        const startPrice2 = closestPrice(bars, startDate);
+        if(startPrice2){
+          basePrice = startPrice2;
+          const before2 = bars.filter(b=>b.date<=startDate);
+          baseDate  = before2.length ? before2[before2.length-1].date : startDate;
+          usedBuyPrice = false; // hay precio real
+        } else {
+          // Sin historial — usar primer precio de compra del período
+          const periodBuys = trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra"&&t.date>=startDate&&t.date<=endDate);
           const totalQty = periodBuys.reduce((a,t)=>a+t.qty,0);
           const totalCost= periodBuys.reduce((a,t)=>a+t.qty*t.price,0);
           basePrice = totalQty>0 ? totalCost/totalQty : h.buyPrice||0;
-          usedBuyPrice = true; // es precio de compra pero dentro del período — correcto
+          baseDate  = periodBuys[0]?.date||startDate;
+          usedBuyPrice = true;
         }
-        baseDate  = trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra"&&t.date>=startDate)[0]?.date||startDate;
-        qtyBase   = qtyEnd;
+        qtyBase = 0; // no tenía posición al inicio → valInicio = 0
       }
 
       if(!basePrice) return null;

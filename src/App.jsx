@@ -3432,15 +3432,42 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
         if(ratio < 0.02) adjBase  = adjBase/100;
       }
 
-      const qtyFactorBase = isBond ? qtyBase/100 : qtyBase;
-      const qtyFactorEnd  = isBond ? qtyEnd/100  : qtyEnd;
-
-      const valBuy = getUSDprice(adjBase,  baseDate, h.buyCurrency, qtyFactorBase);
-      const valEnd = getUSDprice(adjClose, endDate,  h.buyCurrency, qtyFactorEnd);
+      // Rend. %: rendimiento del precio en el período (siempre precio base → precio actual)
       const retPct = ((adjClose - adjBase)/adjBase)*100;
-      const pnlUSD = valEnd - valBuy;
 
-      return {...h, retPct, pnlUSD, valBuy, valEnd, basePrice:adjBase, adjClose,
+      // P&L real del período usando flujos de caja:
+      // P&L = valor_final - valor_inicial - compras_del_período + ventas_del_período
+      const qtyFactor = (qty) => isBond ? qty/100 : qty;
+      const toCCL     = (price, date) => {
+        if(h.buyCurrency==="USD") return price;
+        const cclBar = cclBars.filter(b=>b.date<=date).pop();
+        return price / (cclBar?.close||fxRate);
+      };
+
+      // Valor al inicio del período (qtyStart × precio al inicio)
+      const valInicio = qtyStart>0 ? toCCL(adjBase, baseDate) * qtyFactor(qtyStart) : 0;
+
+      // Valor al final del período (qtyEnd × precio actual)
+      const valFinal = toCCL(adjClose, endDate) * qtyFactor(qtyEnd);
+
+      // Compras durante el período (cash saliente → resta)
+      const periodBuysCF  = trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra"&&t.date>=startDate&&t.date<=endDate);
+      const cashCompras = periodBuysCF.reduce((a,t)=>{
+        const f = isBond ? t.qty/100 : t.qty;
+        return a + toCCL(t.price, t.date) * f;
+      }, 0);
+
+      // Ventas durante el período (cash entrante → suma)
+      const periodSellsCF = trades.filter(t=>t.ticker===h.ticker&&t.tipo==="venta"&&t.date>=startDate&&t.date<=endDate);
+      const cashVentas = periodSellsCF.reduce((a,t)=>{
+        const f = isBond ? t.qty/100 : t.qty;
+        return a + toCCL(t.price, t.date) * f;
+      }, 0);
+
+      const pnlUSD = valFinal - valInicio - cashCompras + cashVentas;
+      const valEnd = valFinal; // para compatibilidad
+
+      return {...h, retPct, pnlUSD, valBuy:valInicio, valEnd, basePrice:adjBase, adjClose,
                usedBuyPrice, baseDate, qtyStart, buyPrice:h.buyPrice||0};
     }).filter(Boolean);
   },[en,historicos,trades,startDate,endDate,fxRate,period]);

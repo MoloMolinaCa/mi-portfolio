@@ -3673,6 +3673,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
     });
   };
   const [metaDraft, setMetaDraft] = useState({tna:'', base:'30/360', emisionDate:''});
+  const [wizardFlujosOpen, setWizardFlujosOpen] = useState(false); // BondWizard inline en FlujoTab
   // CER: serie histórica {date:string, valor:number}[], cacheada en memoria
   // CER: se lee desde historicos.json — cargado por update_historicos.py
   // No hace fetch desde el browser (evita CORS)
@@ -4305,6 +4306,10 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                     <span style={{fontSize:10,color:'var(--text-muted)',marginLeft:4}}>✏️</span>
                   </div>
                 )}
+                <button onClick={()=>setWizardFlujosOpen(true)}
+                  style={{background:'rgba(59,130,246,0.12)',border:'1px solid rgba(59,130,246,0.3)',borderRadius:6,padding:'5px 12px',cursor:'pointer',color:'#60A5FA',fontSize:12,fontWeight:600}}>
+                  ⚡ Carga rápida
+                </button>
                 <button onClick={()=>setAddingFlow(selected)}
                   style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:6,padding:'5px 12px',cursor:'pointer',color:'var(--text-secondary)',fontSize:12}}>
                   + Agregar pago
@@ -4637,6 +4642,35 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
         )}
       </div>
     </div>
+
+    {/* BondWizard inline — carga rápida desde FlujoTab */}
+    {wizardFlujosOpen && selected && (
+      <BondWizard
+        ticker={selected}
+        darkMode={true}
+        onConfirm={(newFlows)=>{
+          const existing = bondFlows[selected]||[];
+          if(existing.length > 0){
+            const replace = window.confirm(
+              `Ya hay ${existing.length} flujo(s) cargados para ${selected}.\n\n` +
+              `¿Reemplazar todo? (Cancelar = agregar al final)`
+            );
+            if(replace){
+              setBondFlows(prev=>({...prev,[selected]:newFlows}));
+            } else {
+              // Merge: agregar nuevos evitando duplicados de fecha+tipo
+              const existingKeys = new Set(existing.map(f=>f.date+'|'+f.tipo));
+              const toAdd = newFlows.filter(f=>!existingKeys.has(f.date+'|'+f.tipo));
+              setBondFlows(prev=>({...prev,[selected]:[...existing,...toAdd].sort((a,b)=>a.date.localeCompare(b.date))}));
+            }
+          } else {
+            setBondFlows(prev=>({...prev,[selected]:newFlows}));
+          }
+          setWizardFlujosOpen(false);
+        }}
+        onSkip={()=>setWizardFlujosOpen(false)}
+      />
+    )}
   );
 }
 

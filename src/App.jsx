@@ -3341,7 +3341,11 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
     return twr.map(p=>({date:p.date, close:p.val}));
   },[en, historicos, trades, startDate, endDate, fxRate]);
 
-  // Contribución al rendimiento — desde precio de compra (consistente con P&L total)
+  const [sortContrib, setSortContrib] = useState("contrib"); // "contrib"|"pnl"|"rend"
+
+  // Contribución al rendimiento
+  // retPct: rendimiento DENTRO del período (desde startBar o buyPrice si comprado después)
+  // pnlUSD: P&L en USD del período
   const contributions = useMemo(()=>{
     const cclBars = historicos?.CCL||[];
     return en.map(h=>{
@@ -3355,16 +3359,37 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
         const cclBar=cclBars.filter(b=>b.date<=date).pop();
         return price*qtyFactor/(cclBar?.close||fxRate);
       };
-      // Usar precio de compra promedio ponderado (FIFO aproximado = buyPrice guardado)
-      const buyPrice = h.buyPrice||0;
-      if(!buyPrice) return null;
-      const valBuy = getUSD(buyPrice, h.buyDate||startDate);
-      const valEnd = getUSD(endBar.close, endBar.date);
-      const retPct = ((endBar.close - buyPrice)/buyPrice)*100;
+      // Precio base del período: si el activo fue comprado DESPUÉS del startDate
+      // usar buyPrice; si fue comprado ANTES, usar el precio al inicio del período
+      const buyDate = h.buyDate||startDate;
+      let basePrice, baseDate;
+      if(buyDate >= startDate){
+        // Comprado dentro del período → base = precio de compra
+        basePrice = h.buyPrice||0;
+        baseDate  = buyDate;
+      } else {
+        // Comprado antes → base = primer precio disponible desde startDate
+        const startBar = bars.filter(b=>b.date>=startDate)[0];
+        basePrice = startBar?.close || h.buyPrice||0;
+        baseDate  = startBar?.date || startDate;
+      }
+      if(!basePrice) return null;
+      const valBuy = getUSD(basePrice, baseDate);
+      const valEnd = getUSD(endBar.close, endDate);
+      const retPct = ((endBar.close - basePrice)/basePrice)*100;
       const pnlUSD = valEnd - valBuy;
-      return {...h, retPct, pnlUSD, valBuy, valEnd, buyPrice};
-    }).filter(Boolean).sort((a,b)=>Math.abs(b.pnlUSD)-Math.abs(a.pnlUSD));
+      return {...h, retPct, pnlUSD, valBuy, valEnd, basePrice, buyPrice:h.buyPrice||0};
+    }).filter(Boolean);
   },[en,historicos,startDate,endDate,fxRate]);
+
+  const contributionsSorted = useMemo(()=>{
+    const arr = [...contributions];
+    if(sortContrib==="pnl")    return arr.sort((a,b)=>b.pnlUSD-a.pnlUSD);
+    if(sortContrib==="rend")   return arr.sort((a,b)=>b.retPct-a.retPct);
+    // contrib: por contribución absoluta al portfolio
+    const totalAbs = contributions.reduce((a,c)=>a+Math.abs(c.pnlUSD),0)||1;
+    return arr.sort((a,b)=>Math.abs(b.pnlUSD)-Math.abs(a.pnlUSD));
+  },[contributions,sortContrib]);
 
   const totalPnlUSD = contributions.reduce((a,c)=>a+c.pnlUSD,0);
 
@@ -3451,7 +3476,19 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
 
       {/* Contribución al rendimiento */}
       <div style={{...card,padding:"16px 20px"}}>
-        {sectionTitle("Contribución al rendimiento · desde precio de compra")}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          {sectionTitle("Contribución al rendimiento · " + (selP.key==="todo"?"desde precio de compra":"rendimiento del período"))}
+          <div style={{display:"flex",gap:6,alignItems:"center"}}>
+            <span style={{fontSize:10,color:"var(--text-muted)"}}>Ordenar:</span>
+            {[["contrib","Contribución"],["pnl","P&L USD"],["rend","Rendimiento"]].map(([k,l])=>(
+              <button key={k} onClick={()=>setSortContrib(k)}
+                style={{padding:"3px 10px",borderRadius:5,border:"1px solid var(--border)",cursor:"pointer",fontSize:10,fontWeight:sortContrib===k?700:400,
+                  background:sortContrib===k?"var(--accent)":"var(--bg-input)",color:sortContrib===k?"#fff":"var(--text-secondary)"}}>
+                {l}
+              </button>
+            ))}
+          </div>
+        </div>
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
             <thead>
@@ -3462,14 +3499,13 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
               </tr>
             </thead>
             <tbody>
-              {contributions.map(h=>{
+              {contributionsSorted.map(h=>{
                 const contrib = totalPnlUSD!==0 ? (h.pnlUSD/Math.abs(totalPnlUSD))*100 : 0;
                 const barW = Math.min(100,Math.abs(contrib));
                 return(
                   <tr key={h.ticker} style={{borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
                     <td style={{padding:"8px 12px"}}>
                       <span style={{fontWeight:700,fontFamily:"'DM Mono',monospace",color:"var(--accent)",fontSize:12}}>{h.ticker}</span>
-                      <span style={{fontSize:10,color:"var(--text-muted)",marginLeft:8,display:"none"}}>{h.name}</span>
                     </td>
                     <td style={{padding:"8px 12px",fontSize:10,color:"var(--text-muted)"}}>{ASSET_TYPES[h.type]?.icon} {ASSET_TYPES[h.type]?.label}</td>
                     <td style={{padding:"8px 12px",textAlign:"right",fontWeight:600,color:pc(h.retPct)}}>{fmtP(h.retPct)}</td>
@@ -3563,7 +3599,10 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
 
       {/* Correlación entre activos */}
       <div style={{...card,padding:"16px 20px"}}>
-        {sectionTitle("Correlación entre activos · retornos diarios")}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          {sectionTitle("Correlación entre activos · retornos diarios")}
+          <span style={{fontSize:10,color:"var(--text-muted)",fontStyle:"italic"}}>⚠ No aplica filtro de período — usa todo el histórico disponible</span>
+        </div>
         {(()=>{
           // Solo activos con suficientes datos en el período
           const activos = en.filter(h=>{
@@ -3637,40 +3676,6 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
             </div>
           );
         })()}
-      </div>
-
-      {/* Ranking por período */}
-      <div style={{...card,padding:"16px 20px"}}>
-        {sectionTitle("Ranking de activos · rendimiento del período")}
-        <div style={{overflowX:"auto"}}>
-          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-            <thead>
-              <tr style={{borderBottom:"1px solid var(--border)"}}>
-                {["#","Ticker","Nombre","Tipo","Precio compra","Precio actual","Rend. total","P&L USD","vs S&P"].map((h,i)=>(
-                  <th key={i} style={{padding:"6px 12px",textAlign:i>=4?"right":"left",fontSize:10,color:"var(--text-muted)",fontWeight:600,textTransform:"uppercase",letterSpacing:0.8,whiteSpace:"nowrap"}}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {[...contributions].sort((a,b)=>b.retPct-a.retPct).map((h,i)=>{
-                const vsSP = spReturn!=null ? h.retPct - spReturn : null;
-                return(
-                  <tr key={h.ticker} style={{borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
-                    <td style={{padding:"8px 12px",color:"var(--text-muted)",fontSize:11}}>{i+1}</td>
-                    <td style={{padding:"8px 12px",fontWeight:700,fontFamily:"'DM Mono',monospace",color:"var(--accent)"}}>{h.ticker}</td>
-                    <td style={{padding:"8px 12px",color:"var(--text-secondary)",maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontSize:11}}>{h.name}</td>
-                    <td style={{padding:"8px 12px",fontSize:10,color:"var(--text-muted)"}}>{ASSET_TYPES[h.type]?.icon}</td>
-                    <td style={{padding:"8px 12px",textAlign:"right",color:"var(--text-muted)",fontSize:11,fontFamily:"'DM Mono',monospace"}}>{h.buyPrice?fmtU(h.buyPrice,2):"—"}</td>
-                    <td style={{padding:"8px 12px",textAlign:"right",fontSize:11,fontFamily:"'DM Mono',monospace"}}>{fmtU(h.currentPrice,2)}</td>
-                    <td style={{padding:"8px 12px",textAlign:"right",fontWeight:700,color:pc(h.retPct)}}>{fmtP(h.retPct)}</td>
-                    <td style={{padding:"8px 12px",textAlign:"right",color:pc(h.pnlUSD)}}>{hideAmounts?"••••":(h.pnlUSD>=0?"+":"")+fmtU(h.pnlUSD,0)}</td>
-                    <td style={{padding:"8px 12px",textAlign:"right",color:vsSP!=null?pc(vsSP):"var(--text-muted)",fontWeight:600}}>{vsSP!=null?fmtP(vsSP):"—"}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
       </div>
 
     </div>
@@ -5298,7 +5303,7 @@ function App(){
 
         {/* Nav */}
         <div style={{background:"var(--bg-card)",borderBottom:"1px solid var(--border)",padding:"0 20px",display:"flex",gap:0}}>
-          {[["dashboard","📊 Dashboard"],["portfolio","💼 Portfolio"],["analisis","🔍 Análisis"],["operaciones","📋 Operaciones"],["flujos","💸 Flujos"]].map(([id,lbl])=>(
+          {[["dashboard","📊 Dashboard"],["portfolio","💼 Portfolio"],["analisis","🔍 Análisis"],["flujos","💸 Flujos"],["operaciones","📋 Operaciones"]].map(([id,lbl])=>(
             <button key={id} onClick={()=>setTab(id)} className="nav-btn" style={{padding:"13px 18px",background:"transparent",border:"none",borderBottom:tab===id?"2px solid var(--accent)":"2px solid transparent",color:tab===id?"var(--text-primary)":"var(--text-muted)",cursor:"pointer",fontSize:13,fontWeight:tab===id?600:400,letterSpacing:tab===id?"-0.1px":0}}>
               {lbl}
             </button>

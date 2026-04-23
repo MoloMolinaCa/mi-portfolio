@@ -1503,13 +1503,16 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
     return new Set();
   };
   // Avanzar al siguiente día hábil (lunes-viernes, sin feriados AR)
+  // Usar T12:00:00 para evitar desfase UTC en timezones negativas (Argentina UTC-3)
   const nextBusinessDay = async (dateStr) => {
-    const d = new Date(dateStr);
+    const d = new Date(dateStr + 'T12:00:00');
     for(let i=0;i<20;i++){
-      const dow=d.getDay();
-      const ds=d.toISOString().slice(0,10);
-      const fer=feriadosWiz.current[d.getFullYear()]||await fetchFeriadosWiz(d.getFullYear());
-      if(dow!==0&&dow!==6&&!fer.has(ds)) return ds;
+      // getDay() sobre fecha con hora local → día correcto en Argentina
+      const dow = d.getDay();
+      // Reconstruir string YYYY-MM-DD desde componentes locales para evitar desfase UTC
+      const ds = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      const fer = feriadosWiz.current[d.getFullYear()] || await fetchFeriadosWiz(d.getFullYear());
+      if(dow!==0 && dow!==6 && !fer.has(ds)) return ds;
       d.setDate(d.getDate()+1);
     }
     return dateStr; // fallback
@@ -1525,6 +1528,7 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
     cuotas: '',
     emisionDate: '',
     primerCupon: '', // fecha exacta del primer cupón (YYYY-MM-DD) — el schedule se proyecta desde acá
+    base: '30/360',  // base de cálculo: '30/360' | 'dias/365'
     ajuste: 'ninguno', // ninguno | CER | UVA
   });
   const [generatedFlows, setGeneratedFlows] = useState(null);
@@ -1553,14 +1557,18 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
     const endYear = endDate.getFullYear();
     for(let y=startYear; y<=endYear; y++) await fetchFeriadosWiz(y);
 
+    // Helper: construir YYYY-MM-DD desde componentes locales (evita desfase UTC en AR)
+    const toLocalStr = (d) => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+
     // Generar fechas teóricas (dateCalc): primer cupón + freqMonths sucesivos, mismo día
     const calcDates = [primerCupon]; // primera fecha exacta como la ingresó el usuario
-    const cur = new Date(firstDate);
+    const cur = new Date(primerCupon+'T12:00:00');
     cur.setMonth(cur.getMonth() + freqMonths);
-    while(cur < endDate){
+    while(cur <= endDate){
       const year=cur.getFullYear(), month=cur.getMonth();
       const lastDay = new Date(year, month+1, 0).getDate();
-      calcDates.push(new Date(year, month, Math.min(diaNum,lastDay)).toISOString().slice(0,10));
+      // Usar hora 12 para evitar desfase, construir string local
+      calcDates.push(toLocalStr(new Date(year, month, Math.min(diaNum,lastDay), 12)));
       cur.setMonth(cur.getMonth() + freqMonths);
     }
     // Asegurar que el vto esté incluido al final
@@ -1574,6 +1582,7 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
       calcDates.map((d,i) => i===calcDates.length-1 ? Promise.resolve(d) : nextBusinessDay(d))
     );
 
+    const divisor = params.base === 'dias/365' ? 365 : 360;
     const amortPorCuota = amortTipo==='bullet' ? 0 : (cuotas ? parseFloat((100/parseInt(cuotas)).toFixed(6)) : 0);
     let vnResidual = 100;
     // Cálculo de días usa fechas TEÓRICAS (dateCalc), empezando desde la emisión
@@ -1582,7 +1591,7 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
     const rows = calcDates.map((dateCalc, i) => {
       const d1 = new Date(prevCalcDate+'T12:00:00'), d2 = new Date(dateCalc+'T12:00:00');
       const dias = Math.max(0, Math.round((d2-d1)/(1000*60*60*24)));
-      const cupon = parseFloat((tnaNum * dias/360 * vnResidual).toFixed(6));
+      const cupon = parseFloat((tnaNum * dias/divisor * vnResidual).toFixed(6));
       const esUltimo = i === calcDates.length-1;
       const amort = amortTipo==='bullet' ? (esUltimo ? 100 : 0) : amortPorCuota;
       const row = {dateCalc, datePago:pagoDates[i], dias, cupon, amort, vnResidual};
@@ -1603,7 +1612,8 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
       const calc = row.dateCalc || pago;
       const diffDias = (pago !== calc) ? ` · pago ${pago}` : '';
       if(row.cupon > 0){
-        flows.push({id:id++, date:pago, dateCalc:calc, tipo:'cupon', monto:row.cupon, cobrado:false, fechaCobro:null, fuente:'wizard', nota:`${row.dias}d · ${params.tna}%×${row.dias}/360${diffDias}`});
+        const divisorNota = params.base==='dias/365'?365:360;
+        flows.push({id:id++, date:pago, dateCalc:calc, tipo:'cupon', monto:row.cupon, cobrado:false, fechaCobro:null, fuente:'wizard', nota:`${row.dias}d · ${params.tna}%×${row.dias}/${divisorNota}${diffDias}`});
       }
       if(row.amort > 0){
         flows.push({id:id++, date:pago, dateCalc:calc, tipo:'amortizacion', monto:row.amort, cobrado:false, fechaCobro:null, fuente:'wizard', nota:`Amort. ${row.amort.toFixed(4)}%${diffDias}`});
@@ -1630,6 +1640,7 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
     setRecalculating(true);
     try{
       const tnaNum = parseFloat(params.tna)/100;
+      const divisorR = params.base==='dias/365' ? 365 : 360;
       // Ordenar por fecha teórica
       const sorted = [...editRows].sort((a,b)=>(a.dateCalc||a.date).localeCompare(b.dateCalc||b.date));
       let prevDate = params.emisionDate || (sorted[0].dateCalc||sorted[0].date);
@@ -1638,7 +1649,7 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
         const calcDate = row.dateCalc || row.date;
         const d1 = new Date(prevDate+'T12:00:00'), d2 = new Date(calcDate+'T12:00:00');
         const dias = Math.max(0, Math.round((d2-d1)/(1000*60*60*24)));
-        const cupon = parseFloat((tnaNum * dias/360 * vnResidual).toFixed(6));
+        const cupon = parseFloat((tnaNum * dias/divisorR * vnResidual).toFixed(6));
         const newRow = {...row, dias, cupon};
         vnResidual = parseFloat(Math.max(0, vnResidual - (parseFloat(row.amort)||0)).toFixed(6));
         prevDate = calcDate;
@@ -1679,30 +1690,47 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
                 📌 {seedMeta.desc}
               </div>
             )}
-            <div style={{maxHeight:280,overflowY:"auto",marginBottom:16}}>
-              <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                <thead>
-                  <tr style={{borderBottom:"1px solid var(--border)"}}>
-                    {["Fecha","Tipo","Monto %VN"].map(h=>(
-                      <th key={h} style={{padding:"6px 10px",textAlign:"left",fontSize:10,color:"var(--text-muted)",fontWeight:600,textTransform:"uppercase"}}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {seedFlows.map((f,i)=>(
-                    <tr key={i} style={{borderBottom:"1px solid var(--border)"}}>
-                      <td style={{padding:"6px 10px",fontFamily:"'DM Mono',monospace"}}>{f.date.slice(8)+'/'+f.date.slice(5,7)+'/'+f.date.slice(0,4)}</td>
-                      <td style={{padding:"6px 10px"}}>
-                        <span style={{color:f.tipo==='amortizacion'?"var(--yellow)":"var(--accent)",fontWeight:600}}>
-                          {f.tipo==='amortizacion'?'💰 Amort.':'🎫 Cupón'}
-                        </span>
-                      </td>
-                      <td style={{padding:"6px 10px",fontFamily:"'DM Mono',monospace",textAlign:"right"}}>{f.monto.toFixed(4)}%</td>
+            {(()=>{
+              const hasDualDates = seedFlows.some(f=>f.dateCalc && f.dateCalc!==f.date);
+              const fmtD = d => d ? d.slice(8)+'/'+d.slice(5,7)+'/'+d.slice(0,4) : '—';
+              return (
+              <div style={{maxHeight:280,overflowY:"auto",marginBottom:16}}>
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                  <thead>
+                    <tr style={{borderBottom:"1px solid var(--border)"}}>
+                      {hasDualDates
+                        ? [
+                            <th key="fc" style={{padding:"6px 8px",textAlign:"left",fontSize:10,color:"var(--text-muted)",fontWeight:600,textTransform:"uppercase"}}>F. Cálculo</th>,
+                            <th key="fp" style={{padding:"6px 8px",textAlign:"left",fontSize:10,color:"#60A5FA",fontWeight:600,textTransform:"uppercase"}}>F. Pago</th>,
+                          ]
+                        : <th style={{padding:"6px 10px",textAlign:"left",fontSize:10,color:"var(--text-muted)",fontWeight:600,textTransform:"uppercase"}}>Fecha</th>
+                      }
+                      <th style={{padding:"6px 10px",textAlign:"left",fontSize:10,color:"var(--text-muted)",fontWeight:600,textTransform:"uppercase"}}>Tipo</th>
+                      <th style={{padding:"6px 10px",textAlign:"right",fontSize:10,color:"var(--text-muted)",fontWeight:600,textTransform:"uppercase"}}>Monto %VN</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {seedFlows.map((f,i)=>(
+                      <tr key={i} style={{borderBottom:"1px solid var(--border)"}}>
+                        {hasDualDates ? <>
+                          <td style={{padding:"6px 8px",fontFamily:"'DM Mono',monospace",fontSize:11,color:"var(--text-secondary)"}}>{fmtD(f.dateCalc||f.date)}</td>
+                          <td style={{padding:"6px 8px",fontFamily:"'DM Mono',monospace",fontSize:11,color:"#60A5FA"}}>{fmtD(f.date)}</td>
+                        </> :
+                          <td style={{padding:"6px 10px",fontFamily:"'DM Mono',monospace"}}>{fmtD(f.date)}</td>
+                        }
+                        <td style={{padding:"6px 10px"}}>
+                          <span style={{color:f.tipo==='amortizacion'?"var(--yellow)":"var(--accent)",fontWeight:600}}>
+                            {f.tipo==='amortizacion'?'💰 Amort.':'🎫 Cupón'}
+                          </span>
+                        </td>
+                        <td style={{padding:"6px 10px",fontFamily:"'DM Mono',monospace",textAlign:"right"}}>{f.monto.toFixed(4)}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              );
+            })()}
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
               <button onClick={onSkip} style={{...btn("var(--bg-input)"),color:"var(--text-muted)",border:"1px solid var(--border)"}}>Cargar manualmente</button>
               <button onClick={()=>handleConfirm([...seedFlows])} style={btn("var(--accent)")}>✓ Confirmar y cargar</button>
@@ -1743,6 +1771,13 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
                 <span style={{fontSize:10,color:"var(--text-muted)",marginTop:3,display:"block"}}>
                   Fecha teórica — el resto se proyecta desde acá · días hábiles ajustados automático
                 </span>
+              </div>
+              <div>
+                <span style={lbl}>Base de cálculo</span>
+                <select value={params.base} onChange={e=>set('base',e.target.value)} style={inp}>
+                  <option value="30/360">30/360</option>
+                  <option value="dias/365">Días / 365</option>
+                </select>
               </div>
               <div>
                 <span style={lbl}>Amortización</span>

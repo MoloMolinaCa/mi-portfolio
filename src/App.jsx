@@ -3766,33 +3766,47 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
                 {/* KPIs principales */}
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                   {[
-                    {l:"Vol. portfolio", v:volPort.toFixed(1)+"%", sub:"anualizada real", c:"var(--accent)"},
-                    {l:"Vol. ponderada", v:volWeighted.toFixed(1)+"%", sub:"sin diversificar", c:"var(--text-secondary)"},
-                    {l:"Ratio diversific.", v:"×"+divRatio.toFixed(2), sub:"ahorro de riesgo", c:divRatio>1.1?"var(--green)":"var(--text-secondary)"},
-                    {l:"Activos efectivos", v:nEff+" / "+activos.length, sub:"por concentración", c:"var(--text-secondary)"},
-                  ].map(({l,v,sub,c})=>(
-                    <div key={l} style={{background:"var(--bg-input)",borderRadius:8,padding:"10px 12px"}}>
-                      <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8,marginBottom:2}}>{l}</div>
+                    {l:"Vol. portfolio", v:volPort.toFixed(1)+"%", c:"var(--accent)",
+                      tip:"Cuánto oscila tu cartera en conjunto en un año, considerando que los activos no se mueven todos juntos. Ej: 7.8% significa que una cartera de US$10.000 puede moverse ±US$780 en un año típico."},
+                    {l:"Vol. ponderada", v:volWeighted.toFixed(1)+"%", c:"var(--text-secondary)",
+                      tip:"La volatilidad de cada activo multiplicada por su peso en cartera, sumadas. Es el escenario hipotético donde TODOS los activos caen al mismo tiempo — el peor caso posible. Siempre es mayor que la Vol. Portfolio real."},
+                    {l:"Ratio diversific.", v:"×"+divRatio.toFixed(2), c:divRatio>1.1?"var(--green)":"var(--text-secondary)",
+                      tip:"Vol. Ponderada ÷ Vol. Portfolio. Mide cuánto riesgo te ahorrás por tener activos que no se mueven juntos. ×2 significa que tu cartera tiene la mitad del riesgo que tendría si todo estuviese correlacionado."},
+                    {l:"Activos efectivos", v:nEff+" / "+activos.length, c:"var(--text-secondary)",
+                      tip:"De tus "+activos.length+" activos, cuántos 'realmente distintos' tenés desde el punto de vista del riesgo. Si tenés 4 CEDEARs muy correlacionados entre sí, se cuentan casi como 1 solo activo."},
+                  ].map(({l,v,c,tip})=>(
+                    <div key={l} title={tip}
+                      style={{background:"var(--bg-input)",borderRadius:8,padding:"10px 12px",cursor:"help",position:"relative",borderBottom:"2px dotted rgba(255,255,255,0.1)"}}>
+                      <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8,marginBottom:2,display:"flex",alignItems:"center",gap:4}}>
+                        {l} <span style={{fontSize:9,opacity:0.5}}>ⓘ</span>
+                      </div>
                       <div style={{fontSize:16,fontWeight:700,color:c,fontFamily:"'DM Mono',monospace"}}>{v}</div>
-                      <div style={{fontSize:9,color:"var(--text-muted)",marginTop:2}}>{sub}</div>
                     </div>
                   ))}
                 </div>
 
-                {/* Contribución al riesgo por activo */}
+                {/* Contribución al riesgo por activo — ordenado de mayor a menor */}
                 <div>
-                  <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Contribución al riesgo</div>
-                  {activos.map((h,i)=>(
-                    <div key={h.ticker} style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
-                      <span style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:"var(--accent)",minWidth:56,fontWeight:600}}>{h.ticker}</span>
+                  <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>
+                    Contribución al riesgo
+                    <span style={{fontWeight:400,marginLeft:6,textTransform:"none",letterSpacing:0,fontStyle:"italic"}}>— qué % del riesgo total aporta cada activo (peso × volatilidad × correlación)</span>
+                  </div>
+                  {activos.map((h,i)=>({ticker:h.ticker, val:riskContrib[i], i}))
+                    .sort((a,b)=>b.val-a.val)
+                    .map(({ticker,val})=>(
+                    <div key={ticker} style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
+                      <span style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:"var(--accent)",minWidth:56,fontWeight:600}}>{ticker}</span>
                       <div style={{flex:1,height:14,background:"var(--bg-input)",borderRadius:3,overflow:"hidden"}}>
-                        <div style={{height:"100%",width:Math.min(100,Math.abs(riskContrib[i]))+"%",
-                          background:riskContrib[i]>30?"var(--red)":riskContrib[i]>15?"var(--yellow)":"var(--accent)",
+                        <div style={{height:"100%",width:Math.min(100,Math.abs(val))+"%",
+                          background:val>30?"var(--red)":val>15?"var(--yellow)":"var(--accent)",
                           borderRadius:3,opacity:0.8}}/>
                       </div>
-                      <span style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:"var(--text-secondary)",minWidth:42,textAlign:"right"}}>{riskContrib[i].toFixed(1)}%</span>
+                      <span style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:"var(--text-secondary)",minWidth:42,textAlign:"right"}}>{val.toFixed(1)}%</span>
                     </div>
                   ))}
+                  <div style={{fontSize:10,color:"var(--text-muted)",marginTop:6,fontStyle:"italic"}}>
+                    * Bonos ARS (TZX27, TZXD6): su volatilidad en pesos se diluye al convertir a USD por CCL, por eso su contribución es baja aunque el precio en ARS varíe.
+                  </div>
                 </div>
 
                 {/* Mejor diversificador */}

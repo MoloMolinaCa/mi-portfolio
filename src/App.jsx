@@ -3375,9 +3375,18 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
         baseDate  = startBar?.date || startDate;
       }
       if(!basePrice) return null;
-      const valBuy = getUSD(basePrice, baseDate);
-      const valEnd = getUSD(endBar.close, endDate);
-      const retPct = ((endBar.close - basePrice)/basePrice)*100;
+      // Normalizar escala: bonos ARS a veces están en escala distinta entre buyPrice e historicos
+      // Si hay factor 100 de diferencia, corregir
+      let adjClose = endBar.close;
+      let adjBase  = basePrice;
+      if(isBond && h.buyCurrency==="ARS" && adjBase>0){
+        const ratio = adjClose/adjBase;
+        if(ratio > 50)  adjClose = adjClose/100;  // historico en escala x100
+        if(ratio < 0.02) adjBase  = adjBase/100;   // buyPrice en escala x100
+      }
+      const valBuy = getUSD(adjBase, baseDate);
+      const valEnd = getUSD(adjClose, endDate);
+      const retPct = ((adjClose - adjBase)/adjBase)*100;
       const pnlUSD = valEnd - valBuy;
       return {...h, retPct, pnlUSD, valBuy, valEnd, basePrice, buyPrice:h.buyPrice||0};
     }).filter(Boolean);
@@ -3429,6 +3438,10 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
         ))}
         <span style={{fontSize:11,color:"var(--text-muted)",marginLeft:8}}>{fmtDate(startDate)} → {fmtDate(endDate)}</span>
       </div>
+
+      {/* ── Sección filtrada por período ───────────────────────────────────── */}
+      <div style={{border:"1px solid rgba(59,130,246,0.15)",borderRadius:12,padding:"16px",display:"grid",gap:16,background:"rgba(59,130,246,0.02)"}}>
+      <div style={{fontSize:10,color:"rgba(96,165,250,0.6)",textTransform:"uppercase",letterSpacing:1,marginBottom:-8}}>↕ Aplica filtro de período</div>
 
       {/* Fila superior: Extremos Portfolio + S&P */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
@@ -3605,11 +3618,13 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
         })()}
       </div>
 
-      {/* Correlación entre activos */}
+      </div>{/* /filtered-block */}
+
+      {/* Correlación entre activos — SIN filtro de período */}
       <div style={{...card,padding:"16px 20px"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
           {sectionTitle("Correlación entre activos · retornos diarios")}
-          <span style={{fontSize:10,color:"var(--text-muted)",fontStyle:"italic"}}>⚠ No aplica filtro de período — usa todo el histórico disponible</span>
+          <span style={{fontSize:10,color:"var(--text-muted)",fontStyle:"italic",background:"rgba(251,191,36,0.08)",border:"1px solid rgba(251,191,36,0.2)",borderRadius:5,padding:"2px 8px"}}>⚠ Usa todo el histórico · no aplica filtro</span>
         </div>
         {(()=>{
           // Solo activos con suficientes datos en el período
@@ -3649,37 +3664,143 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
             return "rgba(255,255,255,0.05)";
           };
 
+          // ── Métricas de riesgo ponderadas ───────────────────────────────────
+          // Pesos en cartera basados en valEnd (USD)
+          const totalVal = contributions.reduce((a,c)=>a+Math.max(0,c.valEnd||0),0)||1;
+          const weights  = activos.map(h=>{
+            const c = contributions.find(c=>c.ticker===h.ticker);
+            return c ? Math.max(0,c.valEnd||0)/totalVal : 0;
+          });
+
+          // Volatilidad diaria de cada activo (std dev de retornos diarios)
+          const vols = rets.map(r=>{
+            const n=r.rets.length; if(n<2) return 0;
+            const mu=r.rets.reduce((a,b)=>a+b,0)/n;
+            return Math.sqrt(r.rets.reduce((a,b)=>a+(b-mu)**2,0)/n);
+          });
+
+          // Volatilidad ponderada simple (sin correlaciones) — benchmark
+          const volWeighted = vols.reduce((a,v,i)=>a+weights[i]*v,0) * Math.sqrt(252) * 100;
+
+          // Volatilidad real del portfolio (con correlaciones) — fórmula matricial
+          // σ_p² = Σ_i Σ_j w_i * w_j * σ_i * σ_j * ρ_ij
+          let varPort = 0;
+          for(let i=0;i<activos.length;i++){
+            for(let j=0;j<activos.length;j++){
+              const rho = i===j ? 1 : (corr(rets[i].rets,rets[j].rets)||0);
+              varPort += weights[i]*weights[j]*vols[i]*vols[j]*rho;
+            }
+          }
+          const volPort = Math.sqrt(Math.max(0,varPort)) * Math.sqrt(252) * 100;
+
+          // Ratio de diversificación: vol_ponderada / vol_portfolio (>1 = diversificación efectiva)
+          const divRatio = volWeighted>0 ? volWeighted/volPort : 1;
+
+          // Contribución marginal al riesgo de cada activo
+          // MCTR_i = w_i * Σ_j (w_j * σ_i * σ_j * ρ_ij) / σ_p
+          const sigmaP = Math.sqrt(Math.max(0,varPort));
+          const mctr = activos.map((_,i)=>{
+            if(sigmaP===0) return 0;
+            let cov_ip=0;
+            for(let j=0;j<activos.length;j++){
+              const rho=i===j?1:(corr(rets[i].rets,rets[j].rets)||0);
+              cov_ip+=weights[j]*vols[i]*vols[j]*rho;
+            }
+            return weights[i]*cov_ip/sigmaP;
+          });
+          const mctrTotal = mctr.reduce((a,b)=>a+b,0)||1;
+          const riskContrib = mctr.map(m=>m/mctrTotal*100); // % de riesgo total
+
+          // Correlación promedio de cada activo con el resto (diversificador = menor valor)
+          const avgCorr = activos.map((_,i)=>{
+            const others = activos.map((_,j)=>j!==i?corr(rets[i].rets,rets[j].rets):null).filter(v=>v!=null);
+            return others.length ? others.reduce((a,b)=>a+b,0)/others.length : 0;
+          });
+          const bestDiversifier = activos[avgCorr.indexOf(Math.min(...avgCorr))];
+
+          // HHI de concentración por riesgo
+          const hhi = riskContrib.reduce((a,b)=>a+(b/100)**2,0);
+          const nEff = hhi>0 ? (1/hhi).toFixed(1) : activos.length; // activos "efectivos"
+
           return(
-            <div style={{overflowX:"auto"}}>
-              <table style={{borderCollapse:"collapse",fontSize:11}}>
-                <thead>
-                  <tr>
-                    <th style={{padding:"6px 10px",width:60}}/>
-                    {activos.map(h=>(
-                      <th key={h.ticker} style={{padding:"6px 10px",textAlign:"center",color:"var(--accent)",fontFamily:"'DM Mono',monospace",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>{h.ticker}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {activos.map((ha,i)=>(
-                    <tr key={ha.ticker}>
-                      <td style={{padding:"4px 10px",color:"var(--accent)",fontFamily:"'DM Mono',monospace",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>{ha.ticker}</td>
-                      {activos.map((hb,j)=>{
-                        const v = i===j ? 1 : corr(rets[i].rets, rets[j].rets);
-                        return(
-                          <td key={hb.ticker} style={{padding:"4px 8px",textAlign:"center",background:corrColor(v),borderRadius:4,fontSize:11,fontWeight:i===j?700:400,color:i===j?"var(--text-primary)":v!=null?(Math.abs(v)>0.5?"var(--text-primary)":"var(--text-secondary)"):"var(--text-muted)"}}>
-                            {v!=null ? (i===j?"1.00":v.toFixed(2)) : "—"}
-                          </td>
-                        );
-                      })}
-                    </tr>
+            <div style={{display:"grid",gridTemplateColumns:"auto 1fr",gap:24,alignItems:"start"}}>
+              {/* Matriz */}
+              <div>
+                <div style={{overflowX:"auto"}}>
+                  <table style={{borderCollapse:"collapse",fontSize:11}}>
+                    <thead>
+                      <tr>
+                        <th style={{padding:"6px 10px",width:60}}/>
+                        {activos.map(h=>(
+                          <th key={h.ticker} style={{padding:"6px 10px",textAlign:"center",color:"var(--accent)",fontFamily:"'DM Mono',monospace",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>{h.ticker}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activos.map((ha,i)=>(
+                        <tr key={ha.ticker}>
+                          <td style={{padding:"4px 10px",color:"var(--accent)",fontFamily:"'DM Mono',monospace",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>{ha.ticker}</td>
+                          {activos.map((hb,j)=>{
+                            const v = i===j ? 1 : corr(rets[i].rets, rets[j].rets);
+                            return(
+                              <td key={hb.ticker} style={{padding:"4px 8px",textAlign:"center",background:corrColor(v),borderRadius:4,fontSize:11,fontWeight:i===j?700:400,color:i===j?"var(--text-primary)":v!=null?(Math.abs(v)>0.5?"var(--text-primary)":"var(--text-secondary)"):"var(--text-muted)"}}>
+                                {v!=null ? (i===j?"1.00":v.toFixed(2)) : "—"}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div style={{marginTop:10,display:"flex",gap:16,fontSize:10,color:"var(--text-muted)"}}>
+                  <span><span style={{color:"var(--green)"}}>■</span> Correlación positiva (&gt;0.7)</span>
+                  <span><span style={{color:"var(--red)"}}>■</span> Correlación negativa (&lt;-0.7)</span>
+                </div>
+              </div>
+
+              {/* Panel de riesgo */}
+              <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Riesgo del portfolio</div>
+
+                {/* KPIs principales */}
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                  {[
+                    {l:"Vol. portfolio", v:volPort.toFixed(1)+"%", sub:"anualizada real", c:"var(--accent)"},
+                    {l:"Vol. ponderada", v:volWeighted.toFixed(1)+"%", sub:"sin diversificar", c:"var(--text-secondary)"},
+                    {l:"Ratio diversific.", v:"×"+divRatio.toFixed(2), sub:"ahorro de riesgo", c:divRatio>1.1?"var(--green)":"var(--text-secondary)"},
+                    {l:"Activos efectivos", v:nEff+" / "+activos.length, sub:"por concentración", c:"var(--text-secondary)"},
+                  ].map(({l,v,sub,c})=>(
+                    <div key={l} style={{background:"var(--bg-input)",borderRadius:8,padding:"10px 12px"}}>
+                      <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8,marginBottom:2}}>{l}</div>
+                      <div style={{fontSize:16,fontWeight:700,color:c,fontFamily:"'DM Mono',monospace"}}>{v}</div>
+                      <div style={{fontSize:9,color:"var(--text-muted)",marginTop:2}}>{sub}</div>
+                    </div>
                   ))}
-                </tbody>
-              </table>
-              <div style={{marginTop:10,display:"flex",gap:16,fontSize:10,color:"var(--text-muted)"}}>
-                <span><span style={{color:"var(--green)"}}>■</span> Alta correlación positiva (&gt;0.7)</span>
-                <span><span style={{color:"var(--red)"}}>■</span> Alta correlación negativa (&lt;-0.7)</span>
-                <span><span style={{color:"var(--text-muted)"}}>■</span> Sin correlación relevante</span>
+                </div>
+
+                {/* Contribución al riesgo por activo */}
+                <div>
+                  <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Contribución al riesgo</div>
+                  {activos.map((h,i)=>(
+                    <div key={h.ticker} style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
+                      <span style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:"var(--accent)",minWidth:56,fontWeight:600}}>{h.ticker}</span>
+                      <div style={{flex:1,height:14,background:"var(--bg-input)",borderRadius:3,overflow:"hidden"}}>
+                        <div style={{height:"100%",width:Math.min(100,Math.abs(riskContrib[i]))+"%",
+                          background:riskContrib[i]>30?"var(--red)":riskContrib[i]>15?"var(--yellow)":"var(--accent)",
+                          borderRadius:3,opacity:0.8}}/>
+                      </div>
+                      <span style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:"var(--text-secondary)",minWidth:42,textAlign:"right"}}>{riskContrib[i].toFixed(1)}%</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Mejor diversificador */}
+                <div style={{background:"rgba(52,211,153,0.06)",border:"1px solid rgba(52,211,153,0.2)",borderRadius:8,padding:"10px 12px"}}>
+                  <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8,marginBottom:4}}>Mejor diversificador</div>
+                  <span style={{fontFamily:"'DM Mono',monospace",color:"var(--green)",fontWeight:700,fontSize:14}}>{bestDiversifier?.ticker}</span>
+                  <span style={{fontSize:11,color:"var(--text-muted)",marginLeft:8}}>corr. prom. {Math.min(...avgCorr).toFixed(2)}</span>
+                </div>
               </div>
             </div>
           );

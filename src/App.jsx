@@ -1487,6 +1487,34 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
   const seedFlows = SEED_BOND_FLOWS[ticker]||null;
   const seedMeta  = SEED_BOND_META[ticker]||null;
 
+  // Cache de feriados propio del wizard
+  const feriadosWiz = React.useRef({});
+  const fetchFeriadosWiz = async (year) => {
+    if(feriadosWiz.current[year]) return feriadosWiz.current[year];
+    try{
+      const r = await fetch(`https://api.argentinadatos.com/v1/feriados/${year}`,{signal:AbortSignal.timeout(5000)});
+      if(r.ok){
+        const data = await r.json();
+        const s = new Set((Array.isArray(data)?data:[]).map(f=>(f.fecha||f.date||'').slice(0,10)).filter(Boolean));
+        feriadosWiz.current[year] = s; return s;
+      }
+    }catch{}
+    feriadosWiz.current[year] = new Set();
+    return new Set();
+  };
+  // Avanzar al siguiente día hábil (lunes-viernes, sin feriados AR)
+  const nextBusinessDay = async (dateStr) => {
+    const d = new Date(dateStr);
+    for(let i=0;i<20;i++){
+      const dow=d.getDay();
+      const ds=d.toISOString().slice(0,10);
+      const fer=feriadosWiz.current[d.getFullYear()]||await fetchFeriadosWiz(d.getFullYear());
+      if(dow!==0&&dow!==6&&!fer.has(ds)) return ds;
+      d.setDate(d.getDate()+1);
+    }
+    return dateStr; // fallback
+  };
+
   // Wizard manual
   const [step, setStep] = useState(seedFlows ? 'confirm' : 'params');
   const [params, setParams] = useState({
@@ -1496,6 +1524,7 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
     amortTipo: 'bullet', // bullet | cuotas
     cuotas: '',
     emisionDate: '',
+    diaCorte: '', // día del mes en que cae el cupón (ej: 1, 15, 30)
     ajuste: 'ninguno', // ninguno | CER | UVA
   });
   const [generatedFlows, setGeneratedFlows] = useState(null);
@@ -1506,34 +1535,55 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
   const btn = (color) => ({background:color,border:"none",borderRadius:8,padding:"9px 20px",color:"#fff",cursor:"pointer",fontSize:13,fontWeight:600});
 
   // Genera tabla de filas por fecha (una fila = una fecha, con amort y cupon)
-  const generateRows = () => {
-    const {vto, tna, frecuencia, amortTipo, cuotas, emisionDate} = params;
+  // async porque ajusta fechas a días hábiles
+  const generateRows = async () => {
+    const {vto, tna, frecuencia, amortTipo, cuotas, emisionDate, diaCorte} = params;
     if(!vto || !tna) return null;
 
     const freqMonths = {mensual:1, trimestral:3, semestral:6, anual:12}[frecuencia] || 6;
     const tnaNum = parseFloat(tna)/100;
-    const startDate = emisionDate ? new Date(emisionDate) : new Date();
-    const endDate = new Date(vto);
+    const startDate = emisionDate ? new Date(emisionDate+'T12:00:00') : new Date();
+    const endDate = new Date(vto+'T12:00:00');
+    const diaNum = parseInt(diaCorte) || startDate.getDate();
 
-    // Generar fechas de cupón
-    const couponDates = [];
+    // Pre-cargar feriados de los años involucrados
+    const startYear = startDate.getFullYear();
+    const endYear = endDate.getFullYear();
+    for(let y=startYear; y<=endYear; y++) await fetchFeriadosWiz(y);
+
+    // Generar fechas de cupón: fijar diaNum en cada mes, ajustar a siguiente hábil
+    const rawDates = [];
     const cur = new Date(startDate);
     cur.setMonth(cur.getMonth() + freqMonths);
     while(cur <= endDate){
-      couponDates.push(cur.toISOString().slice(0,10));
+      // Fijar el día de corte en este mes (sin exceder el último día del mes)
+      const year=cur.getFullYear(), month=cur.getMonth();
+      const lastDay = new Date(year, month+1, 0).getDate();
+      const targetDay = Math.min(diaNum, lastDay);
+      rawDates.push(new Date(year, month, targetDay).toISOString().slice(0,10));
       cur.setMonth(cur.getMonth() + freqMonths);
     }
-    if(couponDates.length===0 || couponDates[couponDates.length-1] !== vto){
-      couponDates.push(vto);
+    // Último flujo siempre en la fecha de vto exacta (no ajustar hábil para el vto)
+    if(rawDates.length===0 || rawDates[rawDates.length-1] !== vto){
+      // Quitar si ya existe y re-agregar al final
+      const filtered = rawDates.filter(d=>d!==vto);
+      filtered.push(vto);
+      rawDates.length = 0;
+      filtered.forEach(d=>rawDates.push(d));
     }
+
+    // Ajustar cada fecha (excepto el vto) al siguiente día hábil
+    const couponDates = await Promise.all(
+      rawDates.map((d,i) => i===rawDates.length-1 ? Promise.resolve(d) : nextBusinessDay(d))
+    );
 
     const amortPorCuota = amortTipo==='bullet' ? 0 : (cuotas ? parseFloat((100/parseInt(cuotas)).toFixed(6)) : 0);
     let vnResidual = 100;
     let prevDate = emisionDate || startDate.toISOString().slice(0,10);
 
     const rows = couponDates.map((dateStr, i) => {
-      const d1 = new Date(prevDate), d2 = new Date(dateStr);
-      const dias = Math.round((d2-d1)/(1000*60*60*24));
+      const d1 = new Date(prevDate+'T12:00:00'), d2 = new Date(dateStr+'T12:00:00');
+      const dias = Math.max(0, Math.round((d2-d1)/(1000*60*60*24)));
       const cupon = parseFloat((tnaNum * dias/360 * vnResidual).toFixed(6));
       const esUltimo = i === couponDates.length-1;
       const amort = amortTipo==='bullet' ? (esUltimo ? 100 : 0) : amortPorCuota;
@@ -1560,17 +1610,38 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
     return flows;
   };
 
-  // Mantener generateFlows para compatibilidad
-  const generateFlows = () => {
-    const rows = generateRows();
-    return rows ? rowsToFlows(rows) : null;
+  const [editRows, setEditRows] = useState(null); // filas editables por fecha
+  const [generating, setGenerating] = useState(false);
+  const handleGenerate = async () => {
+    setGenerating(true);
+    try{
+      const rows = await generateRows();
+      if(rows){ setEditRows(rows); }
+      setStep('review');
+    }finally{ setGenerating(false); }
   };
 
-  const [editRows, setEditRows] = useState(null); // filas editables por fecha
-  const handleGenerate = () => {
-    const rows = generateRows();
-    if(rows){ setEditRows(rows); }
-    setStep('review');
+  // Recalcula los cupones usando las fechas actuales de editRows + params de tasa
+  const [recalculating, setRecalculating] = useState(false);
+  const recalcularTasas = async () => {
+    if(!editRows||!params.tna) return;
+    setRecalculating(true);
+    try{
+      const tnaNum = parseFloat(params.tna)/100;
+      const sorted = [...editRows].sort((a,b)=>a.date.localeCompare(b.date));
+      let prevDate = params.emisionDate || sorted[0].date;
+      let vnResidual = 100;
+      const newRows = sorted.map((row, i) => {
+        const d1 = new Date(prevDate+'T12:00:00'), d2 = new Date(row.date+'T12:00:00');
+        const dias = Math.max(0, Math.round((d2-d1)/(1000*60*60*24)));
+        const cupon = parseFloat((tnaNum * dias/360 * vnResidual).toFixed(6));
+        const newRow = {...row, dias, cupon};
+        vnResidual = parseFloat(Math.max(0, vnResidual - (parseFloat(row.amort)||0)).toFixed(6));
+        prevDate = row.date;
+        return newRow;
+      });
+      setEditRows(newRows);
+    }finally{ setRecalculating(false); }
   };
 
   const handleConfirm = (flows) => {
@@ -1641,7 +1712,13 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
               <div>
                 <span style={lbl}>Fecha de emisión</span>
-                <input type="date" value={params.emisionDate} onChange={e=>set('emisionDate',e.target.value)} style={inp}/>
+                <input type="date" value={params.emisionDate} onChange={e=>{
+                  set('emisionDate',e.target.value);
+                  if(e.target.value && !params.diaCorte){
+                    const d=new Date(e.target.value+'T12:00:00');
+                    set('diaCorte', String(d.getDate()));
+                  }
+                }} style={inp}/>
               </div>
               <div>
                 <span style={lbl}>Fecha de vencimiento</span>
@@ -1659,6 +1736,19 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
                   <option value="semestral">Semestral</option>
                   <option value="anual">Anual</option>
                 </select>
+              </div>
+              <div>
+                <span style={lbl}>Día de pago del cupón</span>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <input type="number" min="1" max="31" placeholder="ej: 1"
+                    value={params.diaCorte}
+                    onChange={e=>set('diaCorte',e.target.value)}
+                    style={{...inp,width:80}}/>
+                  <span style={{fontSize:11,color:"var(--text-muted)",lineHeight:1.3}}>
+                    de cada mes<br/>
+                    <span style={{fontSize:10,opacity:0.7}}>→ ajusta a día hábil AR</span>
+                  </span>
+                </div>
               </div>
               <div>
                 <span style={lbl}>Amortización</span>
@@ -1684,8 +1774,9 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
             </div>
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
               <button onClick={onSkip} style={{...btn("var(--bg-input)"),color:"var(--text-muted)",border:"1px solid var(--border)"}}>Saltar por ahora</button>
-              <button onClick={handleGenerate} disabled={!params.vto||!params.tna} style={{...btn(!params.vto||!params.tna?"rgba(59,130,246,0.3)":"var(--accent)"),cursor:!params.vto||!params.tna?"not-allowed":"pointer"}}>
-                Generar flujos →
+              <button onClick={handleGenerate} disabled={!params.vto||!params.tna||generating}
+                style={{...btn(!params.vto||!params.tna?"rgba(59,130,246,0.3)":"var(--accent)"),cursor:!params.vto||!params.tna||generating?"not-allowed":"pointer",display:"flex",alignItems:"center",gap:6}}>
+                {generating ? <><span style={{animation:"spin 0.7s linear infinite",display:"inline-block"}}>⟳</span> Cargando feriados...</> : "Generar flujos →"}
               </button>
             </div>
           </>
@@ -1711,6 +1802,15 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
             {amortOk&&(
               <div style={{background:"rgba(52,211,153,0.07)",border:"1px solid rgba(52,211,153,0.2)",borderRadius:7,padding:"7px 12px",marginBottom:10,fontSize:12,color:"var(--green)"}}>
                 ✓ Amortización total: 100%
+              </div>
+            )}
+            {params.tna&&(
+              <div style={{marginBottom:10,display:"flex",justifyContent:"flex-end"}}>
+                <button onClick={recalcularTasas} disabled={recalculating}
+                  title={"Recalcula los cupones usando TNA "+params.tna+"% y las fechas actuales"}
+                  style={{background:"rgba(59,130,246,0.12)",border:"1px solid rgba(59,130,246,0.3)",borderRadius:7,padding:"6px 14px",color:"#60A5FA",cursor:recalculating?"wait":"pointer",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:6}}>
+                  {recalculating?<><span style={{animation:"spin 0.7s linear infinite",display:"inline-block"}}>⟳</span>Calculando...</>:<>🔄 Recalcular tasas <span style={{fontWeight:400,opacity:0.7}}>({params.tna}% TNA)</span></>}
+                </button>
               </div>
             )}
             <div style={{maxHeight:320,overflowY:"auto",marginBottom:16}}>

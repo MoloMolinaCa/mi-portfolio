@@ -3344,53 +3344,94 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
   const [sortContrib, setSortContrib] = useState({col:"contrib", asc:false});
   const toggleSort = (col) => setSortContrib(prev => prev.col===col ? {...prev,asc:!prev.asc} : {col, asc:false});
 
-  // Contribución al rendimiento
-  // retPct: rendimiento DENTRO del período (desde startBar o buyPrice si comprado después)
-  // pnlUSD: P&L en USD del período
+  // Contribución al rendimiento — considera tenencia real en el período
   const contributions = useMemo(()=>{
     const cclBars = historicos?.CCL||[];
+    const getUSDprice=(price,date,buyCurrency,qtyF)=>{
+      if(buyCurrency==="USD") return price*qtyF;
+      const cclBar=cclBars.filter(b=>b.date<=date).pop();
+      return price*qtyF/(cclBar?.close||fxRate);
+    };
+
+    // Reconstruir qty de cada ticker al inicio del período desde trades
+    const qtyAtStart = {};
+    const allTickers = [...new Set(en.map(h=>h.ticker))];
+    allTickers.forEach(ticker=>{
+      const buys  = trades.filter(t=>t.ticker===ticker&&t.tipo==="compra"&&t.date<startDate);
+      const sells = trades.filter(t=>t.ticker===ticker&&t.tipo==="venta"&&t.date<startDate);
+      const qty = buys.reduce((a,t)=>a+t.qty,0) - sells.reduce((a,t)=>a+t.qty,0);
+      qtyAtStart[ticker] = Math.max(0, qty);
+    });
+
     return en.map(h=>{
       const bars = historicos?.[h.ticker]||[];
       const endBar = [...bars].filter(b=>b.date<=endDate).pop();
       if(!endBar) return null;
-      const isBond=h.type==="bono_usd"||h.type==="bono_ars";
-      const qtyFactor=isBond?h.qty/100:h.qty;
-      const getUSD=(price,date)=>{
-        if(h.buyCurrency==="USD") return price*qtyFactor;
-        const cclBar=cclBars.filter(b=>b.date<=date).pop();
-        return price*qtyFactor/(cclBar?.close||fxRate);
-      };
-      // Precio base del período: si el activo fue comprado DESPUÉS del startDate
-      // usar buyPrice; si fue comprado ANTES, usar el precio al inicio del período
-      const buyDate = h.buyDate||startDate;
-      let basePrice, baseDate;
-      if(buyDate >= startDate){
-        // Comprado dentro del período → base = precio de compra
-        basePrice = h.buyPrice||0;
-        baseDate  = buyDate;
-      } else {
-        // Comprado antes → base = primer precio disponible desde startDate
+      const isBond = h.type==="bono_usd"||h.type==="bono_ars";
+
+      // Qty al inicio del período (puede ser 0 si fue comprado después)
+      const qtyStart = qtyAtStart[h.ticker]||0;
+      // Qty actual (la de en[])
+      const qtyEnd = h.qty;
+
+      // Si no tenía nada al inicio Y no compró durante el período → saltar
+      if(qtyStart===0 && qtyEnd===0) return null;
+
+      // Precio base: si tenía posición al inicio → usar precio histórico del startDate
+      //              si compró durante el período → usar precio promedio de compras del período
+      let basePrice, baseDate, usedBuyPrice=false, qtyBase;
+
+      if(qtyStart > 0){
+        // Tenía posición al inicio — base = precio al startDate
         const startBar = bars.filter(b=>b.date>=startDate)[0];
-        basePrice = startBar?.close || h.buyPrice||0;
-        baseDate  = startBar?.date || startDate;
+        if(startBar){
+          basePrice = startBar.close;
+          baseDate  = startBar.date;
+          qtyBase   = qtyStart;
+        } else {
+          // Sin historial para ese período — usar precio de compra
+          basePrice = h.buyPrice||0;
+          baseDate  = startDate;
+          qtyBase   = qtyStart;
+          usedBuyPrice = true;
+        }
+      } else {
+        // Comprado durante el período — base = precio promedio de compras en el período
+        const periodBuys = trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra"&&t.date>=startDate&&t.date<=endDate);
+        if(!periodBuys.length){ basePrice=h.buyPrice||0; usedBuyPrice=true; }
+        else {
+          const totalQty = periodBuys.reduce((a,t)=>a+t.qty,0);
+          const totalCost= periodBuys.reduce((a,t)=>a+t.qty*t.price,0);
+          basePrice = totalQty>0 ? totalCost/totalQty : h.buyPrice||0;
+          usedBuyPrice = true; // es precio de compra pero dentro del período — correcto
+        }
+        baseDate  = trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra"&&t.date>=startDate)[0]?.date||startDate;
+        qtyBase   = qtyEnd;
       }
+
       if(!basePrice) return null;
-      // Normalizar escala: bonos ARS a veces están en escala distinta entre buyPrice e historicos
-      // Si hay factor 100 de diferencia, corregir
+
+      // Normalizar escala bonos ARS
       let adjClose = endBar.close;
       let adjBase  = basePrice;
       if(isBond && h.buyCurrency==="ARS" && adjBase>0){
         const ratio = adjClose/adjBase;
-        if(ratio > 50)  adjClose = adjClose/100;  // historico en escala x100
-        if(ratio < 0.02) adjBase  = adjBase/100;   // buyPrice en escala x100
+        if(ratio > 50)  adjClose = adjClose/100;
+        if(ratio < 0.02) adjBase  = adjBase/100;
       }
-      const valBuy = getUSD(adjBase, baseDate);
-      const valEnd = getUSD(adjClose, endDate);
+
+      const qtyFactorBase = isBond ? qtyBase/100 : qtyBase;
+      const qtyFactorEnd  = isBond ? qtyEnd/100  : qtyEnd;
+
+      const valBuy = getUSDprice(adjBase,  baseDate, h.buyCurrency, qtyFactorBase);
+      const valEnd = getUSDprice(adjClose, endDate,  h.buyCurrency, qtyFactorEnd);
       const retPct = ((adjClose - adjBase)/adjBase)*100;
       const pnlUSD = valEnd - valBuy;
-      return {...h, retPct, pnlUSD, valBuy, valEnd, basePrice, buyPrice:h.buyPrice||0};
+
+      return {...h, retPct, pnlUSD, valBuy, valEnd, basePrice:adjBase, adjClose,
+               usedBuyPrice, baseDate, qtyStart, buyPrice:h.buyPrice||0};
     }).filter(Boolean);
-  },[en,historicos,startDate,endDate,fxRate,period]);
+  },[en,historicos,trades,startDate,endDate,fxRate,period]);
 
   const contributionsSorted = useMemo(()=>{
     const arr = [...contributions];
@@ -3506,12 +3547,13 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
                 </th>
               );
             };
-          return (
+          return (<>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
             <thead>
               <tr style={{borderBottom:"1px solid var(--border)"}}>
                 <th style={{padding:"6px 12px",textAlign:"left",fontSize:10,color:"var(--text-muted)",fontWeight:600,textTransform:"uppercase",letterSpacing:0.8}}>Activo</th>
                 <th style={{padding:"6px 12px",textAlign:"left",fontSize:10,color:"var(--text-muted)",fontWeight:600,textTransform:"uppercase",letterSpacing:0.8}}>Tipo</th>
+                {selP.key!=="todo"&&<th style={{padding:"6px 12px",textAlign:"right",fontSize:10,color:"var(--text-muted)",fontWeight:600,textTransform:"uppercase",letterSpacing:0.8}}>Precio base</th>}
                 <SortTh col="rend"   label="Rend. total"/>
                 <SortTh col="pnl"    label="P&L USD"/>
                 <SortTh col="contrib" label="Contribución"/>
@@ -3528,6 +3570,14 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
                       <span style={{fontWeight:700,fontFamily:"'DM Mono',monospace",color:"var(--accent)",fontSize:12}}>{h.ticker}</span>
                     </td>
                     <td style={{padding:"8px 12px",fontSize:10,color:"var(--text-muted)"}}>{ASSET_TYPES[h.type]?.icon} {ASSET_TYPES[h.type]?.label}</td>
+                    {selP.key!=="todo"&&(
+                      <td style={{padding:"8px 12px",textAlign:"right",fontSize:10}}>
+                        <span style={{color:h.usedBuyPrice?"var(--yellow)":"var(--text-muted)",fontFamily:"'DM Mono',monospace"}}>
+                          {h.buyCurrency==="USD"?fmtU(h.basePrice,2):`$${h.basePrice.toLocaleString("es-AR",{maximumFractionDigits:2})}`}
+                        </span>
+                        {h.usedBuyPrice&&<span title="Sin historial para este período — se usó precio de compra" style={{marginLeft:4,color:"var(--yellow)",fontSize:9}}>★pc</span>}
+                      </td>
+                    )}
                     <td style={{padding:"8px 12px",textAlign:"right",fontWeight:600,color:pc(h.retPct)}}>{fmtP(h.retPct)}</td>
                     <td style={{padding:"8px 12px",textAlign:"right",color:pc(h.pnlUSD)}}>{hideAmounts?"••••":(h.pnlUSD>=0?"+":"")+fmtU(h.pnlUSD,0)}</td>
                     <td style={{padding:"8px 12px",textAlign:"right",fontWeight:600,color:pc(contrib)}}>{fmtP(contrib)}</td>
@@ -3548,7 +3598,13 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
               </tr>
             </tfoot>
           </table>
-          );})()}
+          {selP.key!=="todo" && contributionsSorted.some(h=>h.usedBuyPrice) && (
+            <div style={{marginTop:8,fontSize:11,color:"var(--yellow)",display:"flex",gap:6,alignItems:"center"}}>
+              <span>★pc</span>
+              <span>= sin datos históricos para este período — se usó precio de compra como base.</span>
+            </div>
+          )}
+          </>);})()}
         </div>
       </div>
 

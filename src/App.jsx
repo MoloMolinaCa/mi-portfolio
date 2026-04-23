@@ -3765,24 +3765,49 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
 
                 {/* KPIs principales */}
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                  {[
-                    {l:"Vol. portfolio", v:volPort.toFixed(1)+"%", c:"var(--accent)",
-                      tip:"Cuánto oscila tu cartera en conjunto en un año, considerando que los activos no se mueven todos juntos. Ej: 7.8% significa que una cartera de US$10.000 puede moverse ±US$780 en un año típico."},
-                    {l:"Vol. ponderada", v:volWeighted.toFixed(1)+"%", c:"var(--text-secondary)",
-                      tip:"La volatilidad de cada activo multiplicada por su peso en cartera, sumadas. Es el escenario hipotético donde TODOS los activos caen al mismo tiempo — el peor caso posible. Siempre es mayor que la Vol. Portfolio real."},
-                    {l:"Ratio diversific.", v:"×"+divRatio.toFixed(2), c:divRatio>1.1?"var(--green)":"var(--text-secondary)",
-                      tip:"Vol. Ponderada ÷ Vol. Portfolio. Mide cuánto riesgo te ahorrás por tener activos que no se mueven juntos. ×2 significa que tu cartera tiene la mitad del riesgo que tendría si todo estuviese correlacionado."},
-                    {l:"Activos efectivos", v:nEff+" / "+activos.length, c:"var(--text-secondary)",
-                      tip:"De tus "+activos.length+" activos, cuántos 'realmente distintos' tenés desde el punto de vista del riesgo. Si tenés 4 CEDEARs muy correlacionados entre sí, se cuentan casi como 1 solo activo."},
-                  ].map(({l,v,c,tip})=>(
-                    <div key={l} title={tip}
-                      style={{background:"var(--bg-input)",borderRadius:8,padding:"10px 12px",cursor:"help",position:"relative",borderBottom:"2px dotted rgba(255,255,255,0.1)"}}>
-                      <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8,marginBottom:2,display:"flex",alignItems:"center",gap:4}}>
-                        {l} <span style={{fontSize:9,opacity:0.5}}>ⓘ</span>
+                  {(()=>{
+                    // Semáforo vol. portfolio: <8% verde, 8-15% amarillo, >15% rojo
+                    const volColor = volPort<8 ? "var(--green)" : volPort<15 ? "var(--yellow)" : "var(--red)";
+                    const volMsg   = volPort<8
+                      ? "✓ Volatilidad baja — cartera conservadora"
+                      : volPort<15
+                      ? "⚠ Volatilidad moderada — nivel aceptable pero atención"
+                      : "✗ Volatilidad alta — la cartera oscila demasiado";
+                    const ratioColor = divRatio>1.5?"var(--green)":divRatio>1.1?"var(--yellow)":"var(--red)";
+                    const ratioMsg   = divRatio>1.5
+                      ? "✓ Buena diversificación — los activos se compensan bien"
+                      : divRatio>1.1
+                      ? "⚠ Diversificación moderada — podrías mejorarla"
+                      : "✗ Poca diversificación — los activos se mueven muy juntos";
+                    const nEffNum = parseFloat(nEff);
+                    const nEffColor = nEffNum/activos.length>0.6?"var(--green)":nEffNum/activos.length>0.4?"var(--yellow)":"var(--red)";
+                    const nEffMsg   = nEffNum/activos.length>0.6
+                      ? "✓ Buena variedad — tus activos son realmente distintos"
+                      : nEffNum/activos.length>0.4
+                      ? "⚠ Variedad moderada — algunos activos se solapan"
+                      : "✗ Poca variedad real — varios activos se mueven igual";
+                    const kpis = [
+                      {l:"Vol. portfolio", v:volPort.toFixed(1)+"%", c:volColor, msg:volMsg,
+                        tip:"Cuánto oscila tu cartera en conjunto por año. Ej: 7.8% sobre US$10.000 = ±US$780 en un año típico."},
+                      {l:"Vol. sin diversif.", v:volWeighted.toFixed(1)+"%", c:"var(--text-secondary)", msg:"= suma de vol. de cada activo × su peso. Siempre mayor que la real.",
+                        tip:"Si todos tus activos cayeran al mismo tiempo (el peor caso), esta sería la volatilidad. La diferencia con Vol. Portfolio muestra cuánto te protege la diversificación."},
+                      {l:"Ratio diversific.", v:"×"+divRatio.toFixed(2), c:ratioColor, msg:ratioMsg,
+                        tip:"Vol. sin diversif. ÷ Vol. portfolio. ×2 = tu cartera tiene la mitad del riesgo del peor caso."},
+                      {l:"Activos efectivos", v:nEff+" / "+activos.length, c:nEffColor, msg:nEffMsg,
+                        tip:"Cuántos activos realmente distintos tenés. Si tenés 4 CEDEARs muy correlacionados, se cuentan casi como 1."},
+                    ];
+                    return kpis.map(({l,v,c,msg,tip})=>(
+                      <div key={l} title={tip}
+                        style={{background:"var(--bg-input)",borderRadius:8,padding:"10px 12px",cursor:"help",
+                          borderLeft:"3px solid "+c}}>
+                        <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8,marginBottom:2,display:"flex",alignItems:"center",gap:4}}>
+                          {l} <span style={{fontSize:9,opacity:0.4}}>ⓘ</span>
+                        </div>
+                        <div style={{fontSize:16,fontWeight:700,color:c,fontFamily:"'DM Mono',monospace"}}>{v}</div>
+                        <div style={{fontSize:10,color:c,marginTop:4,opacity:0.85}}>{msg}</div>
                       </div>
-                      <div style={{fontSize:16,fontWeight:700,color:c,fontFamily:"'DM Mono',monospace"}}>{v}</div>
-                    </div>
-                  ))}
+                    ));
+                  })()}
                 </div>
 
                 {/* Contribución al riesgo por activo — ordenado de mayor a menor */}

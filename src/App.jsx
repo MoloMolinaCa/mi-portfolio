@@ -3627,17 +3627,17 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
           <span style={{fontSize:10,color:"var(--text-muted)",fontStyle:"italic",background:"rgba(251,191,36,0.08)",border:"1px solid rgba(251,191,36,0.2)",borderRadius:5,padding:"2px 8px"}}>⚠ Usa todo el histórico · no aplica filtro</span>
         </div>
         {(()=>{
-          // Solo activos con suficientes datos en el período
+          // Correlación usa TODO el histórico disponible — sin filtro de período
           const activos = en.filter(h=>{
-            const bars=(historicos?.[h.ticker]||[]).filter(b=>b.date>=startDate&&b.date<=endDate);
+            const bars=(historicos?.[h.ticker]||[]);
             return bars.length>=10;
-          }).slice(0,8); // máximo 8 para que entre en pantalla
+          }).slice(0,8);
 
           if(activos.length<2) return <div style={{color:"var(--text-muted)",fontSize:12}}>Se necesitan al menos 2 activos con datos</div>;
 
-          // Calcular retornos diarios por activo
+          // Retornos diarios sobre todo el histórico
           const rets = activos.map(h=>{
-            const bars=(historicos?.[h.ticker]||[]).filter(b=>b.date>=startDate&&b.date<=endDate).sort((a,b)=>a.date.localeCompare(b.date));
+            const bars=(historicos?.[h.ticker]||[]).slice().sort((a,b)=>a.date.localeCompare(b.date));
             const r=[];
             for(let i=1;i<bars.length;i++) r.push((bars[i].close-bars[i-1].close)/bars[i-1].close);
             return {ticker:h.ticker, rets:r};

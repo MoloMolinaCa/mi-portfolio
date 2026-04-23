@@ -1672,7 +1672,9 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
   };
 
   const handleConfirm = (flows) => {
-    onConfirm(flows);
+    // Pasar tna/base/emisionDate para que el caller actualice bondMeta
+    const meta = params.tna ? {tna:parseFloat(params.tna), base:params.base||'30/360', emisionDate:params.emisionDate||null} : null;
+    onConfirm(flows, meta);
   };
 
   return(
@@ -4040,10 +4042,12 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
   const buildRows = (flows) => {
     const byDate = {};
     flows.forEach(f => {
-      if(!byDate[f.date]) byDate[f.date]={date:f.date,cupon:null,amort:null,ids:[]};
+      if(!byDate[f.date]) byDate[f.date]={date:f.date,dateCalc:f.dateCalc||f.date,cupon:null,amort:null,ids:[]};
       if(f.tipo==='amortizacion') byDate[f.date].amort=f;
       else byDate[f.date].cupon=f;
       byDate[f.date].ids.push(f.id);
+      // Tomar dateCalc del flow si existe
+      if(f.dateCalc && f.dateCalc!==f.date) byDate[f.date].dateCalc=f.dateCalc;
     });
     const rows = Object.values(byDate).sort((a,b)=>a.date.localeCompare(b.date));
     let vn = 100;
@@ -4052,10 +4056,12 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
       const interestPct = row.cupon?.monto ?? 0;
       const vnAntes     = vn;
       vn = Math.max(0, vn - amortPct);
-      // Días
-      const prevDate = i>0 ? rows[i-1].date : row.date;
-      const diasR = i===0 ? 0 : diasReales(prevDate, row.date);
-      const dias3 = i===0 ? 0 : dias30_360(prevDate, row.date);
+      // Días: usar dateCalc (teórica) para el cálculo, no la fecha de pago
+      const prevRow = i>0 ? rows[i-1] : null;
+      const prevCalc = prevRow ? (prevRow.dateCalc||prevRow.date) : (row.dateCalc||row.date);
+      const curCalc  = row.dateCalc || row.date;
+      const diasR = i===0 ? 0 : diasReales(prevCalc, curCalc);
+      const dias3 = i===0 ? 0 : dias30_360(prevCalc, curCalc);
       return {...row, amortPct, interestPct, totalPct:amortPct+interestPct, vnAntes, vnDespues:vn, diasReales:diasR, dias30360:dias3};
     });
   };
@@ -4487,7 +4493,8 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                       <thead>
                         <tr>
                           <th style={{...thPL,width:28}}>#</th>
-                          <th style={{...thPL}}>Fecha</th>
+                          <th style={{...thPL}}>F. Pago</th>
+                          <th style={{...thPL,color:'var(--text-muted)',fontSize:9}}>F. Teórica</th>
                           <th style={thP}>Días ({selMeta.base})</th>
                           <th style={thP}>Amort. % VN</th>
                           <th style={thP}>VN Residual</th>
@@ -4521,6 +4528,9 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                               <td style={{...tdPL,color:'var(--text-muted)',fontSize:11}}>{i+1}</td>
                               <td style={{...tdPL,fontWeight:600,color:isCobrado?'var(--green)':isPast?'var(--yellow)':'var(--text-primary)'}}>
                                 {fmtD(row.date)}{isCobrado&&<span style={{fontSize:9,marginLeft:5,color:'var(--green)'}}>✓</span>}
+                              </td>
+                              <td style={{...tdPL,fontSize:10,color:'var(--text-muted)'}}>
+                                {row.dateCalc && row.dateCalc!==row.date ? fmtD(row.dateCalc) : <span style={{opacity:0.3}}>—</span>}
                               </td>
                               <td style={{...tdP,color:'var(--text-muted)'}}>{dias}</td>
                               {/* Amort — input siempre visible en todas las filas */}
@@ -4587,9 +4597,21 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                               <td style={{...tdP,background:'rgba(52,211,153,0.04)',color:'var(--green)',fontWeight:700}}>
                                 {fmtN(row.totalPct)}
                               </td>
-                              <td style={{...tdP,textAlign:'center'}}>
+                              <td style={{...tdP,textAlign:'center',whiteSpace:'nowrap'}}>
+                                <button onClick={()=>{
+                                    // Abrir fila de addingFlow con los datos pre-cargados de esta fila
+                                    setAddingFlow(selected);
+                                    const f = row.cupon||row.amort;
+                                    setNewFlow({
+                                      date: f?.date||row.date,
+                                      tipo: row.cupon&&row.amort?'amort_cupon':row.amort?'amortizacion':'cupon',
+                                      amort: row.amort?.monto||'',
+                                      nota: f?.nota||''
+                                    });
+                                  }}
+                                  title="Editar" style={{background:'transparent',border:'none',cursor:'pointer',color:'var(--text-muted)',fontSize:11,padding:'0 2px'}}>✏️</button>
                                 <button onClick={()=>deleteRow(selected,row.ids)}
-                                  style={{background:'transparent',border:'none',cursor:'pointer',color:'var(--red)',fontSize:12,padding:'0 2px'}}>🗑</button>
+                                  title="Eliminar" style={{background:'transparent',border:'none',cursor:'pointer',color:'var(--red)',fontSize:12,padding:'0 2px'}}>🗑</button>
                               </td>
                             </tr>
                           );
@@ -4597,7 +4619,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                       </tbody>
                       <tfoot>
                         <tr style={{borderTop:'2px solid var(--border)',background:'var(--bg-input)'}}>
-                          <td colSpan={isCERBond?10:7} style={{...tdPL,fontWeight:700,fontSize:10,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:0.8}}>Total</td>
+                          <td colSpan={isCERBond?12:9} style={{...tdPL,fontWeight:700,fontSize:10,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:0.8}}>Total</td>
                           <td style={{...tdP,background:'rgba(251,191,36,0.08)',color:'var(--yellow)',fontWeight:700}}>{fmtN(rows.reduce((a,r)=>a+r.amortPct,0))}</td>
                           <td style={{...tdP,background:'rgba(59,130,246,0.08)',color:'var(--accent)',fontWeight:700}}>{fmtN(rows.reduce((a,r)=>a+r.interestPct,0))}</td>
                           <td style={{...tdP,background:'rgba(52,211,153,0.08)',color:'var(--green)',fontWeight:700}}>{fmtN(rows.reduce((a,r)=>a+r.totalPct,0))}</td>
@@ -4707,7 +4729,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
       <BondWizard
         ticker={selected}
         darkMode={true}
-        onConfirm={(newFlows)=>{
+        onConfirm={(newFlows, meta)=>{
           const existing = bondFlows[selected]||[];
           if(existing.length > 0){
             const replace = window.confirm(
@@ -4717,7 +4739,6 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
             if(replace){
               setBondFlows(prev=>({...prev,[selected]:newFlows}));
             } else {
-              // Merge: agregar nuevos evitando duplicados de fecha+tipo
               const existingKeys = new Set(existing.map(f=>f.date+'|'+f.tipo));
               const toAdd = newFlows.filter(f=>!existingKeys.has(f.date+'|'+f.tipo));
               setBondFlows(prev=>({...prev,[selected]:[...existing,...toAdd].sort((a,b)=>a.date.localeCompare(b.date))}));
@@ -4725,6 +4746,8 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
           } else {
             setBondFlows(prev=>({...prev,[selected]:newFlows}));
           }
+          // Actualizar bondMeta con TNA/base del wizard
+          if(meta) setBondMeta(prev=>({...prev,[selected]:{tna:meta.tna,base:meta.base,emisionDate:meta.emisionDate||null}}));
           setWizardFlujosOpen(false);
         }}
         onSkip={()=>setWizardFlujosOpen(false)}
@@ -5528,8 +5551,17 @@ function App(){
         <BondWizard
           ticker={bondWizard.ticker}
           darkMode={darkMode}
-          onConfirm={(flows)=>{
+          onConfirm={(flows, meta)=>{
             setBondFlows(prev=>({...prev,[bondWizard.ticker]:flows}));
+            if(meta){
+              // bondMeta vive en FlujoTab — actualizar localStorage para que lo levante
+              try{
+                const saved = localStorage.getItem('gal_bond_meta_v1');
+                const cur = saved ? JSON.parse(saved) : {};
+                cur[bondWizard.ticker] = {tna:meta.tna, base:meta.base, emisionDate:meta.emisionDate||null};
+                localStorage.setItem('gal_bond_meta_v1', JSON.stringify(cur));
+              }catch{}
+            }
             setBondWizard(null);
           }}
           onSkip={()=>setBondWizard(null)}

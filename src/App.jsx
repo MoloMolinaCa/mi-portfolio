@@ -1772,7 +1772,7 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
 }
 
 function Modal({h,port=[],onSave,onClose,darkMode=true}){
-  const blank={ticker:"",name:"",type:"accion_ar",qty:"",buyPrice:"",buyCurrency:"ARS",buyDate:todayAR(),operacion:"compra",comision:"",comisionPct:""};
+  const blank={ticker:"",name:"",type:"accion_ar",qty:"",buyPrice:"",buyCurrency:"ARS",buyDate:todayAR(),operacion:"compra",comision:"",comisionPct:"",netoManual:""};
   const [f,setF]=useState(h?{...h,operacion:"compra",buyPrice:""}:blank);
   const [tickerStatus,setTickerStatus]=useState(h?"confirmed":"idle");
   const [searchResults,setSearchResults]=useState([]); // lista de instrumentos encontrados
@@ -2060,51 +2060,62 @@ function Modal({h,port=[],onSave,onClose,darkMode=true}){
                   })()}
                 </span>
               </div>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,gap:8}}>
-                <span style={{fontSize:11,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,flexShrink:0}}>Comisión</span>
-                <div style={{display:"flex",gap:8,alignItems:"center",flex:1}}>
-                  {/* Monto */}
-                  <div style={{display:"flex",alignItems:"center",gap:4,flex:1}}>
-                    <span style={{fontSize:11,color:"var(--text-muted)"}}>{f.buyCurrency}</span>
-                    <input type="number" min="0" value={f.comision||""}
-                      onChange={e=>{
-                        const monto=+e.target.value;
-                        set("comision",monto);
-                        const bruto=+f.qty*+f.buyPrice;
-                        if(bruto>0)set("comisionPct",+((monto/bruto)*100).toFixed(4));
-                      }}
-                      placeholder="0.00"
-                      style={{...inp,padding:"4px 8px",fontSize:13,textAlign:"right"}}/>
+              {(()=>{
+                const isBondComision=f.type==="bono_ars"||f.type==="bono_usd";
+                const brutoComision=+f.qty*(isBondComision?+f.buyPrice/100:+f.buyPrice);
+                const comVal=+f.comision||0;
+                const netoCalc=f.operacion==="venta"?brutoComision-comVal:brutoComision+comVal;
+                return (<>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,gap:8}}>
+                    <span style={{fontSize:11,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,flexShrink:0}}>Comisión</span>
+                    <div style={{display:"flex",gap:8,alignItems:"center",flex:1}}>
+                      {/* Monto comisión */}
+                      <div style={{display:"flex",alignItems:"center",gap:4,flex:1}}>
+                        <span style={{fontSize:11,color:"var(--text-muted)"}}>{f.buyCurrency}</span>
+                        <input type="number" min="0" value={f.comision||""}
+                          onChange={e=>{
+                            const monto=+e.target.value;
+                            setF(p=>({...p,comision:monto,netoManual:"",
+                              comisionPct:brutoComision>0?+((monto/brutoComision)*100).toFixed(4):p.comisionPct}));
+                          }}
+                          placeholder="0.00"
+                          style={{...inp,padding:"4px 8px",fontSize:13,textAlign:"right"}}/>
+                      </div>
+                      <span style={{color:"var(--text-muted)",fontSize:12}}>↔</span>
+                      {/* Porcentaje */}
+                      <div style={{display:"flex",alignItems:"center",gap:4,flex:1}}>
+                        <input type="number" min="0" step="0.01" value={f.comisionPct||""}
+                          onChange={e=>{
+                            const pct=+e.target.value;
+                            const com=brutoComision>0?+(brutoComision*pct/100).toFixed(2):0;
+                            setF(p=>({...p,comisionPct:pct,comision:com,netoManual:""}));
+                          }}
+                          placeholder="0.00"
+                          style={{...inp,padding:"4px 8px",fontSize:13,textAlign:"right"}}/>
+                        <span style={{fontSize:11,color:"var(--text-muted)"}}>%</span>
+                      </div>
+                    </div>
                   </div>
-                  <span style={{color:"var(--text-muted)",fontSize:12}}>↔</span>
-                  {/* Porcentaje */}
-                  <div style={{display:"flex",alignItems:"center",gap:4,flex:1}}>
-                    <input type="number" min="0" step="0.01" value={f.comisionPct||""}
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",borderTop:"1px solid var(--border)",paddingTop:8,gap:8}}>
+                    <span style={{fontSize:11,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,flexShrink:0}}>Monto neto</span>
+                    <input type="number" min="0"
+                      value={f.netoManual!==""?f.netoManual:(netoCalc||"")}
                       onChange={e=>{
-                        const pct=+e.target.value;
-                        set("comisionPct",pct);
-                        const isBondC=f.type==="bono_ars"||f.type==="bono_usd";
-                        const bruto=+f.qty*(isBondC?+f.buyPrice/100:+f.buyPrice);
-                        if(bruto>0)set("comision",+(bruto*pct/100).toFixed(2));
+                        const neto=+e.target.value;
+                        const diff=f.operacion==="venta"?brutoComision-neto:neto-brutoComision;
+                        const comAbs=+Math.abs(diff).toFixed(2);
+                        const pct=brutoComision>0?+((comAbs/brutoComision)*100).toFixed(4):0;
+                        setF(p=>({...p,netoManual:e.target.value,comision:comAbs,comisionPct:pct}));
                       }}
-                      placeholder="0.00"
-                      style={{...inp,padding:"4px 8px",fontSize:13,textAlign:"right"}}/>
-                    <span style={{fontSize:11,color:"var(--text-muted)"}}>%</span>
+                      onBlur={()=>setF(p=>({...p,netoManual:""}))}
+                      placeholder={(()=>{const n=netoCalc;return f.buyCurrency==="USD"?`USD ${n.toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}`:`$ ${n.toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}`;})()}
+                      style={{...inp,padding:"4px 8px",fontSize:16,fontWeight:700,
+                        textAlign:"right",width:"auto",flex:1,
+                        color:f.operacion==="venta"?"var(--red)":"var(--green)",
+                        border:"1px solid "+(f.netoManual!==""?"var(--accent)":"var(--border)")}}/>
                   </div>
-                </div>
-              </div>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",borderTop:"1px solid var(--border)",paddingTop:8}}>
-                <span style={{fontSize:11,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Monto neto</span>
-                <span style={{fontSize:16,fontWeight:700,color:f.operacion==="venta"?"var(--red)":"var(--green)"}}>
-                  {(()=>{
-                    const isBondN=f.type==="bono_ars"||f.type==="bono_usd";
-                    const bruto=+f.qty*(isBondN?+f.buyPrice/100:+f.buyPrice);
-                    const com=+f.comision||0;
-                    const neto=f.operacion==="venta"?bruto-com:bruto+com;
-                    return f.buyCurrency==="USD"?`USD ${neto.toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}`:`$ ${neto.toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
-                  })()}
-                </span>
-              </div>
+                </>);
+              })()}
             </div>
           )}
 
@@ -4918,16 +4929,29 @@ function App(){
         const result={loading:false,sources:{}};
 
         // Usar histórico del JSON pre-generado
-        const spyBarsB = getSPYBars();
-        if(spyBarsB.length){
-          const pb=findPrice(spyBarsB,buyDate), ps=findPrice(spyBarsB,sellDate);
+        const spyBars = historicos?.sp500 || [];
+        if(spyBars.length){
+          const pb=findPrice(spyBars,buyDate), ps=findPrice(spyBars,sellDate);
           if(pb&&ps){result.sp500Pct=((ps-pb)/pb)*100;result.sources.sp500="historicos.json";}
         }
 
-        const cclBarsB = getCCLBars();
-        if(cclBarsB.length){
-          const pb=findPrice(cclBarsB,buyDate), ps=findPrice(cclBarsB,sellDate);
+        const cclBars = historicos?.CCL || [];
+        if(cclBars.length){
+          const pb=findPrice(cclBars,buyDate), ps=findPrice(cclBars,sellDate);
           if(pb&&ps){result.cclPct=((ps-pb)/pb)*100;result.cclBuy=pb;result.cclSell=ps;result.sources.ccl="historicos.json";}
+        }
+
+        const mepBars = historicos?.MEP || [];
+        if(mepBars.length){
+          const pb=findPrice(mepBars,buyDate), ps=findPrice(mepBars,sellDate);
+          if(pb&&ps){result.mepPct=((ps-pb)/pb)*100;result.sources.mep="historicos.json";}
+        }
+
+        // CER como proxy de inflación ARS
+        const cerBars = historicos?.CER || [];
+        if(cerBars.length){
+          const pb=findPrice(cerBars,buyDate), ps=findPrice(cerBars,sellDate);
+          if(pb&&ps){result.infArPct=((ps-pb)/pb)*100;result.sources.infAr="CER";}
         }
 
         setBenchmarkData(result);
@@ -5262,12 +5286,18 @@ function App(){
               const t10yPeriod=(Math.pow(1+liveT10Y/100,days/365)-1)*100;
               const bd=benchmarkData;
               const loading=!bd||bd.loading;
+              const isCurrencyARS = ventaResult.currency==="ARS";
               const benchmarks=[
                 {label:"Tu operación",val:ventaResult.pnlPct,color:ventaResult.pnlPct>=0?"var(--green)":"var(--red)",bold:true},
-                {label:"Treasury 10Y ("+liveT10Y+"%)",val:t10yPeriod,color:"var(--yellow)"},
-                {label:"S&P 500",val:bd?.sp500Pct??null,color:"#60A5FA"},
+                // T10Y: solo USD
+                ...(!isCurrencyARS?[{label:"Treasury 10Y ("+liveT10Y+"%)",val:t10yPeriod,color:"var(--yellow)"}]:[]),
+                // S&P 500: solo USD
+                ...(!isCurrencyARS?[{label:"S&P 500",val:bd?.sp500Pct??null,color:"#60A5FA"}]:[]),
+                // CCL y MEP: siempre (son benchmarks útiles en ambas monedas)
                 {label:"Dólar CCL",val:bd?.cclPct??null,color:"#A78BFA"},
-                {label:"Inflación AR",val:bd?.infArPct??null,color:"#F97316"},
+                {label:"Dólar MEP",val:bd?.mepPct??null,color:"#818CF8"},
+                // CER (inflación ARS): siempre
+                {label:"Inflación ARS (CER)",val:bd?.infArPct??null,color:"#F97316"},
               ];
               const maxVal=Math.max(...benchmarks.filter(b=>b.val!=null).map(b=>Math.abs(b.val)),1);
               return(

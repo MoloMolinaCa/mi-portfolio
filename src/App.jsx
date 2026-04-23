@@ -4011,6 +4011,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
   const tdPL = {...tdP,textAlign:'left'};
 
   return (
+    <>
     <div style={{display:'flex',flexDirection:'column',gap:16}}>
 
       {/* ── Calendario de cobros ──────────────────────────────────────────── */}
@@ -4671,6 +4672,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
         onSkip={()=>setWizardFlujosOpen(false)}
       />
     )}
+    </>
   );
 }
 

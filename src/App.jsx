@@ -3339,9 +3339,10 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
     const twr = calcTWR(allDates, trades, en, tickerBars, cclBars, mepBars, "USD_CCL", fxRate, livePricesMap, null, endDate);
     // Convertir de base-100 a {date, close} para reutilizar calcExtremes
     return twr.map(p=>({date:p.date, close:p.val}));
-  },[en, historicos, trades, startDate, endDate, fxRate]);
+  },[en, historicos, trades, startDate, endDate, fxRate, period]);
 
-  const [sortContrib, setSortContrib] = useState("contrib"); // "contrib"|"pnl"|"rend"
+  const [sortContrib, setSortContrib] = useState({col:"contrib", asc:false});
+  const toggleSort = (col) => setSortContrib(prev => prev.col===col ? {...prev,asc:!prev.asc} : {col, asc:false});
 
   // Contribución al rendimiento
   // retPct: rendimiento DENTRO del período (desde startBar o buyPrice si comprado después)
@@ -3380,16 +3381,17 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
       const pnlUSD = valEnd - valBuy;
       return {...h, retPct, pnlUSD, valBuy, valEnd, basePrice, buyPrice:h.buyPrice||0};
     }).filter(Boolean);
-  },[en,historicos,startDate,endDate,fxRate]);
+  },[en,historicos,startDate,endDate,fxRate,period]);
 
   const contributionsSorted = useMemo(()=>{
     const arr = [...contributions];
-    if(sortContrib==="pnl")    return arr.sort((a,b)=>b.pnlUSD-a.pnlUSD);
-    if(sortContrib==="rend")   return arr.sort((a,b)=>b.retPct-a.retPct);
-    // contrib: por contribución absoluta al portfolio
-    const totalAbs = contributions.reduce((a,c)=>a+Math.abs(c.pnlUSD),0)||1;
-    return arr.sort((a,b)=>Math.abs(b.pnlUSD)-Math.abs(a.pnlUSD));
-  },[contributions,sortContrib]);
+    const {col, asc} = sortContrib;
+    const dir = asc ? 1 : -1;
+    if(col==="pnl")    arr.sort((a,b)=>(a.pnlUSD-b.pnlUSD)*dir);
+    else if(col==="rend")   arr.sort((a,b)=>(a.retPct-b.retPct)*dir);
+    else arr.sort((a,b)=>(Math.abs(a.pnlUSD)-Math.abs(b.pnlUSD))*dir); // contrib
+    return arr;
+  },[contributions,sortContrib,period]);
 
   const totalPnlUSD = contributions.reduce((a,c)=>a+c.pnlUSD,0);
 
@@ -3476,26 +3478,31 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
 
       {/* Contribución al rendimiento */}
       <div style={{...card,padding:"16px 20px"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-          {sectionTitle("Contribución al rendimiento · " + (selP.key==="todo"?"desde precio de compra":"rendimiento del período"))}
-          <div style={{display:"flex",gap:6,alignItems:"center"}}>
-            <span style={{fontSize:10,color:"var(--text-muted)"}}>Ordenar:</span>
-            {[["contrib","Contribución"],["pnl","P&L USD"],["rend","Rendimiento"]].map(([k,l])=>(
-              <button key={k} onClick={()=>setSortContrib(k)}
-                style={{padding:"3px 10px",borderRadius:5,border:"1px solid var(--border)",cursor:"pointer",fontSize:10,fontWeight:sortContrib===k?700:400,
-                  background:sortContrib===k?"var(--accent)":"var(--bg-input)",color:sortContrib===k?"#fff":"var(--text-secondary)"}}>
-                {l}
-              </button>
-            ))}
-          </div>
-        </div>
+        {sectionTitle("Contribución al rendimiento · " + (selP.key==="todo"?"desde precio de compra":"rendimiento del período"))}
         <div style={{overflowX:"auto"}}>
+          {(()=>{
+            const SortTh = ({col, label, align="right"}) => {
+              const active = sortContrib.col===col;
+              const arrow  = active ? (sortContrib.asc ? " ↑" : " ↓") : "";
+              return (
+                <th onClick={()=>toggleSort(col)}
+                  style={{padding:"6px 12px",textAlign:align,fontSize:10,fontWeight:active?700:600,
+                    color:active?"var(--accent)":"var(--text-muted)",textTransform:"uppercase",
+                    letterSpacing:0.8,whiteSpace:"nowrap",cursor:"pointer",userSelect:"none"}}>
+                  {label}{arrow}
+                </th>
+              );
+            };
+          return (
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
             <thead>
               <tr style={{borderBottom:"1px solid var(--border)"}}>
-                {["Activo","Tipo","Rend. total","P&L USD","Contribución","Barra"].map((h,i)=>(
-                  <th key={i} style={{padding:"6px 12px",textAlign:i>=2?"right":"left",fontSize:10,color:"var(--text-muted)",fontWeight:600,textTransform:"uppercase",letterSpacing:0.8,whiteSpace:"nowrap"}}>{h}</th>
-                ))}
+                <th style={{padding:"6px 12px",textAlign:"left",fontSize:10,color:"var(--text-muted)",fontWeight:600,textTransform:"uppercase",letterSpacing:0.8}}>Activo</th>
+                <th style={{padding:"6px 12px",textAlign:"left",fontSize:10,color:"var(--text-muted)",fontWeight:600,textTransform:"uppercase",letterSpacing:0.8}}>Tipo</th>
+                <SortTh col="rend"   label="Rend. total"/>
+                <SortTh col="pnl"    label="P&L USD"/>
+                <SortTh col="contrib" label="Contribución"/>
+                <th style={{padding:"6px 12px",fontSize:10,color:"var(--text-muted)",fontWeight:600,textTransform:"uppercase",letterSpacing:0.8}}>Barra</th>
               </tr>
             </thead>
             <tbody>
@@ -3528,6 +3535,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
               </tr>
             </tfoot>
           </table>
+          );})()}
         </div>
       </div>
 

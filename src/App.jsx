@@ -1,11 +1,13 @@
 /* eslint-disable */
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, memo, useRef, useCallback } from "react";
 
 // Hook responsive — detecta pantalla mobile (<768px)
 function useIsMobile(){ 
-  const [m,setM]=useState(()=>window.innerWidth<768);
+  const [m,setM]=useState(()=>{
+    try{ return window.innerWidth<768; }catch{ return false; }
+  });
   useEffect(()=>{
-    const h=()=>setM(window.innerWidth<768);
+    const h=()=>{ try{ setM(window.innerWidth<768); }catch{} };
     window.addEventListener('resize',h);
     return()=>window.removeEventListener('resize',h);
   },[]);
@@ -2732,6 +2734,26 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
 
     // Qué % mostrar según vista
     const dispPct=view==="native"?origPct:view==="usd"?pctUSD:pctARS;
+    // En mobile: fila simplificada (ticker, precio actual, val USD, rend%)
+    if(isMobile){
+      return(
+        <tr key={`${h.ticker}-${h.type}-${h.id||""}`} style={{borderTop:"1px solid var(--border)"}}>
+          <td style={{...tdL,fontWeight:700,fontFamily:"monospace",color:"var(--accent)",padding:"8px 6px"}}>
+            {h.ticker}
+            {h.isLive&&<span style={{display:"block",fontSize:8,color:"var(--green)"}}>●</span>}
+          </td>
+          <td style={{...tdR,fontSize:11,padding:"8px 6px"}}>
+            {(()=>{const cp=h.currentPrice;return isUSD?fmtU(cp,2):fmtA(cp);})()}
+            {h.liveChangePct!=null&&h.isLive&&<span style={{display:"block",fontSize:9,color:pc(h.liveChangePct)}}>{fmtP(h.liveChangePct)}</span>}
+          </td>
+          <td style={{...tdR,fontWeight:600,fontSize:11,padding:"8px 6px",background:"rgba(52,211,153,0.06)"}}>
+            {hideAmounts?"••••":fmtU(valUSD)}
+            <span style={{display:"block",fontSize:9,color:pc(pnlUSD)}}>{hideAmounts?"••••":(pnlUSD>=0?"+":"")+fmtU(pnlUSD)}</span>
+          </td>
+          <td style={{...tdR,fontWeight:700,color:pc(pctUSD),fontSize:12,padding:"8px 6px"}}>{fmtP(pctUSD)}</td>
+        </tr>
+      );
+    }
     return(
       <tr key={`${h.ticker}-${h.type}-${h.id||""}`} style={{borderTop:"1px solid var(--border)"}}>
         <td style={{...tdL,fontWeight:700,fontFamily:"monospace",color:"var(--accent)"}}>
@@ -2830,17 +2852,62 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
         return(
           <div key={`section-${t.key}`} style={{...card,overflow:"hidden"}}>
             {/* Encabezado de sección */}
-            <div style={{padding:"12px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center",background:'transparent'}}>
+            <div style={{padding:"12px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center",background:'transparent',flexWrap:isMobile?"wrap":"nowrap",gap:8}}>
               <div style={{display:"flex",alignItems:"center",gap:10}}>
                 <span style={{fontWeight:700,fontSize:13,color:"var(--text-primary)"}}>{t.icon} {t.label}</span>
                 <span style={{fontSize:11,color:"var(--text-muted)"}}>· {items.length} posición{items.length!==1?"es":""}</span>
               </div>
-              <div style={{display:"flex",gap:20,alignItems:"center",fontSize:12}}>
+              <div style={{display:"flex",gap:isMobile?12:20,alignItems:"center",fontSize:12}}>
                 <span style={{color:"var(--text-muted)"}}>Saldo: <b style={{color:"var(--text-primary)"}}>{hideAmounts?"••••••":fmtU(secVal)}</b></span>
                 <span style={{color:"var(--text-muted)"}}>PnL: <b style={{color:pc(secPnl)}}>{hideAmounts?"••••••":fmtU(secPnl,0)}</b></span>
                 <span style={{fontWeight:700,color:pc(secPct),fontSize:13}}>{fmtP(secPct)}</span>
               </div>
             </div>
+            {isMobile?(
+              /* Mobile: cards con scroll horizontal tipo swipe */
+              <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch",padding:"12px",display:"flex",gap:10,scrollSnapType:"x mandatory"}}>
+                {items.map(h=>{
+                  const isBond=h.type==="bono_usd"||h.type==="bono_ars";
+                  const isUSD=h.buyCurrency==="USD";
+                  const qF=isBond?h.qty/100:h.qty;
+                  const origVal=h.currentPrice*qF;
+                  const origCost=(h.ppc||h.buyPrice)*qF;
+                  let valUSD=isUSD?origVal:origVal/fxRate;
+                  let costUSD=isUSD?origCost:origCost/fxRate;
+                  const pnlUSD=valUSD-costUSD;
+                  const pctUSD=costUSD>0?(pnlUSD/costUSD)*100:0;
+                  return(
+                    <div key={h.ticker} style={{flexShrink:0,width:150,scrollSnapAlign:"start",
+                      background:"var(--bg-input)",borderRadius:10,padding:"12px",
+                      borderLeft:`3px solid ${pc(pctUSD)==="var(--green)"?"var(--green)":pc(pctUSD)==="var(--red)"?"var(--red)":"var(--border)"}`,}}>
+                      <div style={{fontWeight:700,fontFamily:"monospace",color:"var(--accent)",fontSize:13,marginBottom:2}}>
+                        {h.ticker}
+                        {h.isLive&&<span style={{fontSize:8,color:"var(--green)",marginLeft:4}}>●</span>}
+                      </div>
+                      <div style={{fontSize:10,color:"var(--text-muted)",marginBottom:8,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{h.name}</div>
+                      <div style={{fontSize:11,color:"var(--text-secondary)",marginBottom:4}}>
+                        <span style={{color:"var(--text-muted)"}}>Precio </span>
+                        {isUSD?fmtU(h.currentPrice,2):fmtA(h.currentPrice)}
+                      </div>
+                      <div style={{borderTop:"1px solid var(--border)",marginTop:6,paddingTop:6}}>
+                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                          <span style={{fontSize:10,color:"var(--text-muted)"}}>Hoy</span>
+                          <span style={{fontSize:11,fontWeight:600,color:h.liveChangePct!=null?pc(h.liveChangePct):"var(--text-muted)"}}>
+                            {h.liveChangePct!=null?fmtP(h.liveChangePct):"—"}
+                          </span>
+                        </div>
+                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
+                          <span style={{fontSize:10,color:"var(--text-muted)"}}>Total</span>
+                          <span style={{fontSize:11,fontWeight:700,color:pc(pctUSD)}}>{fmtP(pctUSD)}</span>
+                        </div>
+                        <div style={{fontSize:12,fontWeight:700,color:"var(--text-primary)",marginTop:4}}>{hideAmounts?"••••":fmtU(valUSD)}</div>
+                        <div style={{fontSize:10,color:pc(pnlUSD)}}>{hideAmounts?"••••":(pnlUSD>=0?"+":"")+fmtU(pnlUSD)} PnL</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ):(
             <div style={{overflowX:"auto"}}>
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:isMobile?11:13,minWidth:isMobile?0:600,tableLayout:"fixed"}}>
                 <thead>
@@ -2859,6 +2926,7 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
                 <tbody>{items.map(renderRow)}</tbody>
               </table>
             </div>
+            )}
           </div>
         );
       })}
@@ -3353,6 +3421,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
   },[en, historicos, trades, startDate, endDate, fxRate, period]);
 
   const [sortContrib, setSortContrib] = useState({col:"contrib", asc:false});
+  const [mobileSection, setMobileSection] = useState("contribucion"); // mobile: acordeon
   const toggleSort = (col) => setSortContrib(prev => prev.col===col ? {...prev,asc:!prev.asc} : {col, asc:false});
 
   // Contribución al rendimiento — considera tenencia real en el período
@@ -3578,23 +3647,46 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
     <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1.2,fontWeight:600,marginBottom:12}}>{t}</div>
   );
 
+  // Mobile: tabs de sección
+  const MOBILE_SECTIONS = [
+    {k:"contribucion", l:"Contribución"},
+    {k:"extremos", l:"Extremos"},
+    {k:"retornos", l:"Retornos"},
+    {k:"correlacion", l:"Correlación"},
+  ];
+
   return(
-    <div className="fi" style={{display:"grid",gap:16}}>
+    <div className="fi" style={{display:"grid",gap:isMobile?10:16}}>
 
       {/* Selector de período */}
-      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+      <div style={{display:"flex",gap:isMobile?4:8,alignItems:"center",flexWrap:"wrap"}}>
         {PERIODS_AN.map(p=>(
-          <button key={p.key} onClick={()=>setPeriod(p.key)} style={btnStyle(period===p.key)}>{p.label}</button>
+          <button key={p.key} onClick={()=>setPeriod(p.key)} style={{...btnStyle(period===p.key),padding:isMobile?"4px 10px":"4px 12px",fontSize:isMobile?11:11}}>{p.label}</button>
         ))}
-        <span style={{fontSize:11,color:"var(--text-muted)",marginLeft:8}}>{fmtDate(startDate)} → {fmtDate(endDate)}</span>
+        <span style={{fontSize:10,color:"var(--text-muted)",marginLeft:4}}>{fmtDate(startDate)} → {fmtDate(endDate)}</span>
       </div>
 
+      {/* Mobile: tabs de sección */}
+      {isMobile&&(
+        <div style={{display:"flex",gap:0,background:"var(--bg-input)",borderRadius:8,padding:2,overflowX:"auto"}}>
+          {MOBILE_SECTIONS.map(s=>(
+            <button key={s.k} onClick={()=>setMobileSection(s.k)}
+              style={{flex:1,padding:"6px 8px",borderRadius:6,border:"none",cursor:"pointer",fontSize:11,
+                fontWeight:mobileSection===s.k?600:400,whiteSpace:"nowrap",
+                background:mobileSection===s.k?"var(--accent)":"transparent",
+                color:mobileSection===s.k?"#fff":"var(--text-secondary)"}}>
+              {s.l}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* ── Sección filtrada por período ───────────────────────────────────── */}
-      <div style={{border:"1px solid rgba(59,130,246,0.15)",borderRadius:12,padding:"16px",display:"grid",gap:16,background:"rgba(59,130,246,0.02)"}}>
-      <div style={{fontSize:10,color:"rgba(96,165,250,0.6)",textTransform:"uppercase",letterSpacing:1,marginBottom:-8}}>↕ Aplica filtro de período</div>
+      <div style={{border:"1px solid rgba(59,130,246,0.15)",borderRadius:12,padding:isMobile?"10px":"16px",display:"grid",gap:isMobile?10:16,background:"rgba(59,130,246,0.02)"}}>
+      {!isMobile&&<div style={{fontSize:10,color:"rgba(96,165,250,0.6)",textTransform:"uppercase",letterSpacing:1,marginBottom:-8}}>↕ Aplica filtro de período</div>}
 
       {/* Fila superior: Extremos Portfolio + S&P */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+      {(!isMobile||mobileSection==="extremos")&&<div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12}}>
         {[
           {label:"📊 Mi Portfolio", ex:portExtremes},
           {label:"🇺🇸 S&P 500",      ex:spExtremes},
@@ -3637,10 +3729,10 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
             ) : <div style={{color:"var(--text-muted)",fontSize:12}}>Sin datos suficientes</div>}
           </div>
         ))}
-      </div>
+      </div>}
 
       {/* Contribución al rendimiento */}
-      <div style={{...card,padding:"16px 20px"}}>
+      {(!isMobile||mobileSection==="contribucion")&&<div style={{...card,padding:isMobile?"10px 12px":"16px 20px"}}>
         {sectionTitle("Contribución al rendimiento · " + (selP.key==="todo"?"desde precio de compra":"rendimiento del período"))}
         <div style={{overflowX:"auto"}}>
           {(()=>{
@@ -3716,9 +3808,9 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
           )}
           </>);})()}
         </div>
-      </div>
+      </div>}
 
-      {/* Retornos diarios — versión legible */}
+      {(!isMobile||mobileSection==="retornos")&&<>{/* Retornos diarios — versión legible */}
       <div style={{...card,padding:"16px 20px"}}>
         {sectionTitle("Estadísticas de retornos diarios")}
         {(()=>{
@@ -3783,11 +3875,12 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
           );
         })()}
       </div>
+      </>}
 
       </div>{/* /filtered-block */}
 
       {/* Correlación entre activos — SIN filtro de período */}
-      <div style={{...card,padding:"16px 20px"}}>
+      {(!isMobile||mobileSection==="correlacion")&&<div style={{...card,padding:isMobile?"10px 12px":"16px 20px"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
           {sectionTitle("Correlación entre activos · retornos diarios")}
           <span style={{fontSize:10,color:"var(--text-muted)",fontStyle:"italic",background:"rgba(251,191,36,0.08)",border:"1px solid rgba(251,191,36,0.2)",borderRadius:5,padding:"2px 8px"}}>⚠ Usa todo el histórico · no aplica filtro</span>
@@ -4010,7 +4103,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
             </div>
           );
         })()}
-      </div>
+      </div>}
 
     </div>
   );
@@ -4470,7 +4563,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
         const fmtMoney = (p) => p.currency==='USD' ? `US$${fmtN2(p.total)}` : `$${fmtN2(p.total)}`;
 
         return(
-          <div style={{...card,padding:'16px 20px',display:'grid',gridTemplateColumns:'1fr 300px',gap:20,maxHeight:390,overflow:'hidden'}}>
+          <div style={{...card,padding:isMobile?'10px 12px':'16px 20px',display:'grid',gridTemplateColumns:isMobile?'1fr':'1fr 300px',gap:isMobile?12:20,maxHeight:isMobile?'none':390,overflow:isMobile?'visible':'hidden'}}>
 
             {/* Calendario */}
             <div>
@@ -4627,7 +4720,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                               onMouseLeave={e=>e.currentTarget.style.background=isFirst?'rgba(59,130,246,0.06)':'transparent'}>
                               {/* Fecha grande */}
                               <div style={{textAlign:'center',minWidth:42,flexShrink:0}}>
-                                <div style={{fontSize:20,fontWeight:700,fontFamily:"'DM Mono',monospace",color:p.hasAmort?'var(--yellow)':'var(--accent)',lineHeight:1}}>
+                                <div style={{fontSize:isMobile?16:20,fontWeight:700,fontFamily:"'DM Mono',monospace",color:p.hasAmort?'var(--yellow)':'var(--accent)',lineHeight:1}}>
                                   {p.date.slice(8)}
                                 </div>
                                 <div style={{fontSize:9,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:0.5}}>
@@ -5218,10 +5311,16 @@ function App(){
   const [lastRefresh,setLastRefresh] = useState(null);
   const [countdown,setCountdown]   = useState(300);
 
+  const countdownRef = useRef(300);
+  const [countdownDisplay, setCountdownDisplay] = useState(300);
   useEffect(()=>{
     if(!lastRefresh)return;
-    setCountdown(300);
-    const tick=setInterval(()=>setCountdown(c=>c<=1?300:c-1),1000);
+    countdownRef.current = 300;
+    setCountdownDisplay(300);
+    const tick=setInterval(()=>{
+      countdownRef.current = countdownRef.current<=1 ? 300 : countdownRef.current-1;
+      setCountdownDisplay(countdownRef.current);
+    },1000);
     return()=>clearInterval(tick);
   },[lastRefresh]);
 
@@ -5746,40 +5845,52 @@ function App(){
 
       <div style={{minHeight:"100vh",background:"var(--bg)",color:"var(--text-primary)"}} className={darkMode?"theme-dark":"theme-light"}>
         {/* Header */}
-        <div style={{background:"var(--bg-card)",borderBottom:"1px solid var(--border)",padding:isMobile?"8px 12px":"11px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap"}}>
-          <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <div style={{width:32,height:32,borderRadius:10,background:"linear-gradient(135deg,var(--accent),var(--accent2))",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,boxShadow:"0 2px 8px rgba(59,130,246,0.3)"}}>📊</div>
-            <div>
-              <div style={{fontWeight:700,fontSize:15,color:"var(--title-color)",letterSpacing:"-0.3px"}}>Mi Portfolio</div>
-              <div style={{fontSize:11,color:"var(--text-muted)"}}>
-                {priceStatus==="live"&&<span style={{color:"var(--green)"}}>● {liveCount}/{port.length} activos · actualizado {lastRefresh?.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})} · próx. {Math.floor(countdown/60)}:{String(countdown%60).padStart(2,"0")}</span>}
-                {priceStatus==="partial"&&<span style={{color:"var(--yellow)"}}>◐ Parcial · actualizado {lastRefresh?.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})} · próx. {Math.floor(countdown/60)}:{String(countdown%60).padStart(2,"0")}</span>}
-                {priceStatus==="loading"&&<span style={{color:"var(--text-muted)"}}>⟳ Actualizando precios...</span>}
-                {priceStatus==="idle"&&<span style={{color:"var(--text-muted)"}}>Cargando...</span>}
+        <div style={{background:"var(--bg-card)",borderBottom:"1px solid var(--border)",padding:isMobile?"8px 12px":"11px 24px"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+              <div style={{width:28,height:28,flexShrink:0,borderRadius:8,background:"linear-gradient(135deg,var(--accent),var(--accent2))",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>📊</div>
+              <div style={{minWidth:0}}>
+                <div style={{fontWeight:700,fontSize:isMobile?13:15,color:"var(--title-color)",letterSpacing:"-0.3px"}}>Mi Portfolio</div>
+                {!isMobile&&<div style={{fontSize:11,color:"var(--text-muted)"}}>
+                  {priceStatus==="live"&&<span style={{color:"var(--green)"}}>● {liveCount}/{port.length} activos · actualizado {lastRefresh?.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})} · próx. {Math.floor(countdownDisplay/60)}:{String(countdownDisplay%60).padStart(2,"0")}</span>}
+                  {priceStatus==="partial"&&<span style={{color:"var(--yellow)"}}>◐ Parcial</span>}
+                  {priceStatus==="loading"&&<span style={{color:"var(--text-muted)"}}>⟳ Actualizando...</span>}
+                </div>}
               </div>
             </div>
-          </div>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <div style={{display:"flex",flexDirection:"column",gap:1}}>
-              <select value={fx} onChange={e=>setFx(e.target.value)} style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"5px 10px",color:"var(--text-secondary)",fontSize:12,cursor:"pointer"}}>
-                <option value="CCL">💵 CCL {fmtA(liveFX.CCL)}</option>
-                <option value="MEP">💵 MEP {fmtA(liveFX.MEP)}</option>
-                <option value="oficial">💵 Oficial {fmtA(liveFX.oficial)}</option>
-              </select>
-              <div style={{fontSize:9,color:"var(--text-muted)",textAlign:"center"}}>dólar de valuación</div>
+            <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
+              {!isMobile&&<div style={{display:"flex",flexDirection:"column",gap:1}}>
+                <select value={fx} onChange={e=>setFx(e.target.value)} style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"5px 10px",color:"var(--text-secondary)",fontSize:12,cursor:"pointer"}}>
+                  <option value="CCL">💵 CCL {fmtA(liveFX.CCL)}</option>
+                  <option value="MEP">💵 MEP {fmtA(liveFX.MEP)}</option>
+                  <option value="oficial">💵 Oficial {fmtA(liveFX.oficial)}</option>
+                </select>
+                <div style={{fontSize:9,color:"var(--text-muted)",textAlign:"center"}}>dólar de valuación</div>
+              </div>}
+              <button onClick={refreshPrices} disabled={priceStatus==="loading"} style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"5px 8px",color:"var(--text-secondary)",cursor:"pointer",fontSize:12}}>↻</button>
+              {!isMobile&&<button onClick={downloadTrades} style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"6px 10px",color:"var(--text-secondary)",cursor:"pointer",fontSize:13}}>⬇ CSV</button>}
+              <button onClick={()=>setHideAmounts(h=>!h)}
+                style={{background:hideAmounts?"rgba(37,99,235,0.15)":"var(--bg-card)",border:hideAmounts?"1px solid var(--accent)":"1px solid var(--border)",borderRadius:6,padding:"5px 8px",color:hideAmounts?"var(--accent)":"var(--text-secondary)",cursor:"pointer",fontSize:13}}>
+                {hideAmounts?"🙈":"👁"}
+              </button>
+              <button onClick={()=>setDarkMode(d=>!d)}
+                style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"5px 8px",color:"var(--text-secondary)",cursor:"pointer",fontSize:13}}>
+                {darkMode?"☀️":"🌙"}
+              </button>
+              <button onClick={()=>setModal("add")} style={{background:"var(--accent)",border:"none",borderRadius:6,padding:"6px 12px",color:"#fff",cursor:"pointer",fontSize:isMobile?12:13,fontWeight:600}}>+ Posición</button>
             </div>
-            <button onClick={refreshPrices} disabled={priceStatus==="loading"} style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"5px 10px",color:"var(--text-secondary)",cursor:"pointer",fontSize:12}}>↻</button>
-            <button onClick={downloadTrades} style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"6px 10px",color:"var(--text-secondary)",cursor:"pointer",fontSize:13}}>⬇ CSV</button>
-            <button onClick={()=>setHideAmounts(h=>!h)} title={hideAmounts?"Mostrar montos":"Ocultar montos"}
-              style={{background:hideAmounts?"rgba(37,99,235,0.15)":"var(--bg-card)",border:hideAmounts?"1px solid var(--accent)":"1px solid var(--border)",borderRadius:6,padding:"6px 10px",color:hideAmounts?"var(--accent)":"var(--text-secondary)",cursor:"pointer",fontSize:14}}>
-              {hideAmounts?"🙈":"👁"}
-            </button>
-            <button onClick={()=>setDarkMode(d=>!d)} title={darkMode?"Modo día":"Modo noche"}
-              style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"6px 10px",color:"var(--text-secondary)",cursor:"pointer",fontSize:14}}>
-              {darkMode?"☀️":"🌙"}
-            </button>
-            <button onClick={()=>setModal("add")} style={{background:"var(--accent)",border:"none",borderRadius:6,padding:"6px 14px",color:"#fff",cursor:"pointer",fontSize:13,fontWeight:600}}>+ Posición</button>
           </div>
+          {isMobile&&<div style={{marginTop:6,display:"flex",gap:8,alignItems:"center",justifyContent:"space-between"}}>
+            <select value={fx} onChange={e=>setFx(e.target.value)} style={{background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:6,padding:"4px 8px",color:"var(--text-secondary)",fontSize:11,cursor:"pointer",flex:1}}>
+              <option value="CCL">CCL {fmtA(liveFX.CCL)}</option>
+              <option value="MEP">MEP {fmtA(liveFX.MEP)}</option>
+              <option value="oficial">Oficial {fmtA(liveFX.oficial)}</option>
+            </select>
+            <span style={{fontSize:10,color:priceStatus==="live"?"var(--green)":"var(--text-muted)"}}>
+              {priceStatus==="live"?`● ${liveCount}/${port.length} · ${lastRefresh?.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})}`:priceStatus==="loading"?"⟳":"—"}
+            </span>
+            <button onClick={downloadTrades} style={{background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:6,padding:"4px 8px",color:"var(--text-secondary)",cursor:"pointer",fontSize:11}}>⬇ CSV</button>
+          </div>}
         </div>
 
         {/* Nav */}
@@ -5796,7 +5907,7 @@ function App(){
           ))}
         </div>
 
-        <div style={{padding:isMobile?"10px 8px":"22px 60px",maxWidth:"100%",boxSizing:"border-box"}}>
+        <div style={{padding:isMobile?"12px 16px":"22px 60px",maxWidth:"100%",boxSizing:"border-box"}}>
           {/* Notificación flujos pendientes */}
           {(()=>{
             const todayN=todayAR();

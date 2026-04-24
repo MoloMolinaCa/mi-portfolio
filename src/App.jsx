@@ -5469,6 +5469,33 @@ function App(){
     const years = [...new Set(allDates.map(d=>d.slice(0,4)))];
     const byYear = {};
 
+    // P&L realizado por año (ventas FIFO en USD, por año de la venta)
+    const pnlRealizadoPorAnio = {};
+    trades.filter(t=>t.tipo==="venta").forEach(t=>{
+      const y = t.date.slice(0,4);
+      const isBondT = /[0-9]/.test(t.ticker);
+      const qty = t.qty||0;
+      const qtyF = isBondT ? qty/100 : qty;
+      const toUSDv = (monto, currency, date) => {
+        if(currency==="USD") return monto;
+        const bar = cclBars.filter(b=>b.date<=date).pop();
+        return monto / (bar?.close||cclBars.slice(-1)[0]?.close||1200);
+      };
+      const proceedsUSD = toUSDv((t.price||0)*qtyF, t.currency||"ARS", t.date);
+      const buyLots = trades
+        .filter(b=>b.ticker===t.ticker&&b.tipo==="compra"&&b.ts<t.ts)
+        .sort((a,b)=>a.ts-b.ts);
+      let rem=qty, costUSD=0;
+      for(const lot of buyLots){
+        if(rem<=0) break;
+        const used=Math.min(lot.qty,rem);
+        const lqF=isBondT?used/100:used;
+        costUSD+=toUSDv((lot.price||0)*lqF, lot.currency||"ARS", lot.date);
+        rem-=used;
+      }
+      pnlRealizadoPorAnio[y] = (pnlRealizadoPorAnio[y]||0) + proceedsUSD - costUSD;
+    });
+
     years.forEach(y=>{
       const yStart = y+"-01-01";
       const yEnd   = y+"-12-31" < today ? y+"-12-31" : today;
@@ -5479,7 +5506,15 @@ function App(){
       const twrFin    = puntos[puntos.length-1].val;
       const rendAnio  = ((twrFin/twrInicio)-1)*100;
 
-      byYear[y] = { rend: rendAnio, twrInicio, twrFin };
+      // P&L USD del año = realizado en el año + cambio en valor de cartera
+      // Para el año en curso: no realizado = totPnl (ya calculado fuera)
+      // Para años cerrados: no realizado = 0 (todo fue realizado o rolado)
+      const esAnioActual = y === today.slice(0,4);
+      const realizadoAnio = pnlRealizadoPorAnio[y]||0;
+      const noRealizadoAnio = esAnioActual ? totPnl : 0;
+      const pnlAnio = realizadoAnio + noRealizadoAnio;
+
+      byYear[y] = { rend: rendAnio, pnl: pnlAnio, twrInicio, twrFin };
     });
 
     return { twrTotal: twrTotal*100, twrAnual, dias, serie, byYear, firstDate };
@@ -5963,8 +5998,8 @@ function App(){
                               <div style={{fontSize:14,fontWeight:700,color,marginBottom:3,fontFamily:"'DM Mono',monospace"}}>
                                 {isPos?"+":""}{data.rend.toFixed(1)}%
                               </div>
-                              <div style={{fontSize:10,color:"var(--text-muted)",marginBottom:10}}>
-                                TWR {year}
+                              <div style={{fontSize:11,fontWeight:600,color:data.pnl>=0?"var(--green)":"var(--red)",marginBottom:10,fontFamily:"'DM Mono',monospace"}}>
+                                {hideAmounts?"••••":(data.pnl>=0?"+":"")+fmtU(data.pnl,0)}
                               </div>
                               <div style={{width:28,height:barH,background:color,borderRadius:"3px 3px 0 0",opacity:0.8,transition:"height 0.5s ease"}}/>
                             </div>

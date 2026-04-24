@@ -5388,25 +5388,42 @@ function App(){
   // pnlAmt en ARS → convertir a USD usando CCL de la fecha de la venta
   const pnlRealizado = useMemo(()=>{
     const cclBars = historicos?.CCL||[];
-    return trades
-      .filter(t=>t.tipo==="venta" && t.pnlAmt!=null)
-      .reduce((acc, t)=>{
-        let pnl = t.pnlAmt||0;
-        if(t.currency==="USD") return acc + pnl;
-        // Para bonos ARS el pnlAmt ya está en ARS pero el precio es por cada 100 VN
-        // Si el ticker tiene números → es bono → el pnl ya viene calculado correctamente
-        // desde el modal de venta (costFIFO = qty*price/100 para bonos)
-        // Solo convertir ARS → USD con CCL de la fecha
-        const cclBar = cclBars.filter(b=>b.date<=t.date).pop();
-        const ccl = cclBar?.close||cclBars.slice(-1)[0]?.close||1200;
-        return acc + pnl/ccl;
-      }, 0);
+    // Para cada venta, calcular P&L en USD comparando proceeds vs costo en USD
+    // Evita el problema de convertir pnlAmt en moneda local con cantidades nominales enormes
+    const toUSDamt = (monto, currency, date) => {
+      if(currency==="USD") return monto;
+      const bar = cclBars.filter(b=>b.date<=date).pop();
+      const ccl = bar?.close||cclBars.slice(-1)[0]?.close||1200;
+      return monto/ccl;
+    };
+    const ventasTrades = trades.filter(t=>t.tipo==="venta");
+    return ventasTrades.reduce((acc, venta)=>{
+      const isBond = /\d/.test(venta.ticker);
+      const qty    = venta.qty||0;
+      const qtyF   = isBond ? qty/100 : qty;
+      // Proceeds en USD
+      const proceedsUSD = toUSDamt((venta.price||0)*qtyF, venta.currency||"ARS", venta.date);
+      // Costo FIFO en USD: buscar lotes de compra anteriores
+      const buyLots = trades
+        .filter(t=>t.ticker===venta.ticker&&t.tipo==="compra"&&t.ts<venta.ts)
+        .sort((a,b)=>a.ts-b.ts);
+      let remaining=qty, costUSD=0;
+      for(const lot of buyLots){
+        if(remaining<=0) break;
+        const used = Math.min(lot.qty, remaining);
+        const lotQtyF = isBond ? used/100 : used;
+        costUSD += toUSDamt((lot.price||0)*lotQtyF, lot.currency||"ARS", lot.date);
+        remaining -= used;
+      }
+      return acc + proceedsUSD - costUSD;
+    }, 0);
   },[trades, historicos]);
 
   const totPnlTotal = totPnl + pnlRealizado; // no realizado + realizado
 
   // TWR anualizado + P&L real por año
   const twrStats = useMemo(()=>{
+    try{
     if(!historicos||!trades.length) return null;
     const cclBars  = historicos?.CCL||[];
     const mepBars  = historicos?.MEP||[];
@@ -5509,6 +5526,7 @@ function App(){
     });
 
     return { twrTotal: twrTotal*100, twrAnual, dias, serie, byYear, firstDate };
+    }catch(e){ console.error("twrStats error:",e); return null; }
   },[trades, en, historicos, fxRate, livePrices]);
 
   const benchPct=(Math.pow(1+liveT10Y/100,90/365)-1)*100;
@@ -5942,7 +5960,8 @@ function App(){
               </div>
 
               {/* Rendimiento por año */}
-              {twrStats&&Object.keys(twrStats.byYear).length>0&&(()=>{
+              {twrStats&&Object.keys(twrStats.byYear||{}).length>0&&(()=>{
+                try{
                 const entries = Object.entries(twrStats.byYear).sort(([a],[b])=>a.localeCompare(b));
                 const maxAbs  = Math.max(...entries.map(([,d])=>Math.abs(d.rend)), 1);
                 const BAR_MAX = 80; // px altura máxima de barra
@@ -6010,22 +6029,26 @@ function App(){
                   </div>
 
                   {/* Línea total */}
-                  <div style={{marginTop:16,paddingTop:12,borderTop:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <span style={{fontSize:11,color:"var(--text-muted)"}}>Total acumulado · {twrStats.dias} días</span>
-                    <div style={{display:"flex",gap:24}}>
-                      <div style={{textAlign:"right"}}>
-                        <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8}}>P&L total USD</div>
-                        <div style={{fontSize:14,fontWeight:700,color:pc(totPnlTotal),fontFamily:"'DM Mono',monospace"}}>
-                          {hideAmounts?"••••":(totPnlTotal>=0?"+":"")+fmtU(totPnlTotal,0)}
-                        </div>
-                        <div style={{fontSize:10,color:"var(--text-muted)"}}>
-                          {hideAmounts?"••••":(pnlRealizado>=0?"+":"")+fmtU(pnlRealizado,0)} realizado
-                        </div>
+                  <div style={{marginTop:16,paddingTop:14,borderTop:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div>
+                      <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8,marginBottom:4}}>Total acumulado · {twrStats.dias} días de historia</div>
+                      <div style={{fontSize:10,color:"var(--text-muted)"}}>
+                        <span style={{color:pnlRealizado>=0?"var(--green)":"var(--red)"}}>{hideAmounts?"••••":(pnlRealizado>=0?"+":"")+fmtU(pnlRealizado,0)}</span>
+                        {" realizado · "}
+                        <span style={{color:totPnl>=0?"var(--green)":"var(--red)"}}>{hideAmounts?"••••":(totPnl>=0?"+":"")+fmtU(totPnl,0)}</span>
+                        {" no realizado"}
+                      </div>
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8,marginBottom:4}}>P&L total USD</div>
+                      <div style={{fontSize:28,fontWeight:700,color:pc(totPnlTotal),fontFamily:"'DM Mono',monospace",lineHeight:1}}>
+                        {hideAmounts?"••••••":(totPnlTotal>=0?"+":"")+fmtU(totPnlTotal,0)}
                       </div>
                     </div>
                   </div>
                 </div>
                 );
+                }catch(e){ return <div style={{color:"var(--red)",fontSize:11,padding:8}}>Error cargando rendimiento anual</div>; }
               })()}
 
               {/* Top/Bottom 5 del día en Dashboard */}

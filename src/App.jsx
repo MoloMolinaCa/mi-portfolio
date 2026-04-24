@@ -3418,7 +3418,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
     const twr = calcTWR(allDates, trades, en, tickerBars, cclBars, mepBars, "USD_CCL", fxRate, livePricesMap, null, endDate);
     // Convertir de base-100 a {date, close} para reutilizar calcExtremes
     return twr.map(p=>({date:p.date, close:p.val}));
-  },[en, historicos, trades, startDate, endDate, fxRate, period]);
+  },[en, historicos, trades, startDate, endDate, fxRate]); // sin livePrices
 
   const [sortContrib, setSortContrib] = useState({col:"contrib", asc:false});
   const [mobileSection, setMobileSection] = useState("contribucion"); // mobile: acordeon
@@ -5299,6 +5299,8 @@ function App(){
   },[]);
   const isMobile = useIsMobile();
   const [tab,setTab]           = useState("dashboard");
+  const [visitedTabs, setVisitedTabs] = useState(new Set(["dashboard"]));
+  const handleTabChange = (t) => { setTab(t); setVisitedTabs(prev=>new Set([...prev,t])); };
   const [modal,setModal]       = useState(null);
   const [bondWizard,setBondWizard] = useState(null); // {ticker, onConfirm}
   const [ventaResult,setVentaResult] = useState(null);
@@ -5479,7 +5481,7 @@ function App(){
     return{...h,currentPrice,liveChangePct,valUSD,costUSD,pnlUSD,pnlPct,isLive:!!live,ppc};
   });
 
-  const enGrouped=Object.values(en.reduce((acc,h)=>{
+  const enGrouped = useMemo(()=>Object.values(en.reduce((acc,h)=>{
     if(!acc[h.ticker]){acc[h.ticker]={...h};return acc;}
     const prev=acc[h.ticker];
     const totalQty=prev.qty+h.qty;
@@ -5488,12 +5490,15 @@ function App(){
     merged.pnlPct=merged.costUSD>0?(merged.pnlUSD/merged.costUSD)*100:0;
     acc[h.ticker]=merged;
     return acc;
-  },{}));
+  },{})),[en]);
 
-  const totUSD=en.reduce((a,h)=>a+h.valUSD,0);
-  const totCost=en.reduce((a,h)=>a+h.costUSD,0);
-  const totPnl=totUSD-totCost;
-  const totPct=totCost>0?(totPnl/totCost)*100:0;
+  const {totUSD,totCost,totPnl,totPct} = useMemo(()=>{
+    const totUSD=en.reduce((a,h)=>a+h.valUSD,0);
+    const totCost=en.reduce((a,h)=>a+h.costUSD,0);
+    const totPnl=totUSD-totCost;
+    const totPct=totCost>0?(totPnl/totCost)*100:0;
+    return {totUSD,totCost,totPnl,totPct};
+  },[en]);
 
   // P&L realizado: suma de pnlAmt de todas las ventas ya ejecutadas
   // pnlAmt en ARS → convertir a USD usando CCL de la fecha de la venta
@@ -5630,7 +5635,7 @@ function App(){
 
     return { twrTotal: twrTotal*100, twrAnual, dias, serie, byYear, firstDate };
     }catch(e){ console.error("twrStats error:",e); return null; }
-  },[trades, en, historicos, fxRate, livePrices]);
+  },[trades, en, historicos, fxRate]); // sin livePrices — no recalcular por cada precio
 
   const benchPct=(Math.pow(1+liveT10Y/100,90/365)-1)*100;
   const alpha=totPct-benchPct;
@@ -5896,7 +5901,7 @@ function App(){
         {/* Nav */}
         <div style={{background:"var(--bg-card)",borderBottom:"1px solid var(--border)",padding:"0 12px",display:"flex",gap:0,overflowX:"auto",WebkitOverflowScrolling:"touch",scrollbarWidth:"none"}}>
           {[["dashboard","📊 Dashboard"],["portfolio","💼 Portfolio"],["analisis","🔍 Análisis"],["flujos","💸 Flujos"],["operaciones","📋 Operaciones"]].map(([id,lbl])=>(
-            <button key={id} onClick={()=>setTab(id)} className="nav-btn"
+            <button key={id} onClick={()=>handleTabChange(id)} className="nav-btn"
               style={{padding:isMobile?"10px 12px":"13px 18px",background:"transparent",border:"none",
                 borderBottom:tab===id?"2px solid var(--accent)":"2px solid transparent",
                 color:tab===id?"var(--text-primary)":"var(--text-muted)",cursor:"pointer",
@@ -6202,15 +6207,15 @@ function App(){
           )}
 
           {/* ANÁLISIS */}
-          {tab==="analisis"&&(
+          {tab==="analisis"&&visitedTabs.has("analisis")&&(
             <AnalisisTab en={enGrouped} historicos={historicos} fxRate={fxRate} currency={fx} card={card} livePrices={livePrices} hideAmounts={hideAmounts} trades={trades} isMobile={isMobile}/>
           )}
 
           {/* OPERACIONES */}
-          {tab==="operaciones"&&(
+          {tab==="operaciones"&&visitedTabs.has("operaciones")&&(
             <OperacionesTab trades={trades} port={port} setTrades={setTrades} setPort={setPort} card={card} livePrices={livePrices} darkMode={darkMode}/>
           )}
-          {tab==="flujos"&&(
+          {tab==="flujos"&&visitedTabs.has("flujos")&&(
             <FlujoTab port={port} trades={trades} bondFlows={bondFlows} setBondFlows={setBondFlows} card={card} fxRate={fxRate} historicos={historicos} isMobile={isMobile}/>
           )}
 

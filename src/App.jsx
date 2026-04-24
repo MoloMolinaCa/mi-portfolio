@@ -5512,13 +5512,18 @@ function App(){
       const valorInicio = calcValorCartera(y==="2026"&&firstDate>yStart ? firstDate : yStart);
       const valorFin    = calcValorCartera(yEnd);
 
-      // Flujos del año
+      // Flujos del año — dividir por 100 para bonos (precio es por cada 100 VN)
+      const flowUSD = (t) => {
+        const isBondT = /\d/.test(t.ticker);
+        const qtyF    = isBondT ? t.qty/100 : t.qty;
+        return toUSD((t.price||0)*qtyF, t.currency||"ARS", t.date);
+      };
       const comprasAnio = trades
         .filter(t=>t.tipo==="compra"&&t.date>=yStart&&t.date<=yEnd)
-        .reduce((a,t)=>a+toUSD(t.price*t.qty, t.currency||"ARS", t.date),0);
+        .reduce((a,t)=>a+flowUSD(t),0);
       const ventasAnio  = trades
         .filter(t=>t.tipo==="venta"&&t.date>=yStart&&t.date<=yEnd)
-        .reduce((a,t)=>a+toUSD(t.price*t.qty, t.currency||"ARS", t.date),0);
+        .reduce((a,t)=>a+flowUSD(t),0);
 
       const pnlAnio = valorFin - valorInicio - comprasAnio + ventasAnio;
 
@@ -5989,60 +5994,66 @@ function App(){
                     </div>
                   </div>
 
-                  {/* Barras por año */}
-                  <div style={{display:"flex",gap:0,alignItems:"flex-end",borderBottom:"1px solid var(--border)",paddingBottom:0,marginBottom:0}}>
-                    {entries.map(([year,data],i)=>{
-                      const isPos = data.rend>=0;
-                      const barH  = Math.max(3, Math.abs(data.rend)/maxAbs*BAR_MAX);
-                      const color = isPos?"var(--green)":"var(--red)";
-                      const isLast = i===entries.length-1;
-                      return(
-                        <div key={year} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:0,
-                          borderRight:isLast?"none":"1px solid rgba(255,255,255,0.04)",padding:"0 12px 0"}}>
-                          {/* % encima */}
-                          <div style={{fontSize:13,fontWeight:700,color,marginBottom:4,fontFamily:"'DM Mono',monospace"}}>
-                            {isPos?"+":""}{data.rend.toFixed(1)}%
-                          </div>
-                          {/* P&L debajo del % */}
-                          <div style={{fontSize:10,color:"var(--text-muted)",marginBottom:8}}>
-                            {hideAmounts?"••••":(data.pnl>=0?"+":"")+fmtU(data.pnl,0)}
-                          </div>
-                          {/* Barra delgada */}
-                          <div style={{width:28,height:barH,background:color,borderRadius:"3px 3px 0 0",
-                            opacity:0.8,transition:"height 0.5s ease"}}/>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  {/* Layout: barras a la izquierda, panel total a la derecha */}
+                  <div style={{display:"flex",gap:20,alignItems:"stretch"}}>
 
-                  {/* Años + P&L total abajo */}
-                  <div style={{display:"flex",gap:0,marginTop:0,borderTop:"none"}}>
-                    {entries.map(([year,data],i)=>{
-                      const isLast = i===entries.length-1;
-                      return(
-                        <div key={year} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,
-                          borderRight:isLast?"none":"1px solid rgba(255,255,255,0.04)",padding:"8px 12px 0"}}>
-                          <div style={{fontSize:12,fontWeight:600,color:"var(--text-secondary)"}}>{year}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Línea total */}
-                  <div style={{marginTop:16,paddingTop:14,borderTop:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <div>
-                      <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8,marginBottom:4}}>Total acumulado · {twrStats.dias} días de historia</div>
-                      <div style={{fontSize:10,color:"var(--text-muted)"}}>
-                        <span style={{color:pnlRealizado>=0?"var(--green)":"var(--red)"}}>{hideAmounts?"••••":(pnlRealizado>=0?"+":"")+fmtU(pnlRealizado,0)}</span>
-                        {" realizado · "}
-                        <span style={{color:totPnl>=0?"var(--green)":"var(--red)"}}>{hideAmounts?"••••":(totPnl>=0?"+":"")+fmtU(totPnl,0)}</span>
-                        {" no realizado"}
+                    {/* Barras por año */}
+                    <div style={{flex:1}}>
+                      <div style={{display:"flex",gap:0,alignItems:"flex-end",borderBottom:"1px solid var(--border)"}}>
+                        {entries.map(([year,data],i)=>{
+                          const isPos = data.rend>=0;
+                          const barH  = Math.max(3, Math.abs(data.rend)/maxAbs*BAR_MAX);
+                          const color = isPos?"var(--green)":"var(--red)";
+                          const isLast = i===entries.length-1;
+                          return(
+                            <div key={year} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",
+                              borderRight:isLast?"none":"1px solid rgba(255,255,255,0.04)",padding:"0 16px 0"}}>
+                              <div style={{fontSize:14,fontWeight:700,color,marginBottom:3,fontFamily:"'DM Mono',monospace"}}>
+                                {isPos?"+":""}{data.rend.toFixed(1)}%
+                              </div>
+                              <div style={{fontSize:10,color:"var(--text-muted)",marginBottom:10}}>
+                                {hideAmounts?"••••":(data.pnl>=0?"+":"")+fmtU(data.pnl,0)}
+                              </div>
+                              <div style={{width:28,height:barH,background:color,borderRadius:"3px 3px 0 0",opacity:0.8,transition:"height 0.5s ease"}}/>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {/* Años debajo */}
+                      <div style={{display:"flex",gap:0}}>
+                        {entries.map(([year,,],i)=>(
+                          <div key={year} style={{flex:1,textAlign:"center",padding:"7px 0",
+                            borderRight:i===entries.length-1?"none":"1px solid rgba(255,255,255,0.04)"}}>
+                            <span style={{fontSize:12,fontWeight:600,color:"var(--text-secondary)"}}>{year}</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                    <div style={{textAlign:"right"}}>
-                      <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8,marginBottom:4}}>P&L total USD</div>
-                      <div style={{fontSize:28,fontWeight:700,color:pc(totPnlTotal),fontFamily:"'DM Mono',monospace",lineHeight:1}}>
-                        {hideAmounts?"••••••":(totPnlTotal>=0?"+":"")+fmtU(totPnlTotal,0)}
+
+                    {/* Panel total — a la derecha, mismo alto que las barras */}
+                    <div style={{background:"var(--bg-input)",borderRadius:10,padding:"16px 20px",minWidth:180,display:"flex",flexDirection:"column",justifyContent:"space-between",flexShrink:0}}>
+                      <div>
+                        <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8,marginBottom:6}}>P&L total acumulado</div>
+                        <div style={{fontSize:30,fontWeight:700,color:pc(totPnlTotal),fontFamily:"'DM Mono',monospace",lineHeight:1.1}}>
+                          {hideAmounts?"••••":(totPnlTotal>=0?"+":"")+fmtU(totPnlTotal,0)}
+                        </div>
+                      </div>
+                      <div style={{marginTop:12,display:"flex",flexDirection:"column",gap:6}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                          <span style={{fontSize:10,color:"var(--text-muted)"}}>Realizado</span>
+                          <span style={{fontSize:12,fontWeight:600,color:pc(pnlRealizado),fontFamily:"'DM Mono',monospace"}}>
+                            {hideAmounts?"••••":(pnlRealizado>=0?"+":"")+fmtU(pnlRealizado,0)}
+                          </span>
+                        </div>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                          <span style={{fontSize:10,color:"var(--text-muted)"}}>No realizado</span>
+                          <span style={{fontSize:12,fontWeight:600,color:pc(totPnl),fontFamily:"'DM Mono',monospace"}}>
+                            {hideAmounts?"••••":(totPnl>=0?"+":"")+fmtU(totPnl,0)}
+                          </span>
+                        </div>
+                        <div style={{borderTop:"1px solid var(--border)",paddingTop:6,marginTop:2,fontSize:10,color:"var(--text-muted)"}}>
+                          {twrStats.dias} días de historia
+                        </div>
                       </div>
                     </div>
                   </div>

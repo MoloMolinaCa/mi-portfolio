@@ -1,6 +1,21 @@
 /* eslint-disable */
 import React, { useState, useEffect, useMemo, memo, useRef, useCallback } from "react";
 
+// Componente de countdown — aislado para no re-renderizar el App entero
+function CountdownDisplay({lastRefresh, priceStatus, liveCount, portLen}){
+  const [display, setDisplay] = useState(300);
+  useEffect(()=>{
+    if(!lastRefresh) return;
+    setDisplay(300);
+    const iv = setInterval(()=>setDisplay(d=>d<=1?300:d-1), 1000);
+    return()=>clearInterval(iv);
+  },[lastRefresh]);
+  if(priceStatus==="live") return <span style={{color:"var(--green)"}}>● {liveCount}/{portLen} activos · actualizado {lastRefresh?.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})} · próx. {Math.floor(display/60)}:{String(display%60).padStart(2,"0")}</span>;
+  if(priceStatus==="partial") return <span style={{color:"var(--yellow)"}}>◐ Parcial</span>;
+  if(priceStatus==="loading") return <span style={{color:"var(--text-muted)"}}>⟳ Actualizando...</span>;
+  return null;
+}
+
 // Hook responsive — detecta pantalla mobile (<768px)
 function useIsMobile(){ 
   const [m,setM]=useState(()=>{
@@ -5313,18 +5328,7 @@ function App(){
   const [lastRefresh,setLastRefresh] = useState(null);
   const [countdown,setCountdown]   = useState(300);
 
-  const countdownRef = useRef(300);
-  const [countdownDisplay, setCountdownDisplay] = useState(300);
-  useEffect(()=>{
-    if(!lastRefresh)return;
-    countdownRef.current = 300;
-    setCountdownDisplay(300);
-    const tick=setInterval(()=>{
-      countdownRef.current = countdownRef.current<=1 ? 300 : countdownRef.current-1;
-      setCountdownDisplay(countdownRef.current);
-    },1000);
-    return()=>clearInterval(tick);
-  },[lastRefresh]);
+  // countdown movido a CountdownDisplay component — no re-renderiza el App
 
   // ── Storage ───────────────────────────────────────────────────────────────
   useEffect(()=>{
@@ -5394,17 +5398,17 @@ function App(){
   useEffect(()=>{ if(storageReady){ refreshPrices(); const iv=setInterval(refreshPrices,5*60*1000); return()=>clearInterval(iv); } },[storageReady]);
 
   // ── Portfolio calcs ───────────────────────────────────────────────────────
-  const ppcByTicker = port.reduce((acc,t)=>{
+  const ppcByTicker = useMemo(()=>port.reduce((acc,t)=>{
     const buys = trades.filter(tr=>tr.ticker===t.ticker&&tr.tipo==="compra");
     if(!buys.length){ acc[t.ticker]=t.buyPrice; return acc; }
     const totalCost=buys.reduce((a,tr)=>a+tr.qty*tr.price,0);
     const totalQty =buys.reduce((a,tr)=>a+tr.qty,0);
     acc[t.ticker]=totalQty>0?totalCost/totalQty:t.buyPrice;
     return acc;
-  },{});
+  },{}),[port,trades]);
 
   const today = todayAR();
-  const en=port.map(h=>{
+  const en = useMemo(()=>port.map(h=>{
     const live=livePrices[h.ticker];
     const isBondH=h.type==="bono_ars"; // solo ARS cotiza por 100 laminas diferente al historico
     const livePrice=live?live.price:null;
@@ -5479,7 +5483,7 @@ function App(){
     const pnlUSD=valUSD-costUSD;
     const pnlPct=costUSD>0?(pnlUSD/costUSD)*100:0;
     return{...h,currentPrice,liveChangePct,valUSD,costUSD,pnlUSD,pnlPct,isLive:!!live,ppc};
-  });
+  }),[port,trades,livePrices,historicos,fxRate,ppcByTicker,today]);
 
   const enGrouped = useMemo(()=>Object.values(en.reduce((acc,h)=>{
     if(!acc[h.ticker]){acc[h.ticker]={...h};return acc;}
@@ -5857,9 +5861,7 @@ function App(){
               <div style={{minWidth:0}}>
                 <div style={{fontWeight:700,fontSize:isMobile?13:15,color:"var(--title-color)",letterSpacing:"-0.3px"}}>Mi Portfolio</div>
                 {!isMobile&&<div style={{fontSize:11,color:"var(--text-muted)"}}>
-                  {priceStatus==="live"&&<span style={{color:"var(--green)"}}>● {liveCount}/{port.length} activos · actualizado {lastRefresh?.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})} · próx. {Math.floor(countdownDisplay/60)}:{String(countdownDisplay%60).padStart(2,"0")}</span>}
-                  {priceStatus==="partial"&&<span style={{color:"var(--yellow)"}}>◐ Parcial</span>}
-                  {priceStatus==="loading"&&<span style={{color:"var(--text-muted)"}}>⟳ Actualizando...</span>}
+                  <CountdownDisplay lastRefresh={lastRefresh} priceStatus={priceStatus} liveCount={liveCount} portLen={port.length}/>
                 </div>}
               </div>
             </div>
@@ -5891,8 +5893,8 @@ function App(){
               <option value="MEP">MEP {fmtA(liveFX.MEP)}</option>
               <option value="oficial">Oficial {fmtA(liveFX.oficial)}</option>
             </select>
-            <span style={{fontSize:10,color:priceStatus==="live"?"var(--green)":"var(--text-muted)"}}>
-              {priceStatus==="live"?`● ${liveCount}/${port.length} · ${lastRefresh?.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})}`:priceStatus==="loading"?"⟳":"—"}
+            <span style={{fontSize:10}}>
+              <CountdownDisplay lastRefresh={lastRefresh} priceStatus={priceStatus} liveCount={liveCount} portLen={port.length}/>
             </span>
             <button onClick={downloadTrades} style={{background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:6,padding:"4px 8px",color:"var(--text-secondary)",cursor:"pointer",fontSize:11}}>⬇ CSV</button>
           </div>}

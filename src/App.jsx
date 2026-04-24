@@ -5391,11 +5391,14 @@ function App(){
     return trades
       .filter(t=>t.tipo==="venta" && t.pnlAmt!=null)
       .reduce((acc, t)=>{
-        const pnl = t.pnlAmt||0;
+        let pnl = t.pnlAmt||0;
         if(t.currency==="USD") return acc + pnl;
-        // Convertir ARS → USD con CCL de la fecha
+        // Para bonos ARS el pnlAmt ya está en ARS pero el precio es por cada 100 VN
+        // Si el ticker tiene números → es bono → el pnl ya viene calculado correctamente
+        // desde el modal de venta (costFIFO = qty*price/100 para bonos)
+        // Solo convertir ARS → USD con CCL de la fecha
         const cclBar = cclBars.filter(b=>b.date<=t.date).pop();
-        const ccl = cclBar?.close||historicos?.CCL?.slice(-1)[0]?.close||1200;
+        const ccl = cclBar?.close||cclBars.slice(-1)[0]?.close||1200;
         return acc + pnl/ccl;
       }, 0);
   },[trades, historicos]);
@@ -5845,15 +5848,7 @@ function App(){
                     mainColor:twrStats?pc(twrStats.twrAnual):pc(totPct),
                     trend:twrStats?twrStats.twrAnual:totPct,
                   },
-                  {
-                    icon:"💰", lbl:"P&L total (real.+no real.)",
-                    main:hideAmounts?"••••":(totPnlTotal>=0?"+":"")+fmtU(totPnlTotal),
-                    sub:hideAmounts?"••••":(pnlRealizado>=0?"+":"")+fmtU(pnlRealizado)+" realizado",
-                    subLabel:"Incluye posiciones cerradas",
-                    mainColor:pc(totPnlTotal),
-                    trend:totPnlTotal,
-                    bigSub:false,
-                  },
+
                   {
                     icon:"📅", lbl:"Rendimiento del día",
                     main:fmtP(dayPct),
@@ -5947,55 +5942,91 @@ function App(){
               </div>
 
               {/* Rendimiento por año */}
-              {twrStats&&Object.keys(twrStats.byYear).length>0&&(
-                <div style={{...card,padding:"16px 20px"}}>
-                  <div style={{fontSize:11,fontWeight:600,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:14}}>
-                    Rendimiento por año · TWR
-                  </div>
-                  <div style={{display:"flex",gap:24,alignItems:"flex-end"}}>
-                    {/* Barras */}
-                    <div style={{flex:1,display:"flex",gap:12,alignItems:"flex-end",height:140}}>
-                      {Object.entries(twrStats.byYear).sort(([a],[b])=>a.localeCompare(b)).map(([year,data])=>{
-                        const maxAbs = Math.max(...Object.values(twrStats.byYear).map(d=>Math.abs(d.rend)), 1);
-                        const barH   = Math.max(4, Math.abs(data.rend)/maxAbs*110);
-                        const isPos  = data.rend >= 0;
-                        return(
-                          <div key={year} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6,flex:1,minWidth:60}}>
-                            {/* Valor sobre barra */}
-                            <div style={{fontSize:12,fontWeight:700,color:isPos?"var(--green)":"var(--red)"}}>
-                              {isPos?"+":""}{data.rend.toFixed(1)}%
-                            </div>
-                            <div style={{fontSize:10,color:"var(--text-muted)"}}>
-                              {hideAmounts?"••••":(data.pnl>=0?"+":"")+fmtU(data.pnl,0)}
-                            </div>
-                            {/* Barra */}
-                            <div style={{width:"100%",height:barH,background:isPos?"var(--green)":"var(--red)",borderRadius:"4px 4px 0 0",opacity:0.85,transition:"height 0.4s"}}/>
-                            {/* Año */}
-                            <div style={{fontSize:12,fontWeight:600,color:"var(--text-secondary)"}}>{year}</div>
-                          </div>
-                        );
-                      })}
+              {twrStats&&Object.keys(twrStats.byYear).length>0&&(()=>{
+                const entries = Object.entries(twrStats.byYear).sort(([a],[b])=>a.localeCompare(b));
+                const maxAbs  = Math.max(...entries.map(([,d])=>Math.abs(d.rend)), 1);
+                const BAR_MAX = 80; // px altura máxima de barra
+                return(
+                <div style={{...card,padding:"20px 24px"}}>
+                  {/* Header */}
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
+                    <div>
+                      <div style={{fontSize:11,fontWeight:600,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Rendimiento anual · TWR</div>
+                      <div style={{fontSize:10,color:"var(--text-muted)",marginTop:2,opacity:0.7}}>Incluye activos ya vendidos · punta a punta por año calendario</div>
                     </div>
-                    {/* Panel sumatoria */}
-                    <div style={{background:"var(--bg-input)",borderRadius:10,padding:"14px 18px",minWidth:160,flexShrink:0}}>
-                      <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8,marginBottom:6}}>Acumulado total</div>
-                      <div style={{fontSize:22,fontWeight:700,color:pc(twrStats.twrTotal),fontFamily:"'DM Mono',monospace"}}>
-                        {twrStats.twrTotal>=0?"+":""}{twrStats.twrTotal.toFixed(1)}%
-                      </div>
-                      <div style={{fontSize:11,color:"var(--text-muted)",marginTop:4}}>
-                        {hideAmounts?"••••":(totPnlTotal>=0?"+":"")+fmtU(totPnlTotal,0)} USD total
-                      </div>
-                      <div style={{borderTop:"1px solid var(--border)",marginTop:10,paddingTop:10}}>
-                        <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8,marginBottom:4}}>Anualizado</div>
-                        <div style={{fontSize:16,fontWeight:700,color:pc(twrStats.twrAnual),fontFamily:"'DM Mono',monospace"}}>
-                          {twrStats.twrAnual>=0?"+":""}{twrStats.twrAnual.toFixed(1)}% / año
+                    <div style={{display:"flex",gap:20,alignItems:"center"}}>
+                      <div style={{textAlign:"right"}}>
+                        <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8}}>TWR anualizado</div>
+                        <div style={{fontSize:18,fontWeight:700,color:pc(twrStats.twrAnual),fontFamily:"'DM Mono',monospace"}}>
+                          {twrStats.twrAnual>=0?"+":""}{twrStats.twrAnual.toFixed(1)}%<span style={{fontSize:11,fontWeight:400,opacity:0.6}}>/año</span>
                         </div>
-                        <div style={{fontSize:10,color:"var(--text-muted)",marginTop:2}}>{twrStats.dias} días de historia</div>
+                      </div>
+                      <div style={{textAlign:"right"}}>
+                        <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8}}>Acumulado</div>
+                        <div style={{fontSize:18,fontWeight:700,color:pc(twrStats.twrTotal),fontFamily:"'DM Mono',monospace"}}>
+                          {twrStats.twrTotal>=0?"+":""}{twrStats.twrTotal.toFixed(1)}%
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Barras por año */}
+                  <div style={{display:"flex",gap:0,alignItems:"flex-end",borderBottom:"1px solid var(--border)",paddingBottom:0,marginBottom:0}}>
+                    {entries.map(([year,data],i)=>{
+                      const isPos = data.rend>=0;
+                      const barH  = Math.max(3, Math.abs(data.rend)/maxAbs*BAR_MAX);
+                      const color = isPos?"var(--green)":"var(--red)";
+                      const isLast = i===entries.length-1;
+                      return(
+                        <div key={year} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:0,
+                          borderRight:isLast?"none":"1px solid rgba(255,255,255,0.04)",padding:"0 12px 0"}}>
+                          {/* % encima */}
+                          <div style={{fontSize:13,fontWeight:700,color,marginBottom:4,fontFamily:"'DM Mono',monospace"}}>
+                            {isPos?"+":""}{data.rend.toFixed(1)}%
+                          </div>
+                          {/* P&L debajo del % */}
+                          <div style={{fontSize:10,color:"var(--text-muted)",marginBottom:8}}>
+                            {hideAmounts?"••••":(data.pnl>=0?"+":"")+fmtU(data.pnl,0)}
+                          </div>
+                          {/* Barra delgada */}
+                          <div style={{width:28,height:barH,background:color,borderRadius:"3px 3px 0 0",
+                            opacity:0.8,transition:"height 0.5s ease"}}/>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Años + P&L total abajo */}
+                  <div style={{display:"flex",gap:0,marginTop:0,borderTop:"none"}}>
+                    {entries.map(([year,data],i)=>{
+                      const isLast = i===entries.length-1;
+                      return(
+                        <div key={year} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,
+                          borderRight:isLast?"none":"1px solid rgba(255,255,255,0.04)",padding:"8px 12px 0"}}>
+                          <div style={{fontSize:12,fontWeight:600,color:"var(--text-secondary)"}}>{year}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Línea total */}
+                  <div style={{marginTop:16,paddingTop:12,borderTop:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span style={{fontSize:11,color:"var(--text-muted)"}}>Total acumulado · {twrStats.dias} días</span>
+                    <div style={{display:"flex",gap:24}}>
+                      <div style={{textAlign:"right"}}>
+                        <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8}}>P&L total USD</div>
+                        <div style={{fontSize:14,fontWeight:700,color:pc(totPnlTotal),fontFamily:"'DM Mono',monospace"}}>
+                          {hideAmounts?"••••":(totPnlTotal>=0?"+":"")+fmtU(totPnlTotal,0)}
+                        </div>
+                        <div style={{fontSize:10,color:"var(--text-muted)"}}>
+                          {hideAmounts?"••••":(pnlRealizado>=0?"+":"")+fmtU(pnlRealizado,0)} realizado
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              )}
+                );
+              })()}
 
               {/* Top/Bottom 5 del día en Dashboard */}
               <DayMoversWidget en={enGrouped} historicos={historicos} fxRate={fxRate} livePrices={livePrices} card={card} hideAmounts={hideAmounts}/>

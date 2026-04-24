@@ -5383,6 +5383,131 @@ function App(){
   const totCost=en.reduce((a,h)=>a+h.costUSD,0);
   const totPnl=totUSD-totCost;
   const totPct=totCost>0?(totPnl/totCost)*100:0;
+
+  // P&L realizado: suma de pnlAmt de todas las ventas ya ejecutadas
+  // pnlAmt en ARS → convertir a USD usando CCL de la fecha de la venta
+  const pnlRealizado = useMemo(()=>{
+    const cclBars = historicos?.CCL||[];
+    return trades
+      .filter(t=>t.tipo==="venta" && t.pnlAmt!=null)
+      .reduce((acc, t)=>{
+        const pnl = t.pnlAmt||0;
+        if(t.currency==="USD") return acc + pnl;
+        // Convertir ARS → USD con CCL de la fecha
+        const cclBar = cclBars.filter(b=>b.date<=t.date).pop();
+        const ccl = cclBar?.close||historicos?.CCL?.slice(-1)[0]?.close||1200;
+        return acc + pnl/ccl;
+      }, 0);
+  },[trades, historicos]);
+
+  const totPnlTotal = totPnl + pnlRealizado; // no realizado + realizado
+
+  // TWR anualizado + P&L real por año
+  const twrStats = useMemo(()=>{
+    if(!historicos||!trades.length) return null;
+    const cclBars  = historicos?.CCL||[];
+    const mepBars  = historicos?.MEP||[];
+    const livePricesMap = {};
+    Object.entries(livePrices||{}).forEach(([t,p])=>{ livePricesMap[t]=p; });
+
+    // tickerBars: todos los tickers que aparecen en trades (incluyendo vendidos)
+    const allTradeTickers = [...new Set(trades.map(t=>t.ticker))];
+    const tickerBars = {};
+    allTradeTickers.forEach(ticker=>{
+      if(historicos?.[ticker]) tickerBars[ticker]=historicos[ticker];
+    });
+
+    const firstDate = trades.map(t=>t.date).sort()[0];
+    if(!firstDate) return null;
+    const today = todayAR();
+
+    // Construir serie TWR completa
+    const allDates = [];
+    const d = new Date(firstDate+'T12:00:00');
+    const end = new Date(today+'T12:00:00');
+    while(d<=end){ allDates.push(d.toISOString().slice(0,10)); d.setDate(d.getDate()+1); }
+
+    const serie = calcTWR(allDates, trades, en, tickerBars, cclBars, mepBars, "USD_CCL", fxRate, livePricesMap, null, today);
+    if(!serie||serie.length<2) return null;
+
+    const first = serie[0]?.val||100;
+    const last  = serie[serie.length-1]?.val||100;
+    const twrTotal = (last/first) - 1;
+    const dias = Math.max(1, Math.round((new Date(today)-new Date(firstDate))/(1000*60*60*24)));
+    const twrAnual = (Math.pow(1+twrTotal, 365/dias) - 1) * 100;
+
+    // Helper: convertir monto en moneda a USD usando CCL de esa fecha
+    const toUSD = (monto, currency, date) => {
+      if(currency==="USD") return monto;
+      const bar = cclBars.filter(b=>b.date<=date).pop();
+      const ccl = bar?.close || cclBars.slice(-1)[0]?.close || 1200;
+      return monto / ccl;
+    };
+
+    // P&L real por año:
+    // Para cada año: valor_cartera_fin - valor_cartera_inicio - compras + ventas
+    // "valor cartera" = suma de (qty × precio) de todos los activos vivos en esa fecha,
+    // incluyendo los que ya fueron vendidos pero estaban activos en ese momento
+    const years = [...new Set(allDates.map(d=>d.slice(0,4)))];
+    const byYear = {};
+
+    years.forEach(y=>{
+      const yStart = y+"-01-01";
+      const yEnd   = y+"-12-31" < today ? y+"-12-31" : today;
+
+      // TWR del año: puntos de la serie dentro del año
+      const puntos = serie.filter(p=>p.date>=yStart&&p.date<=yEnd);
+      if(!puntos.length) return;
+      const twrInicio = puntos[0].val;
+      const twrFin    = puntos[puntos.length-1].val;
+      const rendAnio  = ((twrFin/twrInicio)-1)*100;
+
+      // P&L en USD del año usando flujos reales:
+      // Valor inicio = suma de posiciones al inicio del año × precio histórico
+      // Valor fin    = suma de posiciones al fin del año × precio histórico
+      // + ventas realizadas en el año (cash que salió)
+      // - compras realizadas en el año (cash que entró)
+
+      // Reconstruir posiciones al inicio y fin del año
+      const calcValorCartera = (fecha) => {
+        // Para cada ticker: qty en esa fecha × precio en esa fecha
+        let total = 0;
+        allTradeTickers.forEach(ticker=>{
+          const buys  = trades.filter(t=>t.ticker===ticker&&t.tipo==="compra"&&t.date<=fecha);
+          const sells = trades.filter(t=>t.ticker===ticker&&t.tipo==="venta"&&t.date<=fecha);
+          const qty   = buys.reduce((a,t)=>a+t.qty,0) - sells.reduce((a,t)=>a+t.qty,0);
+          if(qty<=0) return;
+          const bars  = tickerBars[ticker]||[];
+          const bar   = bars.filter(b=>b.date<=fecha).pop();
+          if(!bar) return;
+          const isBond= /\d/.test(ticker);
+          const firstT= buys[0];
+          const currency = firstT?.currency||"ARS";
+          const price = isBond ? bar.close/100 : bar.close;
+          total += toUSD(price * qty, currency, fecha);
+        });
+        return total;
+      };
+
+      const valorInicio = calcValorCartera(y==="2026"&&firstDate>yStart ? firstDate : yStart);
+      const valorFin    = calcValorCartera(yEnd);
+
+      // Flujos del año
+      const comprasAnio = trades
+        .filter(t=>t.tipo==="compra"&&t.date>=yStart&&t.date<=yEnd)
+        .reduce((a,t)=>a+toUSD(t.price*t.qty, t.currency||"ARS", t.date),0);
+      const ventasAnio  = trades
+        .filter(t=>t.tipo==="venta"&&t.date>=yStart&&t.date<=yEnd)
+        .reduce((a,t)=>a+toUSD(t.price*t.qty, t.currency||"ARS", t.date),0);
+
+      const pnlAnio = valorFin - valorInicio - comprasAnio + ventasAnio;
+
+      byYear[y] = { rend: rendAnio, pnl: pnlAnio, twrInicio, twrFin };
+    });
+
+    return { twrTotal: twrTotal*100, twrAnual, dias, serie, byYear, firstDate };
+  },[trades, en, historicos, fxRate, livePrices]);
+
   const benchPct=(Math.pow(1+liveT10Y/100,90/365)-1)*100;
   const alpha=totPct-benchPct;
   const liveCount=en.filter(h=>h.isLive).length;
@@ -5713,12 +5838,21 @@ function App(){
                     bigSub:true,
                   },
                   {
-                    icon:"📈", lbl:"Rendimiento total",
-                    main:fmtP(totPct),
-                    sub:hideAmounts?"••••":fmtU(totPnl),
-                    subLabel:"PnL acumulado",
-                    mainColor:pc(totPct),
-                    trend:totPct,
+                    icon:"📈", lbl:"TWR anualizado",
+                    main:twrStats?fmtP(twrStats.twrAnual):fmtP(totPct),
+                    sub:twrStats?fmtP(twrStats.twrTotal)+" total · "+twrStats.dias+"d":(hideAmounts?"••••":fmtU(totPnl)),
+                    subLabel:twrStats?"Rendimiento acumulado":"No realizado",
+                    mainColor:twrStats?pc(twrStats.twrAnual):pc(totPct),
+                    trend:twrStats?twrStats.twrAnual:totPct,
+                  },
+                  {
+                    icon:"💰", lbl:"P&L total (real.+no real.)",
+                    main:hideAmounts?"••••":(totPnlTotal>=0?"+":"")+fmtU(totPnlTotal),
+                    sub:hideAmounts?"••••":(pnlRealizado>=0?"+":"")+fmtU(pnlRealizado)+" realizado",
+                    subLabel:"Incluye posiciones cerradas",
+                    mainColor:pc(totPnlTotal),
+                    trend:totPnlTotal,
+                    bigSub:false,
                   },
                   {
                     icon:"📅", lbl:"Rendimiento del día",
@@ -5811,6 +5945,57 @@ function App(){
                   </div>
                 )}
               </div>
+
+              {/* Rendimiento por año */}
+              {twrStats&&Object.keys(twrStats.byYear).length>0&&(
+                <div style={{...card,padding:"16px 20px"}}>
+                  <div style={{fontSize:11,fontWeight:600,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:14}}>
+                    Rendimiento por año · TWR
+                  </div>
+                  <div style={{display:"flex",gap:24,alignItems:"flex-end"}}>
+                    {/* Barras */}
+                    <div style={{flex:1,display:"flex",gap:12,alignItems:"flex-end",height:140}}>
+                      {Object.entries(twrStats.byYear).sort(([a],[b])=>a.localeCompare(b)).map(([year,data])=>{
+                        const maxAbs = Math.max(...Object.values(twrStats.byYear).map(d=>Math.abs(d.rend)), 1);
+                        const barH   = Math.max(4, Math.abs(data.rend)/maxAbs*110);
+                        const isPos  = data.rend >= 0;
+                        return(
+                          <div key={year} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6,flex:1,minWidth:60}}>
+                            {/* Valor sobre barra */}
+                            <div style={{fontSize:12,fontWeight:700,color:isPos?"var(--green)":"var(--red)"}}>
+                              {isPos?"+":""}{data.rend.toFixed(1)}%
+                            </div>
+                            <div style={{fontSize:10,color:"var(--text-muted)"}}>
+                              {hideAmounts?"••••":(data.pnl>=0?"+":"")+fmtU(data.pnl,0)}
+                            </div>
+                            {/* Barra */}
+                            <div style={{width:"100%",height:barH,background:isPos?"var(--green)":"var(--red)",borderRadius:"4px 4px 0 0",opacity:0.85,transition:"height 0.4s"}}/>
+                            {/* Año */}
+                            <div style={{fontSize:12,fontWeight:600,color:"var(--text-secondary)"}}>{year}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {/* Panel sumatoria */}
+                    <div style={{background:"var(--bg-input)",borderRadius:10,padding:"14px 18px",minWidth:160,flexShrink:0}}>
+                      <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8,marginBottom:6}}>Acumulado total</div>
+                      <div style={{fontSize:22,fontWeight:700,color:pc(twrStats.twrTotal),fontFamily:"'DM Mono',monospace"}}>
+                        {twrStats.twrTotal>=0?"+":""}{twrStats.twrTotal.toFixed(1)}%
+                      </div>
+                      <div style={{fontSize:11,color:"var(--text-muted)",marginTop:4}}>
+                        {hideAmounts?"••••":(totPnlTotal>=0?"+":"")+fmtU(totPnlTotal,0)} USD total
+                      </div>
+                      <div style={{borderTop:"1px solid var(--border)",marginTop:10,paddingTop:10}}>
+                        <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8,marginBottom:4}}>Anualizado</div>
+                        <div style={{fontSize:16,fontWeight:700,color:pc(twrStats.twrAnual),fontFamily:"'DM Mono',monospace"}}>
+                          {twrStats.twrAnual>=0?"+":""}{twrStats.twrAnual.toFixed(1)}% / año
+                        </div>
+                        <div style={{fontSize:10,color:"var(--text-muted)",marginTop:2}}>{twrStats.dias} días de historia</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Top/Bottom 5 del día en Dashboard */}
               <DayMoversWidget en={enGrouped} historicos={historicos} fxRate={fxRate} livePrices={livePrices} card={card} hideAmounts={hideAmounts}/>

@@ -3483,28 +3483,25 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
     // Todos los tickers activos en el período: los que tengo hoy + los que tuve y vendí
     const tickersHoy = new Set(en.map(h=>h.ticker));
 
-    // 1. Tickers con trades dentro del período que ya no están en cartera
-    const tickersConTradesEnPeriodo = new Set(
-      trades
-        .filter(t=>t.date>=startDate&&t.date<=endDate&&!tickersHoy.has(t.ticker))
-        .map(t=>t.ticker)
-    );
+    // Detectar todos los tickers que tuve en algún momento pero ya no tengo
+    // Un activo debe aparecer si:
+    //   a) tuvo trades dentro del período, O
+    //   b) tenía posición al inicio del período (lo compré antes y vendí antes o durante)
+    const allTradeTickers = [...new Set(trades.map(t=>t.ticker))].filter(t=>!tickersHoy.has(t));
 
-    // 2. Tickers que tenía al inicio del período (qtyAtStart > 0) pero ya no tengo
-    // Calcular qtyAtStart temporalmente para detectarlos
-    const qtyAtStartPrecheck = {};
-    [...new Set(trades.map(t=>t.ticker))].forEach(ticker=>{
-      if(tickersHoy.has(ticker)) return; // ya en cartera
-      const buys  = trades.filter(t=>t.ticker===ticker&&t.tipo==="compra"&&t.date<startDate);
-      const sells = trades.filter(t=>t.ticker===ticker&&t.tipo==="venta"&&t.date<startDate);
-      const qty = buys.reduce((a,t)=>a+t.qty,0) - sells.reduce((a,t)=>a+t.qty,0);
-      if(qty>0) qtyAtStartPrecheck[ticker] = qty;
+    const tickersCerrados = allTradeTickers.filter(ticker=>{
+      // ¿Tuvo posición en algún momento del período [startDate, endDate]?
+      const buysAll  = trades.filter(t=>t.ticker===ticker&&t.tipo==="compra");
+      const sellsAll = trades.filter(t=>t.ticker===ticker&&t.tipo==="venta");
+      if(!buysAll.length) return false;
+
+      // Fecha de primera compra y última venta
+      const firstBuy  = buysAll.map(t=>t.date).sort()[0];
+      const lastSell  = sellsAll.map(t=>t.date).sort().pop()||endDate;
+
+      // El activo estuvo en cartera si su rango [firstBuy, lastSell] se solapa con [startDate, endDate]
+      return firstBuy <= endDate && lastSell >= startDate;
     });
-
-    const tickersCerrados = [...new Set([
-      ...tickersConTradesEnPeriodo,
-      ...Object.keys(qtyAtStartPrecheck)
-    ])];
 
     // Construir lista completa: posiciones actuales + cerradas en el período
     const posicionesCerradas = tickersCerrados.map(ticker=>{
@@ -6124,7 +6121,7 @@ function App(){
                 }).sort((a,b)=>a.date.localeCompare(b.date))[0];
 
                 return(
-                  <div className="kpi-grid" style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(3,1fr) auto",gap:isMobile?6:12,maxWidth:1100,alignItems:"stretch",width:"100%"}}>
+                  <div className="kpi-grid" style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(3,1fr) auto",gap:isMobile?6:12,maxWidth:1100,alignItems:"stretch",width:"100%",paddingRight:isMobile?2:0}}>
                     {kpis.map(k=>(
                       <div key={k.lbl} className="kpi-card" style={{
                         ...card,

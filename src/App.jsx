@@ -3528,13 +3528,13 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
     const todasPosiciones = [...en.map(h=>({...h,cerrado:false})), ...posicionesCerradas];
 
     // Reconstruir qty de cada ticker al inicio del período desde trades
+    // Usar <= startDate para incluir los comprados el mismo día de inicio
+    // cashCompras/cashVentas excluirán esos trades usando > startDate
     const qtyAtStart = {};
     const allTickers = [...new Set(todasPosiciones.map(h=>h.ticker))];
-    // IMPORTANTE: usar < estricto para no doble-contar trades del día startDate
-    // Los trades del startDate van en cashCompras/cashVentas, no en qtyAtStart
     allTickers.forEach(ticker=>{
-      const buys  = trades.filter(t=>t.ticker===ticker&&t.tipo==="compra"&&t.date<startDate);
-      const sells = trades.filter(t=>t.ticker===ticker&&t.tipo==="venta"&&t.date<startDate);
+      const buys  = trades.filter(t=>t.ticker===ticker&&t.tipo==="compra"&&t.date<=startDate);
+      const sells = trades.filter(t=>t.ticker===ticker&&t.tipo==="venta"&&t.date<=startDate);
       const qty = buys.reduce((a,t)=>a+t.qty,0) - sells.reduce((a,t)=>a+t.qty,0);
       qtyAtStart[ticker] = Math.max(0, qty);
     });
@@ -3592,6 +3592,15 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
           usedBuyPrice = true;
         }
         qtyBase = 0; // no tenía posición al inicio → valInicio = 0
+        // Recalcular periodBuysCF incluyendo el startDate para el caso de compra en startDate
+        const allPeriodBuys = trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra"&&t.date>=startDate&&t.date<=endDate);
+        if(allPeriodBuys.length && !basePrice){
+          const totalQtyP = allPeriodBuys.reduce((a,t)=>a+t.qty,0);
+          const totalCostP= allPeriodBuys.reduce((a,t)=>a+t.qty*t.price,0);
+          basePrice = totalQtyP>0 ? totalCostP/totalQtyP : h.buyPrice||0;
+          baseDate  = allPeriodBuys[0]?.date||startDate;
+          usedBuyPrice = true;
+        }
       }
 
       if(!basePrice) return null;
@@ -3624,14 +3633,16 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
       const valFinal = toCCL(adjClose, endDate) * qtyFactor(qtyEnd);
 
       // Compras durante el período (cash saliente → resta)
-      const periodBuysCF  = trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra"&&t.date>=startDate&&t.date<=endDate);
+      // Usar > startDate para no doble-contar compras del día inicial (ya en qtyAtStart)
+      const periodBuysCF  = trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra"&&t.date>startDate&&t.date<=endDate);
       const cashCompras = periodBuysCF.reduce((a,t)=>{
         const f = isBond ? t.qty/100 : t.qty;
         return a + toCCL(t.price, t.date) * f;
       }, 0);
 
       // Ventas durante el período (cash entrante → suma)
-      const periodSellsCF = trades.filter(t=>t.ticker===h.ticker&&t.tipo==="venta"&&t.date>=startDate&&t.date<=endDate);
+      // Usar > startDate para no doble-contar ventas del día inicial
+      const periodSellsCF = trades.filter(t=>t.ticker===h.ticker&&t.tipo==="venta"&&t.date>startDate&&t.date<=endDate);
       const cashVentas = periodSellsCF.reduce((a,t)=>{
         const f = isBond ? t.qty/100 : t.qty;
         return a + toCCL(t.price, t.date) * f;
@@ -6125,9 +6136,11 @@ function App(){
                     {kpis.map(k=>(
                       <div key={k.lbl} className="kpi-card" style={{
                         ...card,
-                        padding:"16px 20px",
+                        padding:isMobile?"10px 12px":"16px 20px",
                         position:"relative",
                         overflow:"hidden",
+                        minWidth:0,
+                        boxSizing:"border-box",
                         borderLeft:`3px solid ${k.mainColor==="var(--text-secondary)"?"var(--border)":k.mainColor}`,
                       }}>
                         {k.trend!=null&&<div style={{position:"absolute",inset:0,background:`${k.trend>=0?"rgba(52,211,153,":"rgba(248,113,113,"}0.04)`,pointerEvents:"none"}}/>}
@@ -6138,9 +6151,9 @@ function App(){
                         <div style={{fontSize:isMobile?20:26,fontFamily:"'DM Sans',Georgia,serif",fontWeight:700,color:k.mainColor,lineHeight:1,marginBottom:8,letterSpacing:"-0.5px"}}>
                           {k.main}
                         </div>
-                        <div style={{display:"flex",alignItems:"baseline",gap:4}}>
-                          <span style={{fontSize:k.bigSub?15:12,color:k.trend!=null?pc(k.trend):"var(--text-secondary)",fontWeight:k.bigSub?600:k.trend!=null?600:400}}>{k.sub}</span>
-                          {k.subLabel&&<span style={{fontSize:8,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8,marginLeft:3}}>{k.subLabel}</span>}
+                        <div style={{display:"flex",alignItems:"baseline",gap:4,flexWrap:"wrap"}}>
+                          <span style={{fontSize:k.bigSub?(isMobile?12:15):(isMobile?10:12),color:k.trend!=null?pc(k.trend):"var(--text-secondary)",fontWeight:k.bigSub?600:k.trend!=null?600:400}}>{k.sub}</span>
+                          {k.subLabel&&!isMobile&&<span style={{fontSize:8,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8,marginLeft:3}}>{k.subLabel}</span>}
                         </div>
                       </div>
                     ))}

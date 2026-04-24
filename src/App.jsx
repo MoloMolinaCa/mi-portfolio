@@ -3374,13 +3374,21 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
 
     // Construir lista completa: posiciones actuales + cerradas en el período
     const posicionesCerradas = tickersCerrados.map(ticker=>{
-      const firstTrade = trades.filter(t=>t.ticker===ticker).sort((a,b)=>a.date.localeCompare(b.date))[0];
+      const allT = trades.filter(t=>t.ticker===ticker).sort((a,b)=>a.date.localeCompare(b.date));
+      const firstTrade = allT[0];
+      const currency = firstTrade?.currency||"ARS";
+      // Inferir si es bono: ticker termina en D (USD) o tiene historial de bono
+      // Convención BYMA: bonos USD terminan en D, bonos ARS sin D pero con suffix numérico
+      const isBondTicker = /\d/.test(ticker); // tiene número → probablemente bono
+      const inferredType = currency==="USD"
+        ? (isBondTicker?"bono_usd":"accion_usd")
+        : (isBondTicker?"bono_ars":"accion_ar");
       return {
         ticker,
         name: firstTrade?.name||ticker,
-        type: firstTrade?.type||"accion_ar",
-        buyCurrency: firstTrade?.currency||"ARS",
-        qty: 0, // ya no lo tenemos
+        type: inferredType,
+        buyCurrency: currency,
+        qty: 0,
         buyPrice: firstTrade?.price||0,
         buyDate: firstTrade?.date||startDate,
         cerrado: true,
@@ -3392,8 +3400,8 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
     const qtyAtStart = {};
     const allTickers = [...new Set(todasPosiciones.map(h=>h.ticker))];
     allTickers.forEach(ticker=>{
-      const buys  = trades.filter(t=>t.ticker===ticker&&t.tipo==="compra"&&t.date<startDate);
-      const sells = trades.filter(t=>t.ticker===ticker&&t.tipo==="venta"&&t.date<startDate);
+      const buys  = trades.filter(t=>t.ticker===ticker&&t.tipo==="compra"&&t.date<=startDate);
+      const sells = trades.filter(t=>t.ticker===ticker&&t.tipo==="venta"&&t.date<=startDate);
       const qty = buys.reduce((a,t)=>a+t.qty,0) - sells.reduce((a,t)=>a+t.qty,0);
       qtyAtStart[ticker] = Math.max(0, qty);
     });
@@ -3503,11 +3511,19 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
 
       // Rend % para cerrados: usar precio de venta vs precio base
       let retPctFinal = retPct;
-      if(h.cerrado && cashVentas>0 && valInicio===0){
-        // Comprado y vendido dentro del período: rend = (venta - compra) / compra
-        const avgBuy  = cashCompras  / (isBond?qtyEnd/100:qtyEnd||1);
-        const avgSell = cashVentas   / (isBond?qtyEnd/100:qtyEnd||1);
-        if(avgBuy>0) retPctFinal = ((avgSell-avgBuy)/avgBuy)*100;
+      if(h.cerrado){
+        // Calcular qty total operada en el período para el rend %
+        const qtyCerrada = periodSellsCF.reduce((a,t)=>a+t.qty,0)||periodBuysCF.reduce((a,t)=>a+t.qty,0)||1;
+        const qtyF = isBond ? qtyCerrada/100 : qtyCerrada;
+        if(valInicio===0 && cashCompras>0 && cashVentas>0){
+          // Comprado y vendido dentro del período
+          const avgBuy  = cashCompras / qtyF;
+          const avgSell = cashVentas  / qtyF;
+          if(avgBuy>0) retPctFinal = ((avgSell-avgBuy)/avgBuy)*100;
+        } else if(valInicio>0 && cashVentas>0){
+          // Tenía al inicio y vendió: rend del precio desde inicio
+          retPctFinal = retPct; // ya calculado arriba
+        }
       }
 
       return {...h, retPct:retPctFinal, pnlUSD, valBuy:valInicio, valEnd, basePrice:adjBase, adjClose,

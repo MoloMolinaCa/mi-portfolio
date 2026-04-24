@@ -3363,9 +3363,34 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
       return bars[0].close;
     };
 
+    // Todos los tickers activos en el período: los que tengo hoy + los que tuve y vendí
+    const tickersHoy = new Set(en.map(h=>h.ticker));
+    // Tickers con trades en el período que ya no están en cartera (cerrados)
+    const tickersCerrados = [...new Set(
+      trades
+        .filter(t=>t.date>=startDate&&t.date<=endDate&&!tickersHoy.has(t.ticker))
+        .map(t=>t.ticker)
+    )];
+
+    // Construir lista completa: posiciones actuales + cerradas en el período
+    const posicionesCerradas = tickersCerrados.map(ticker=>{
+      const firstTrade = trades.filter(t=>t.ticker===ticker).sort((a,b)=>a.date.localeCompare(b.date))[0];
+      return {
+        ticker,
+        name: firstTrade?.name||ticker,
+        type: firstTrade?.type||"accion_ar",
+        buyCurrency: firstTrade?.currency||"ARS",
+        qty: 0, // ya no lo tenemos
+        buyPrice: firstTrade?.price||0,
+        buyDate: firstTrade?.date||startDate,
+        cerrado: true,
+      };
+    });
+    const todasPosiciones = [...en.map(h=>({...h,cerrado:false})), ...posicionesCerradas];
+
     // Reconstruir qty de cada ticker al inicio del período desde trades
     const qtyAtStart = {};
-    const allTickers = [...new Set(en.map(h=>h.ticker))];
+    const allTickers = [...new Set(todasPosiciones.map(h=>h.ticker))];
     allTickers.forEach(ticker=>{
       const buys  = trades.filter(t=>t.ticker===ticker&&t.tipo==="compra"&&t.date<startDate);
       const sells = trades.filter(t=>t.ticker===ticker&&t.tipo==="venta"&&t.date<startDate);
@@ -3373,7 +3398,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
       qtyAtStart[ticker] = Math.max(0, qty);
     });
 
-    return en.map(h=>{
+    return todasPosiciones.map(h=>{
       const bars = historicos?.[h.ticker]||[];
       const endBar = [...bars].filter(b=>b.date<=endDate).pop();
       if(!endBar) return null;
@@ -3471,11 +3496,22 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
         return a + toCCL(t.price, t.date) * f;
       }, 0);
 
+      // Para posiciones cerradas (qty=0): P&L = -cashCompras + cashVentas + valInicio_vendido
+      // (valFinal = 0 porque ya no lo tenemos)
       const pnlUSD = valFinal - valInicio - cashCompras + cashVentas;
-      const valEnd = valFinal; // para compatibilidad
+      const valEnd = valFinal;
 
-      return {...h, retPct, pnlUSD, valBuy:valInicio, valEnd, basePrice:adjBase, adjClose,
-               usedBuyPrice, baseDate, qtyStart, buyPrice:h.buyPrice||0};
+      // Rend % para cerrados: usar precio de venta vs precio base
+      let retPctFinal = retPct;
+      if(h.cerrado && cashVentas>0 && valInicio===0){
+        // Comprado y vendido dentro del período: rend = (venta - compra) / compra
+        const avgBuy  = cashCompras  / (isBond?qtyEnd/100:qtyEnd||1);
+        const avgSell = cashVentas   / (isBond?qtyEnd/100:qtyEnd||1);
+        if(avgBuy>0) retPctFinal = ((avgSell-avgBuy)/avgBuy)*100;
+      }
+
+      return {...h, retPct:retPctFinal, pnlUSD, valBuy:valInicio, valEnd, basePrice:adjBase, adjClose,
+               usedBuyPrice, baseDate, qtyStart, buyPrice:h.buyPrice||0, cerrado:h.cerrado||false};
     }).filter(Boolean);
   },[en,historicos,trades,startDate,endDate,fxRate,period]);
 
@@ -3613,7 +3649,8 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
                 return(
                   <tr key={h.ticker} style={{borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
                     <td style={{padding:"8px 12px"}}>
-                      <span style={{fontWeight:700,fontFamily:"'DM Mono',monospace",color:"var(--accent)",fontSize:12}}>{h.ticker}</span>
+                      <span style={{fontWeight:700,fontFamily:"'DM Mono',monospace",color:h.cerrado?"var(--text-muted)":"var(--accent)",fontSize:12}}>{h.ticker}</span>
+                      {h.cerrado&&<span style={{marginLeft:6,fontSize:9,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:4,padding:"1px 5px",color:"var(--text-muted)",verticalAlign:"middle"}}>CERRADO</span>}
                     </td>
                     <td style={{padding:"8px 12px",fontSize:10,color:"var(--text-muted)"}}>{ASSET_TYPES[h.type]?.icon} {ASSET_TYPES[h.type]?.label}</td>
                     {selP.key!=="todo"&&(

@@ -1,5 +1,16 @@
 /* eslint-disable */
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+
+// Hook responsive — detecta pantalla mobile (<768px)
+function useIsMobile(){ 
+  const [m,setM]=useState(()=>window.innerWidth<768);
+  useEffect(()=>{
+    const h=()=>setM(window.innerWidth<768);
+    window.addEventListener('resize',h);
+    return()=>window.removeEventListener('resize',h);
+  },[]);
+  return m;
+}
 
 const ASSET_TYPES = {
   accion_ar: { label: "Acciones AR",  color: "#3B82F6", icon: "📈" },
@@ -2647,7 +2658,7 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
   );
 }
 
-function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setModal,del,card,hideAmounts=false,trades=[],historicos={}}){
+function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setModal,del,card,hideAmounts=false,trades=[],historicos={},isMobile=false}){
   const [view,setView]=useState("dual");
   const fmtU=(n,d=0)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"USD",maximumFractionDigits:d}).format(n);
   const fmtA=(n)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:0}).format(n);
@@ -2831,18 +2842,18 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
               </div>
             </div>
             <div style={{overflowX:"auto"}}>
-              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13,minWidth:600,tableLayout:"fixed"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:isMobile?11:13,minWidth:isMobile?0:600,tableLayout:"fixed"}}>
                 <thead>
                   <tr>
-                    <th style={{...thS,width:70}}>Ticker</th>
-                    <th style={{...thS}}>Nombre</th>
-                    <th style={{...thR,width:100}}>Nominales</th>
-                    <th style={{...thR,width:130}}>PPC</th>
-                    <th style={{...thR,width:150}}>Precio actual</th>
-                    {(view==="dual"||view==="ars")&&<><th style={{...thR,width:140,background:"rgba(96,165,250,0.08)"}}>Val. ARS</th><th style={{...thR,width:130,background:"rgba(96,165,250,0.08)"}}>PnL · % ARS</th></>}
-                    {(view==="dual"||view==="usd")&&<><th style={{...thR,width:120,background:"rgba(52,211,153,0.1)"}}>Val. USD</th><th style={{...thR,width:130,background:"rgba(52,211,153,0.1)"}}>PnL · % USD</th></>}
-                    {view==="native"&&<><th style={{...thR,width:140,background:"rgba(139,92,246,0.08)"}}>Val. moneda</th><th style={{...thR,width:130,background:"rgba(139,92,246,0.08)"}}>PnL · % moneda</th></>}
-                    <th style={{...thR,width:110}}>Rend %</th>
+                    <th style={{...thS,width:isMobile?65:70}}>Ticker</th>
+                    {!isMobile&&<th style={{...thS}}>Nombre</th>}
+                    {!isMobile&&<th style={{...thR,width:100}}>Nominales</th>}
+                    {!isMobile&&<th style={{...thR,width:130}}>PPC</th>}
+                    <th style={{...thR,width:isMobile?90:150}}>Precio actual</th>
+                    {!isMobile&&(view==="dual"||view==="ars")&&<><th style={{...thR,width:140,background:"rgba(96,165,250,0.08)"}}>Val. ARS</th><th style={{...thR,width:130,background:"rgba(96,165,250,0.08)"}}>PnL · % ARS</th></>}
+                    {(view==="dual"||view==="usd")&&<><th style={{...thR,width:isMobile?80:120,background:"rgba(52,211,153,0.1)"}}>Val. USD</th>{!isMobile&&<th style={{...thR,width:130,background:"rgba(52,211,153,0.1)"}}>PnL · % USD</th>}</>}
+                    {!isMobile&&view==="native"&&<><th style={{...thR,width:140,background:"rgba(139,92,246,0.08)"}}>Val. moneda</th><th style={{...thR,width:130,background:"rgba(139,92,246,0.08)"}}>PnL · % moneda</th></>}
+                    <th style={{...thR,width:isMobile?70:110}}>Rend %</th>
                   </tr>
                 </thead>
                 <tbody>{items.map(renderRow)}</tbody>
@@ -3245,7 +3256,7 @@ function DayMoversWidget({en, historicos, fxRate, livePrices, card, hideAmounts=
 }
 
 
-function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAmounts=false, trades=[]}) {
+function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAmounts=false, trades=[], isMobile=false}) {
   const PERIODS_AN = [
     {key:"todo",  label:"Todo el período", days:null, start:"2026-01-01"},
     {key:"ytd",   label:"YTD",             days:null, ytd:true},
@@ -4025,7 +4036,7 @@ async function fetchBondFlows(ticker) {
   } catch { return null; }
 }
 
-function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historicos}) {
+function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historicos, isMobile=false}) {
   const [selected, setSelected]       = useState(null);
   const [loadingTicker, setLoadingTicker] = useState(null);
   const [addingFlow, setAddingFlow]   = useState(null);
@@ -5193,6 +5204,7 @@ function App(){
       .then(d=>{ if(d && Object.keys(d).length>1) setHistoricos(d); })
       .catch(()=>{});
   },[]);
+  const isMobile = useIsMobile();
   const [tab,setTab]           = useState("dashboard");
   const [modal,setModal]       = useState(null);
   const [bondWizard,setBondWizard] = useState(null); // {ticker, onConfirm}
@@ -5722,11 +5734,19 @@ function App(){
         ::-webkit-scrollbar{width:4px;height:4px}
         ::-webkit-scrollbar-track{background:var(--bg)}
         ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+        @media(max-width:768px){
+          .fi table{font-size:11px;}
+          .fi .kpi-grid{grid-template-columns:1fr 1fr!important;}
+          .mobile-hide{display:none!important;}
+          .mobile-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+          .mobile-stack{flex-direction:column!important;}
+          .mobile-full{width:100%!important;min-width:0!important;}
+        }
       `}</style>
 
       <div style={{minHeight:"100vh",background:"var(--bg)",color:"var(--text-primary)"}} className={darkMode?"theme-dark":"theme-light"}>
         {/* Header */}
-        <div style={{background:"var(--bg-card)",borderBottom:"1px solid var(--border)",padding:"11px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+        <div style={{background:"var(--bg-card)",borderBottom:"1px solid var(--border)",padding:isMobile?"8px 12px":"11px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap"}}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
             <div style={{width:32,height:32,borderRadius:10,background:"linear-gradient(135deg,var(--accent),var(--accent2))",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,boxShadow:"0 2px 8px rgba(59,130,246,0.3)"}}>📊</div>
             <div>
@@ -5763,15 +5783,20 @@ function App(){
         </div>
 
         {/* Nav */}
-        <div style={{background:"var(--bg-card)",borderBottom:"1px solid var(--border)",padding:"0 20px",display:"flex",gap:0}}>
+        <div style={{background:"var(--bg-card)",borderBottom:"1px solid var(--border)",padding:"0 12px",display:"flex",gap:0,overflowX:"auto",WebkitOverflowScrolling:"touch",scrollbarWidth:"none"}}>
           {[["dashboard","📊 Dashboard"],["portfolio","💼 Portfolio"],["analisis","🔍 Análisis"],["flujos","💸 Flujos"],["operaciones","📋 Operaciones"]].map(([id,lbl])=>(
-            <button key={id} onClick={()=>setTab(id)} className="nav-btn" style={{padding:"13px 18px",background:"transparent",border:"none",borderBottom:tab===id?"2px solid var(--accent)":"2px solid transparent",color:tab===id?"var(--text-primary)":"var(--text-muted)",cursor:"pointer",fontSize:13,fontWeight:tab===id?600:400,letterSpacing:tab===id?"-0.1px":0}}>
-              {lbl}
+            <button key={id} onClick={()=>setTab(id)} className="nav-btn"
+              style={{padding:isMobile?"10px 12px":"13px 18px",background:"transparent",border:"none",
+                borderBottom:tab===id?"2px solid var(--accent)":"2px solid transparent",
+                color:tab===id?"var(--text-primary)":"var(--text-muted)",cursor:"pointer",
+                fontSize:isMobile?12:13,fontWeight:tab===id?600:400,
+                letterSpacing:tab===id?"-0.1px":0,whiteSpace:"nowrap",flexShrink:0}}>
+              {isMobile?lbl.split(" ").slice(1).join(" "):lbl}
             </button>
           ))}
         </div>
 
-        <div style={{padding:"22px 60px",maxWidth:"100%",boxSizing:"border-box"}}>
+        <div style={{padding:isMobile?"10px 8px":"22px 60px",maxWidth:"100%",boxSizing:"border-box"}}>
           {/* Notificación flujos pendientes */}
           {(()=>{
             const todayN=todayAR();
@@ -5878,7 +5903,7 @@ function App(){
                 }).sort((a,b)=>a.date.localeCompare(b.date))[0];
 
                 return(
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr) auto",gap:12,maxWidth:1100,alignItems:"stretch"}}>
+                  <div className="kpi-grid" style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(3,1fr) auto",gap:isMobile?8:12,maxWidth:1100,alignItems:"stretch"}}>
                     {kpis.map(k=>(
                       <div key={k.lbl} className="kpi-card" style={{
                         ...card,
@@ -5892,7 +5917,7 @@ function App(){
                           <span style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1.2,fontWeight:600}}>{k.lbl}</span>
                           <span style={{fontSize:13,lineHeight:1,opacity:0.7}}>{k.icon}</span>
                         </div>
-                        <div style={{fontSize:26,fontFamily:"'DM Sans',Georgia,serif",fontWeight:700,color:k.mainColor,lineHeight:1,marginBottom:8,letterSpacing:"-0.5px"}}>
+                        <div style={{fontSize:isMobile?20:26,fontFamily:"'DM Sans',Georgia,serif",fontWeight:700,color:k.mainColor,lineHeight:1,marginBottom:8,letterSpacing:"-0.5px"}}>
                           {k.main}
                         </div>
                         <div style={{display:"flex",alignItems:"baseline",gap:4}}>
@@ -5913,7 +5938,7 @@ function App(){
                 );
               })()}
 
-              <div style={{display:"grid",gridTemplateColumns:"220px 1fr",gap:14,alignItems:"stretch"}}>
+              <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"220px 1fr",gap:14,alignItems:"stretch"}}>
                 <div style={{...card,padding:"18px 16px",display:"flex",flexDirection:"column"}}>
                   <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1.2,marginBottom:12,fontWeight:600}}>Asignación por tipo</div>
                   <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
@@ -5930,7 +5955,7 @@ function App(){
                   </div>
                 </div>
                 <div style={{...card,padding:"10px 18px 18px",display:"flex",flexDirection:"column"}}>
-                  <div style={{height:410}}>
+                  <div style={{height:isMobile?260:410}}>
                     <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} livePricesAll={livePrices} onExpand={()=>setChartModal(true)}/>
                   </div>
                 </div>
@@ -6062,12 +6087,12 @@ function App(){
             <PortfolioTab byType={byType} en={enGrouped} totUSD={totUSD} totCost={totCost}
               totPnl={totPnl} totPct={totPct} fxRate={fxRate} fxMode={fx}
               setModal={setModal} del={del} card={card} hideAmounts={hideAmounts}
-              trades={trades} historicos={historicos}/>
+              trades={trades} historicos={historicos} isMobile={isMobile}/>
           )}
 
           {/* ANÁLISIS */}
           {tab==="analisis"&&(
-            <AnalisisTab en={enGrouped} historicos={historicos} fxRate={fxRate} currency={fx} card={card} livePrices={livePrices} hideAmounts={hideAmounts} trades={trades}/>
+            <AnalisisTab en={enGrouped} historicos={historicos} fxRate={fxRate} currency={fx} card={card} livePrices={livePrices} hideAmounts={hideAmounts} trades={trades} isMobile={isMobile}/>
           )}
 
           {/* OPERACIONES */}
@@ -6075,7 +6100,7 @@ function App(){
             <OperacionesTab trades={trades} port={port} setTrades={setTrades} setPort={setPort} card={card} livePrices={livePrices} darkMode={darkMode}/>
           )}
           {tab==="flujos"&&(
-            <FlujoTab port={port} trades={trades} bondFlows={bondFlows} setBondFlows={setBondFlows} card={card} fxRate={fxRate} historicos={historicos}/>
+            <FlujoTab port={port} trades={trades} bondFlows={bondFlows} setBondFlows={setBondFlows} card={card} fxRate={fxRate} historicos={historicos} isMobile={isMobile}/>
           )}
 
         </div>

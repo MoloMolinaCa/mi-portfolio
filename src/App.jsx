@@ -838,22 +838,37 @@ function Chart100({series}){
 function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRate, livePricesMap, customEnd=null, realTodayStr=null){
   if(!dates||dates.length<2) return [];
   if(!realTodayStr){const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset()-180);realTodayStr=d.toISOString().slice(0,10);}
-  const todayStr=customEnd&&customEnd<realTodayStr?null:realTodayStr; // null = don't use live prices
+  const todayStr=customEnd&&customEnd<realTodayStr?null:realTodayStr;
   const liveMap=(todayStr&&livePricesMap)||{};
 
+  // Pre-indexar trades por ticker para O(1) lookup en vez de O(n) filter en cada fecha
+  const tradesByTicker={};
+  for(const t of trades){
+    if(!tradesByTicker[t.ticker]) tradesByTicker[t.ticker]=[];
+    tradesByTicker[t.ticker].push({...t, _ts: new Date(t.date).getTime()});
+  }
+
+  // Pre-indexar barras con bisección para O(log n) búsqueda de precio
   function findPrice2(bars,d){
     if(!bars?.length)return null;
     const t=new Date(d).getTime();
-    return bars.reduce((b,x)=>Math.abs(new Date(x.date)-t)<Math.abs(new Date(b.date)-t)?x:b,bars[0])?.close||null;
+    let lo=0,hi=bars.length-1,best=0;
+    while(lo<=hi){
+      const mid=(lo+hi)>>1;
+      const mt=new Date(bars[mid].date).getTime();
+      if(Math.abs(mt-t)<Math.abs(new Date(bars[best].date).getTime()-t)) best=mid;
+      if(mt<t) lo=mid+1; else hi=mid-1;
+    }
+    return bars[best]?.close||null;
   }
 
-  // Valor del portfolio en dateStr, usando solo trades cuyo timestamp <= dateT
   const getPortVal=(dateStr, dateT)=>{
     let total=0;
     const isToday=dateStr===todayStr;
     for(const h of en){
-      const buys=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra"&&new Date(t.date).getTime()<=dateT);
-      const sells=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="venta"&&new Date(t.date).getTime()<=dateT);
+      const ticks=tradesByTicker[h.ticker]||[];
+      const buys=ticks.filter(t=>t.tipo==="compra"&&t._ts<=dateT);
+      const sells=ticks.filter(t=>t.tipo==="venta"&&t._ts<=dateT);
       const qty=Math.max(0,buys.reduce((a,t)=>a+t.qty,0)-sells.reduce((a,t)=>a+t.qty,0));
       if(qty<=0)continue;
       const isBond=h.type==="bono_usd"||h.type==="bono_ars";
@@ -2688,11 +2703,12 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
   const tdR={...tdL,textAlign:"center",fontFamily:"'DM Mono',monospace",fontSize:12};
 
   // Helper: encontrar TC histórico más cercano a una fecha
+  const cclBarsP = useMemo(()=>(historicos?.CCL||[]).slice().sort((a,b)=>a.date.localeCompare(b.date)),[historicos]);
   const findHistCCL=(dateStr)=>{
-    const bars=historicos?.CCL||[];
-    if(!bars.length)return fxRate;
-    const t=new Date(dateStr).getTime();
-    return bars.reduce((b,x)=>Math.abs(new Date(x.date)-t)<Math.abs(new Date(b.date)-t)?x:b,bars[0])?.close||fxRate;
+    if(!cclBarsP.length) return fxRate;
+    let lo=0,hi=cclBarsP.length-1,res=-1;
+    while(lo<=hi){ const mid=(lo+hi)>>1; if(cclBarsP[mid].date<=dateStr){res=mid;lo=mid+1;}else hi=mid-1; }
+    return res>=0 ? cclBarsP[res].close : fxRate;
   };
 
   const renderRow=(h)=>{
@@ -3410,30 +3426,24 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
   };
 
   // Portfolio TWR — misma lógica que el gráfico principal
-  const portSeries = useMemo(()=>{
+  // portSeries: calcular sin precios live para no recalcular al llegar precios
+  // Los precios live solo afectan el último punto, no todo el histórico
+  const portSeriesBase = useMemo(()=>{
     if(!historicos||!Object.keys(historicos).length) return [];
-    const cclBars  = historicos?.CCL||[];
-    const mepBars  = historicos?.MEP||[];
-
-    // Construir tickerBars
+    const cclBars = historicos?.CCL||[];
+    const mepBars = historicos?.MEP||[];
     const tickerBars = {};
     en.forEach(h=>{ const b=historicos?.[h.ticker]; if(b) tickerBars[h.ticker]=b; });
-
-    // Fechas del período
     const allDates = [...new Set(
       en.flatMap(h=>(historicos?.[h.ticker]||[]).map(b=>b.date))
     )].filter(d=>d>=startDate&&d<=endDate).sort();
     if(allDates.length<2) return [];
     if(allDates[allDates.length-1]!==endDate) allDates.push(endDate);
-
-    // Precios live para hoy
-    const livePricesMap={};
-    en.forEach(h=>{ if(h.isLive) livePricesMap[h.ticker]=h.currentPrice; });
-
-    const twr = calcTWR(allDates, trades, en, tickerBars, cclBars, mepBars, "USD_CCL", fxRate, livePricesMap, null, endDate);
-    // Convertir de base-100 a {date, close} para reutilizar calcExtremes
+    const twr = calcTWR(allDates, trades, en, tickerBars, cclBars, mepBars, "USD_CCL", fxRate, {}, null, endDate);
     return twr.map(p=>({date:p.date, close:p.val}));
-  },[en, historicos, trades, startDate, endDate, fxRate]); // sin livePrices
+  },[en.map(h=>h.ticker).join(','), historicos, trades, startDate, endDate, fxRate]);
+  // Alias para compatibilidad
+  const portSeries = portSeriesBase;
 
   const [sortContrib, setSortContrib] = useState({col:"contrib", asc:false});
   const [mobileSection, setMobileSection] = useState("contribucion"); // mobile: acordeon
@@ -3442,19 +3452,31 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
   // Contribución al rendimiento — considera tenencia real en el período
   const contributions = useMemo(()=>{
     const cclBars = historicos?.CCL||[];
+    // Cache de CCL por fecha para no re-buscar en cada activo
+    const cclCache={};
+    const getCCL=(date)=>{
+      if(cclCache[date]) return cclCache[date];
+      let lo=0,hi=cclBars.length-1,res=-1;
+      while(lo<=hi){ const mid=(lo+hi)>>1; if(cclBars[mid].date<=date){res=mid;lo=mid+1;}else hi=mid-1; }
+      const v = res>=0 ? cclBars[res].close : fxRate;
+      cclCache[date]=v; return v;
+    };
     const getUSDprice=(price,date,buyCurrency,qtyF)=>{
       if(buyCurrency==="USD") return price*qtyF;
-      const cclBar=cclBars.filter(b=>b.date<=date).pop();
-      return price*qtyF/(cclBar?.close||fxRate);
+      return price*qtyF/getCCL(date);
     };
 
-    // Helper: precio más cercano a una fecha (maneja feriados/fines de semana)
+    // Helper: precio más cercano a una fecha — bisección O(log n)
     const closestPrice = (bars, dateStr) => {
       if(!bars||!bars.length) return null;
-      // Preferir el último bar <= dateStr (precio de cierre anterior)
-      const before = bars.filter(b=>b.date<=dateStr);
-      if(before.length) return before[before.length-1].close;
-      // Si no hay barra anterior, usar la más cercana posterior
+      // Bisección para encontrar el último bar <= dateStr
+      let lo=0, hi=bars.length-1, res=-1;
+      while(lo<=hi){
+        const mid=(lo+hi)>>1;
+        if(bars[mid].date<=dateStr){ res=mid; lo=mid+1; }
+        else hi=mid-1;
+      }
+      if(res>=0) return bars[res].close;
       return bars[0].close;
     };
 
@@ -5510,10 +5532,14 @@ function App(){
     const cclBars = historicos?.CCL||[];
     // Para cada venta, calcular P&L en USD comparando proceeds vs costo en USD
     // Evita el problema de convertir pnlAmt en moneda local con cantidades nominales enormes
+    const cclCacheP={};
     const toUSDamt = (monto, currency, date) => {
       if(currency==="USD") return monto;
-      const bar = cclBars.filter(b=>b.date<=date).pop();
-      const ccl = bar?.close||cclBars.slice(-1)[0]?.close||1200;
+      if(cclCacheP[date]) return monto/cclCacheP[date];
+      let lo=0,hi=cclBars.length-1,res=-1;
+      while(lo<=hi){ const mid=(lo+hi)>>1; if(cclBars[mid].date<=date){res=mid;lo=mid+1;}else hi=mid-1; }
+      const ccl = res>=0 ? cclBars[res].close : (cclBars.slice(-1)[0]?.close||1200);
+      cclCacheP[date]=ccl;
       return monto/ccl;
     };
     const ventasTrades = trades.filter(t=>t.tipo==="venta");
@@ -5561,13 +5587,19 @@ function App(){
     if(!firstDate) return null;
     const today = todayAR();
 
-    // Construir serie TWR completa
-    const allDates = [];
-    const d = new Date(firstDate+'T12:00:00');
-    const end = new Date(today+'T12:00:00');
-    while(d<=end){ allDates.push(d.toISOString().slice(0,10)); d.setDate(d.getDate()+1); }
+    // Construir serie TWR — usar solo fechas con datos reales para acelerar
+    // (no necesitamos cada día del calendario, solo los días con barras de precio)
+    const allDatesSet = new Set();
+    allTradeTickers.forEach(ticker=>{
+      (tickerBars[ticker]||[]).forEach(b=>{ if(b.date>=firstDate) allDatesSet.add(b.date); });
+    });
+    // Agregar fechas de trades (cash flows)
+    trades.forEach(t=>allDatesSet.add(t.date));
+    allDatesSet.add(today);
+    const allDates = [...allDatesSet].sort();
+    if(allDates.length<2) return null;
 
-    const serie = calcTWR(allDates, trades, en, tickerBars, cclBars, mepBars, "USD_CCL", fxRate, livePricesMap, null, today);
+    const serie = calcTWR(allDates, trades, en, tickerBars, cclBars, mepBars, "USD_CCL", fxRate, {}, null, today);
     if(!serie||serie.length<2) return null;
 
     const first = serie[0]?.val||100;
@@ -5576,12 +5608,18 @@ function App(){
     const dias = Math.max(1, Math.round((new Date(today)-new Date(firstDate))/(1000*60*60*24)));
     const twrAnual = (Math.pow(1+twrTotal, 365/dias) - 1) * 100;
 
-    // Helper: convertir monto en moneda a USD usando CCL de esa fecha
+    // Helper: convertir monto en moneda a USD usando CCL de esa fecha — bisección
+    const cclCacheT={};
+    const getCCLT=(date)=>{
+      if(cclCacheT[date]) return cclCacheT[date];
+      let lo=0,hi=cclBars.length-1,res=-1;
+      while(lo<=hi){ const mid=(lo+hi)>>1; if(cclBars[mid].date<=date){res=mid;lo=mid+1;}else hi=mid-1; }
+      const v = res>=0 ? cclBars[res].close : (cclBars.slice(-1)[0]?.close||1200);
+      cclCacheT[date]=v; return v;
+    };
     const toUSD = (monto, currency, date) => {
       if(currency==="USD") return monto;
-      const bar = cclBars.filter(b=>b.date<=date).pop();
-      const ccl = bar?.close || cclBars.slice(-1)[0]?.close || 1200;
-      return monto / ccl;
+      return monto / getCCLT(date);
     };
 
     // P&L por año: solo TWR % por año

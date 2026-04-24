@@ -5464,10 +5464,8 @@ function App(){
       return monto / ccl;
     };
 
-    // P&L real por año:
-    // Para cada año: valor_cartera_fin - valor_cartera_inicio - compras + ventas
-    // "valor cartera" = suma de (qty × precio) de todos los activos vivos en esa fecha,
-    // incluyendo los que ya fueron vendidos pero estaban activos en ese momento
+    // P&L por año: solo TWR % por año
+    // El P&L en USD total lo calculamos desde pnlRealizado + totPnl (más confiable)
     const years = [...new Set(allDates.map(d=>d.slice(0,4)))];
     const byYear = {};
 
@@ -5475,59 +5473,13 @@ function App(){
       const yStart = y+"-01-01";
       const yEnd   = y+"-12-31" < today ? y+"-12-31" : today;
 
-      // TWR del año: puntos de la serie dentro del año
       const puntos = serie.filter(p=>p.date>=yStart&&p.date<=yEnd);
       if(!puntos.length) return;
       const twrInicio = puntos[0].val;
       const twrFin    = puntos[puntos.length-1].val;
       const rendAnio  = ((twrFin/twrInicio)-1)*100;
 
-      // P&L en USD del año usando flujos reales:
-      // Valor inicio = suma de posiciones al inicio del año × precio histórico
-      // Valor fin    = suma de posiciones al fin del año × precio histórico
-      // + ventas realizadas en el año (cash que salió)
-      // - compras realizadas en el año (cash que entró)
-
-      // Reconstruir posiciones al inicio y fin del año
-      const calcValorCartera = (fecha) => {
-        // Para cada ticker: qty en esa fecha × precio en esa fecha
-        let total = 0;
-        allTradeTickers.forEach(ticker=>{
-          const buys  = trades.filter(t=>t.ticker===ticker&&t.tipo==="compra"&&t.date<=fecha);
-          const sells = trades.filter(t=>t.ticker===ticker&&t.tipo==="venta"&&t.date<=fecha);
-          const qty   = buys.reduce((a,t)=>a+t.qty,0) - sells.reduce((a,t)=>a+t.qty,0);
-          if(qty<=0) return;
-          const bars  = tickerBars[ticker]||[];
-          const bar   = bars.filter(b=>b.date<=fecha).pop();
-          if(!bar) return;
-          const isBond= /\d/.test(ticker);
-          const firstT= buys[0];
-          const currency = firstT?.currency||"ARS";
-          const price = isBond ? bar.close/100 : bar.close;
-          total += toUSD(price * qty, currency, fecha);
-        });
-        return total;
-      };
-
-      const valorInicio = calcValorCartera(y==="2026"&&firstDate>yStart ? firstDate : yStart);
-      const valorFin    = calcValorCartera(yEnd);
-
-      // Flujos del año — dividir por 100 para bonos (precio es por cada 100 VN)
-      const flowUSD = (t) => {
-        const isBondT = /\d/.test(t.ticker);
-        const qtyF    = isBondT ? t.qty/100 : t.qty;
-        return toUSD((t.price||0)*qtyF, t.currency||"ARS", t.date);
-      };
-      const comprasAnio = trades
-        .filter(t=>t.tipo==="compra"&&t.date>=yStart&&t.date<=yEnd)
-        .reduce((a,t)=>a+flowUSD(t),0);
-      const ventasAnio  = trades
-        .filter(t=>t.tipo==="venta"&&t.date>=yStart&&t.date<=yEnd)
-        .reduce((a,t)=>a+flowUSD(t),0);
-
-      const pnlAnio = valorFin - valorInicio - comprasAnio + ventasAnio;
-
-      byYear[y] = { rend: rendAnio, pnl: pnlAnio, twrInicio, twrFin };
+      byYear[y] = { rend: rendAnio, twrInicio, twrFin };
     });
 
     return { twrTotal: twrTotal*100, twrAnual, dias, serie, byYear, firstDate };
@@ -6012,7 +5964,7 @@ function App(){
                                 {isPos?"+":""}{data.rend.toFixed(1)}%
                               </div>
                               <div style={{fontSize:10,color:"var(--text-muted)",marginBottom:10}}>
-                                {hideAmounts?"••••":(data.pnl>=0?"+":"")+fmtU(data.pnl,0)}
+                                TWR {year}
                               </div>
                               <div style={{width:28,height:barH,background:color,borderRadius:"3px 3px 0 0",opacity:0.8,transition:"height 0.5s ease"}}/>
                             </div>

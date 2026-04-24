@@ -3482,12 +3482,29 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
 
     // Todos los tickers activos en el período: los que tengo hoy + los que tuve y vendí
     const tickersHoy = new Set(en.map(h=>h.ticker));
-    // Tickers con trades en el período que ya no están en cartera (cerrados)
-    const tickersCerrados = [...new Set(
+
+    // 1. Tickers con trades dentro del período que ya no están en cartera
+    const tickersConTradesEnPeriodo = new Set(
       trades
         .filter(t=>t.date>=startDate&&t.date<=endDate&&!tickersHoy.has(t.ticker))
         .map(t=>t.ticker)
-    )];
+    );
+
+    // 2. Tickers que tenía al inicio del período (qtyAtStart > 0) pero ya no tengo
+    // Calcular qtyAtStart temporalmente para detectarlos
+    const qtyAtStartPrecheck = {};
+    [...new Set(trades.map(t=>t.ticker))].forEach(ticker=>{
+      if(tickersHoy.has(ticker)) return; // ya en cartera
+      const buys  = trades.filter(t=>t.ticker===ticker&&t.tipo==="compra"&&t.date<startDate);
+      const sells = trades.filter(t=>t.ticker===ticker&&t.tipo==="venta"&&t.date<startDate);
+      const qty = buys.reduce((a,t)=>a+t.qty,0) - sells.reduce((a,t)=>a+t.qty,0);
+      if(qty>0) qtyAtStartPrecheck[ticker] = qty;
+    });
+
+    const tickersCerrados = [...new Set([
+      ...tickersConTradesEnPeriodo,
+      ...Object.keys(qtyAtStartPrecheck)
+    ])];
 
     // Construir lista completa: posiciones actuales + cerradas en el período
     const posicionesCerradas = tickersCerrados.map(ticker=>{
@@ -5938,7 +5955,7 @@ function App(){
         }
       `}</style>
 
-      <div style={{minHeight:"100vh",background:"var(--bg)",color:"var(--text-primary)"}} className={darkMode?"theme-dark":"theme-light"}>
+      <div style={{minHeight:"100vh",background:"var(--bg)",color:"var(--text-primary)",overflowX:"hidden",maxWidth:"100vw"}} className={darkMode?"theme-dark":"theme-light"}>
         {/* Header */}
         <div style={{background:"var(--bg-card)",borderBottom:"1px solid var(--border)",padding:isMobile?"8px 12px":"11px 24px"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
@@ -6000,7 +6017,7 @@ function App(){
           ))}
         </div>
 
-        <div style={{padding:isMobile?"12px 16px":"22px 60px",maxWidth:"100%",boxSizing:"border-box"}}>
+        <div style={{padding:isMobile?"10px 12px":"22px 60px",maxWidth:"100%",boxSizing:"border-box",overflowX:"hidden"}}>
           {/* Notificación flujos pendientes */}
           {(()=>{
             const todayN=todayAR();
@@ -6107,7 +6124,7 @@ function App(){
                 }).sort((a,b)=>a.date.localeCompare(b.date))[0];
 
                 return(
-                  <div className="kpi-grid" style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(3,1fr) auto",gap:isMobile?8:12,maxWidth:1100,alignItems:"stretch"}}>
+                  <div className="kpi-grid" style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(3,1fr) auto",gap:isMobile?6:12,maxWidth:1100,alignItems:"stretch",width:"100%"}}>
                     {kpis.map(k=>(
                       <div key={k.lbl} className="kpi-card" style={{
                         ...card,

@@ -3516,9 +3516,11 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
     // Reconstruir qty de cada ticker al inicio del período desde trades
     const qtyAtStart = {};
     const allTickers = [...new Set(todasPosiciones.map(h=>h.ticker))];
+    // IMPORTANTE: usar < estricto para no doble-contar trades del día startDate
+    // Los trades del startDate van en cashCompras/cashVentas, no en qtyAtStart
     allTickers.forEach(ticker=>{
-      const buys  = trades.filter(t=>t.ticker===ticker&&t.tipo==="compra"&&t.date<=startDate);
-      const sells = trades.filter(t=>t.ticker===ticker&&t.tipo==="venta"&&t.date<=startDate);
+      const buys  = trades.filter(t=>t.ticker===ticker&&t.tipo==="compra"&&t.date<startDate);
+      const sells = trades.filter(t=>t.ticker===ticker&&t.tipo==="venta"&&t.date<startDate);
       const qty = buys.reduce((a,t)=>a+t.qty,0) - sells.reduce((a,t)=>a+t.qty,0);
       qtyAtStart[ticker] = Math.max(0, qty);
     });
@@ -3731,11 +3733,11 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
           <div key={label} style={{...card,padding:"16px 20px"}}>
             <div style={{fontSize:12,fontWeight:700,color:"var(--text-primary)",marginBottom:12}}>{label}</div>
             {ex ? (
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:10}}>
                 {/* Mayor caída */}
                 <div style={{background:"rgba(248,113,113,0.07)",border:"1px solid rgba(248,113,113,0.2)",borderRadius:8,padding:"12px 14px"}}>
                   <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Mayor caída</div>
-                  <div style={{fontSize:22,fontWeight:700,color:"var(--red)",fontFamily:"'DM Mono',monospace"}}>{fmtP(ex.maxDD)}</div>
+                  <div style={{fontSize:isMobile?18:22,fontWeight:700,color:"var(--red)",fontFamily:"'DM Mono',monospace"}}>{fmtP(ex.maxDD)}</div>
                   <div style={{fontSize:10,color:"var(--text-muted)",marginTop:6}}>
                     <span>{fmtDate(ex.ddStart)}</span>
                     <span style={{margin:"0 4px"}}>→</span>
@@ -3752,7 +3754,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
                 {/* Mayor rally */}
                 <div style={{background:"rgba(52,211,153,0.07)",border:"1px solid rgba(52,211,153,0.2)",borderRadius:8,padding:"12px 14px"}}>
                   <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Mayor rally</div>
-                  <div style={{fontSize:22,fontWeight:700,color:"var(--green)",fontFamily:"'DM Mono',monospace"}}>{fmtP(ex.maxRally)}</div>
+                  <div style={{fontSize:isMobile?18:22,fontWeight:700,color:"var(--green)",fontFamily:"'DM Mono',monospace"}}>{fmtP(ex.maxRally)}</div>
                   <div style={{fontSize:10,color:"var(--text-muted)",marginTop:6}}>
                     <span>{fmtDate(ex.rallyStart)}</span>
                     <span style={{margin:"0 4px"}}>→</span>
@@ -3771,6 +3773,51 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
       {/* Contribución al rendimiento */}
       {(!isMobile||mobileSection==="contribucion")&&<div style={{...card,padding:isMobile?"10px 12px":"16px 20px"}}>
         {sectionTitle("Contribución al rendimiento · " + (selP.key==="todo"?"desde precio de compra":"rendimiento del período"))}
+
+        {isMobile ? (
+          /* Mobile: filas compactas con barra */
+          <div style={{display:"flex",flexDirection:"column",gap:1,marginTop:8}}>
+            {/* Sort rápido mobile */}
+            <div style={{display:"flex",gap:4,marginBottom:8}}>
+              {[["contrib","Contrib."],["pnl","P&L"],["rend","Rend."]].map(([k,l])=>(
+                <button key={k} onClick={()=>toggleSort(k)}
+                  style={{flex:1,padding:"4px 0",borderRadius:5,border:"1px solid var(--border)",
+                    fontSize:10,fontWeight:sortContrib.col===k?700:400,cursor:"pointer",
+                    background:sortContrib.col===k?"var(--accent)":"var(--bg-input)",
+                    color:sortContrib.col===k?"#fff":"var(--text-secondary)"}}>
+                  {l}{sortContrib.col===k?(sortContrib.asc?" ↑":" ↓"):""}
+                </button>
+              ))}
+            </div>
+            {contributionsSorted.map(h=>{
+              const contrib = totalPnlUSD!==0 ? (h.pnlUSD/Math.abs(totalPnlUSD))*100 : 0;
+              const barW = Math.min(100,Math.abs(contrib));
+              return(
+                <div key={h.ticker} style={{padding:"8px 4px",borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <span style={{fontWeight:700,fontFamily:"monospace",color:h.cerrado?"var(--text-muted)":"var(--accent)",fontSize:12}}>{h.ticker}</span>
+                      {h.cerrado&&<span style={{fontSize:8,background:"rgba(255,255,255,0.08)",borderRadius:3,padding:"1px 4px",color:"var(--text-muted)"}}>CERRADO</span>}
+                      <span style={{fontSize:10,color:"var(--text-muted)"}}>{ASSET_TYPES[h.type]?.icon}</span>
+                    </div>
+                    <div style={{display:"flex",gap:12,alignItems:"center"}}>
+                      <span style={{fontSize:11,fontWeight:600,color:pc(h.retPct)}}>{fmtP(h.retPct)}</span>
+                      <span style={{fontSize:11,color:pc(h.pnlUSD)}}>{hideAmounts?"••••":(h.pnlUSD>=0?"+":"")+fmtU(h.pnlUSD,0)}</span>
+                      <span style={{fontSize:11,fontWeight:700,color:pc(contrib),minWidth:44,textAlign:"right"}}>{fmtP(contrib)}</span>
+                    </div>
+                  </div>
+                  <div style={{height:4,borderRadius:2,background:"var(--bg-input)",overflow:"hidden"}}>
+                    <div style={{height:"100%",width:barW+"%",background:contrib>=0?"var(--green)":"var(--red)",borderRadius:2}}/>
+                  </div>
+                </div>
+              );
+            })}
+            <div style={{display:"flex",justifyContent:"space-between",padding:"8px 4px",borderTop:"1px solid var(--border)",fontWeight:700,fontSize:12}}>
+              <span>Total</span>
+              <span style={{color:pc(totalPnlUSD)}}>{hideAmounts?"••••":(totalPnlUSD>=0?"+":"")+fmtU(totalPnlUSD,0)}</span>
+            </div>
+          </div>
+        ) : (
         <div style={{overflowX:"auto"}}>
           {(()=>{
             const SortTh = ({col, label, align="right"}) => {
@@ -3845,6 +3892,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
           )}
           </>);})()}
         </div>
+        )}
       </div>}
 
       {(!isMobile||mobileSection==="retornos")&&<>{/* Retornos diarios — versión legible */}
@@ -3873,7 +3921,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
           const maxCount = Math.max(...rangos.map(r=>r.count));
 
           return(
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:isMobile?12:20}}>
               {/* Barras por rango */}
               <div>
                 <div style={{fontSize:10,color:"var(--text-muted)",marginBottom:10,textTransform:"uppercase",letterSpacing:1}}>Días por rango de retorno</div>
@@ -3892,7 +3940,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
               {/* KPIs */}
               <div style={{display:"flex",flexDirection:"column",gap:10}}>
                 <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:2}}>Métricas clave</div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr",gap:8}}>
                   {[
                     {l:"Días positivos", v:`${pos} (${pctPos}%)`, c:"var(--green)"},
                     {l:"Días negativos", v:`${neg} (${(100-parseInt(pctPos))}%)`, c:"var(--red)"},
@@ -3918,7 +3966,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
 
       {/* Correlación entre activos — SIN filtro de período */}
       {(!isMobile||mobileSection==="correlacion")&&<div style={{...card,padding:isMobile?"10px 12px":"16px 20px"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:isMobile?"flex-start":"center",flexDirection:isMobile?"column":"row",gap:isMobile?6:0,marginBottom:12}}>
           {sectionTitle("Correlación entre activos · retornos diarios")}
           <span style={{fontSize:10,color:"var(--text-muted)",fontStyle:"italic",background:"rgba(251,191,36,0.08)",border:"1px solid rgba(251,191,36,0.2)",borderRadius:5,padding:"2px 8px"}}>⚠ Usa todo el histórico · no aplica filtro</span>
         </div>
@@ -4019,11 +4067,11 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
           const nEff = hhi>0 ? (1/hhi).toFixed(1) : activos.length; // activos "efectivos"
 
           return(
-            <div style={{display:"grid",gridTemplateColumns:"auto 1fr",gap:24,alignItems:"start"}}>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"auto 1fr",gap:isMobile?16:24,alignItems:"start"}}>
               {/* Matriz */}
-              <div>
-                <div style={{overflowX:"auto"}}>
-                  <table style={{borderCollapse:"collapse",fontSize:11}}>
+              <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+                <div>
+                  <table style={{borderCollapse:"collapse",fontSize:isMobile?10:11}}>
                     <thead>
                       <tr>
                         <th style={{padding:"6px 10px",width:60}}/>
@@ -4060,7 +4108,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
                 <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Riesgo del portfolio</div>
 
                 {/* KPIs principales */}
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:isMobile?6:8}}>
                   {(()=>{
                     // Semáforo vol. portfolio: <8% verde, 8-15% amarillo, >15% rojo
                     const volColor = volPort<8 ? "var(--green)" : volPort<15 ? "var(--yellow)" : "var(--red)";
@@ -6132,6 +6180,8 @@ function App(){
                 )}
               </div>
 
+              <DayMoversWidget en={enGrouped} historicos={historicos} fxRate={fxRate} livePrices={livePrices} card={card} hideAmounts={hideAmounts}/>
+
               {/* Rendimiento por año */}
               {twrStats&&Object.keys(twrStats.byYear||{}).length>0&&(()=>{
                 try{
@@ -6231,7 +6281,7 @@ function App(){
               })()}
 
               {/* Top/Bottom 5 del día en Dashboard */}
-              <DayMoversWidget en={enGrouped} historicos={historicos} fxRate={fxRate} livePrices={livePrices} card={card} hideAmounts={hideAmounts}/>
+
 
 
 

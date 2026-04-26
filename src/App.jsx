@@ -848,18 +848,20 @@ function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRa
     tradesByTicker[t.ticker].push({...t, _ts: new Date(t.date).getTime()});
   }
 
-  // Pre-indexar barras con bisección para O(log n) búsqueda de precio
+  // Último precio disponible <= fecha (bisección O(log n))
+  // IMPORTANTE: nunca usar precio futuro — solo pasado o igual
   function findPrice2(bars,d){
     if(!bars?.length)return null;
-    const t=new Date(d).getTime();
-    let lo=0,hi=bars.length-1,best=0;
+    // Bisección: encontrar último bar con date <= d
+    let lo=0,hi=bars.length-1,res=-1;
     while(lo<=hi){
       const mid=(lo+hi)>>1;
-      const mt=new Date(bars[mid].date).getTime();
-      if(Math.abs(mt-t)<Math.abs(new Date(bars[best].date).getTime()-t)) best=mid;
-      if(mt<t) lo=mid+1; else hi=mid-1;
+      if(bars[mid].date<=d){ res=mid; lo=mid+1; }
+      else hi=mid-1;
     }
-    return bars[best]?.close||null;
+    if(res>=0) return bars[res].close||null;
+    // Si no hay barra anterior, usar la primera disponible (inicio del histórico)
+    return bars[0].close||null;
   }
 
   const getPortVal=(dateStr, dateT)=>{
@@ -5459,7 +5461,9 @@ function App(){
   const saveToGitHub = async (newPort, newTrades, newFlows, newMeta) => {
     try{
       setSyncStatus("saving");
-      const token = import.meta.env.VITE_PORTFOLIO_TOKEN;
+      // Token inyectado en build por Vite desde variable de entorno VITE_PORTFOLIO_TOKEN
+      const token = (typeof __PORTFOLIO_TOKEN__ !== 'undefined' ? __PORTFOLIO_TOKEN__ : null) 
+                 || (typeof import.meta !== 'undefined' ? import.meta.env?.VITE_PORTFOLIO_TOKEN : null);
       if(!token){ setSyncStatus("idle"); return; }
 
       // Obtener SHA actual si no lo tenemos

@@ -1017,8 +1017,14 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
 
   const findPrice=(bars,dateStr)=>{
     if(!bars||!bars.length)return null;
-    const t=new Date(dateStr).getTime();
-    return bars.reduce((b,x)=>Math.abs(new Date(x.date)-t)<Math.abs(new Date(b.date)-t)?x:b,bars[0])?.close||null;
+    // Último precio <= fecha (nunca usar precio futuro)
+    let lo=0,hi=bars.length-1,res=-1;
+    while(lo<=hi){
+      const mid=(lo+hi)>>1;
+      if(bars[mid].date<=dateStr){res=mid;lo=mid+1;}else hi=mid-1;
+    }
+    if(res>=0) return bars[res].close||null;
+    return bars[0].close||null;
   };
 
   const load=async(p,hist,customStart=null,customEnd=null)=>{
@@ -2233,9 +2239,17 @@ function Modal({h,port=[],onSave,onClose,darkMode=true}){
           <div style={{display:"grid",gridTemplateColumns:"1fr 2fr",gap:12}}>
             <label style={{display:"flex",flexDirection:"column",gap:4}}>
               <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>{f.operacion==="venta"?"Cantidad a vender":"Nominales"}</span>
-              <input type="number" min="0" max={f.operacion==="venta"?availableQty:undefined} value={f.qty}
-                onChange={e=>{const v=+e.target.value;set("qty",f.operacion==="venta"?Math.min(v,availableQty):v||e.target.value);}}
-                style={{...inp,borderColor:overSelling?"var(--red)":undefined}}/>
+              <div style={{display:"flex",gap:4}}>
+                <input type="number" min="0" max={f.operacion==="venta"?availableQty:undefined} value={f.qty}
+                  onChange={e=>{const v=+e.target.value;set("qty",f.operacion==="venta"?Math.min(v,availableQty):v||e.target.value);}}
+                  style={{...inp,flex:1,borderColor:overSelling?"var(--red)":undefined}}/>
+                {f.operacion==="venta"&&f.ticker&&(
+                  <button onClick={()=>set("qty",availableQty)}
+                    style={{background:"var(--accent)",border:"none",borderRadius:8,padding:"0 10px",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>
+                    Todo
+                  </button>
+                )}
+              </div>
               {f.operacion==="venta"&&f.ticker&&<div style={{fontSize:10,color:overSelling?"var(--red)":"var(--text-muted)",marginTop:3}}>
                 {overSelling?`⚠ Solo tenés ${availableQty.toLocaleString("es-AR")} nominales`:`Disponible: ${availableQty.toLocaleString("es-AR")} nominales`}
               </div>}
@@ -2303,21 +2317,31 @@ function Modal({h,port=[],onSave,onClose,darkMode=true}){
                   </div>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",borderTop:"1px solid var(--border)",paddingTop:8,gap:8}}>
                     <span style={{fontSize:11,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,flexShrink:0}}>Monto neto</span>
-                    <input type="number" min="0"
-                      value={f.netoManual!==""?f.netoManual:(netoCalc||"")}
-                      onChange={e=>{
-                        const neto=+e.target.value;
-                        const diff=f.operacion==="venta"?brutoComision-neto:neto-brutoComision;
-                        const comAbs=+Math.abs(diff).toFixed(2);
-                        const pct=brutoComision>0?+((comAbs/brutoComision)*100).toFixed(4):0;
-                        setF(p=>({...p,netoManual:e.target.value,comision:comAbs,comisionPct:pct}));
-                      }}
-                      onBlur={()=>setF(p=>({...p,netoManual:""}))}
-                      placeholder={(()=>{const n=netoCalc;return f.buyCurrency==="USD"?`USD ${n.toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}`:`$ ${n.toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}`;})()}
-                      style={{...inp,padding:"4px 8px",fontSize:16,fontWeight:700,
-                        textAlign:"right",width:"auto",flex:1,
+                    <div style={{textAlign:"right"}}>
+                      {/* Display formateado */}
+                      <div style={{fontSize:20,fontWeight:700,
                         color:f.operacion==="venta"?"var(--red)":"var(--green)",
-                        border:"1px solid "+(f.netoManual!==""?"var(--accent)":"var(--border)")}}/>
+                        fontFamily:"'DM Mono',monospace",letterSpacing:"-0.5px"}}>
+                        {f.buyCurrency==="USD"
+                          ? `USD ${netoCalc.toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}`
+                          : `$ ${netoCalc.toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}`}
+                      </div>
+                      {/* Input editable debajo (para ajuste manual) */}
+                      <input type="number" min="0"
+                        value={f.netoManual||""}
+                        onChange={e=>{
+                          const neto=+e.target.value;
+                          const diff=f.operacion==="venta"?brutoComision-neto:neto-brutoComision;
+                          const comAbs=+Math.abs(diff).toFixed(2);
+                          const pct=brutoComision>0?+((comAbs/brutoComision)*100).toFixed(4):0;
+                          setF(p=>({...p,netoManual:e.target.value,comision:comAbs,comisionPct:pct}));
+                        }}
+                        onBlur={()=>setF(p=>({...p,netoManual:""}))}
+                        placeholder="Ajustar manualmente..."
+                        style={{...inp,padding:"3px 8px",fontSize:11,textAlign:"right",
+                          marginTop:4,color:"var(--text-muted)",
+                          border:"1px solid "+(f.netoManual?"var(--accent)":"rgba(255,255,255,0.1)")}}/>
+                    </div>
                   </div>
                 </>);
               })()}

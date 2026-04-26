@@ -1023,10 +1023,8 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
 
     const actualEnd=customEnd||today;
     const filtered=allDates.filter(d=>d>=firstValid&&d<=actualEnd);
-    // Solo agregar hoy si el histórico ya tiene datos para hoy
-    // Si no hay datos → es finde/feriado → el último punto es el viernes/día hábil anterior
-    const hayDatosHoy = dateSet.has(today);
-    if((!customEnd||customEnd>=today) && hayDatosHoy) filtered.push(today);
+    // Agregar hoy siempre como último punto
+    if(!customEnd||customEnd>=today) filtered.push(today);
     return[...new Set(filtered)].sort();
   };
 

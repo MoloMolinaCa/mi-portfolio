@@ -5563,25 +5563,44 @@ function App(){
     }
   };
 
-  // ── Storage (localStorage como fallback) ─────────────────────────────────
+  // ── Storage ───────────────────────────────────────────────────────────────
   const [bondMetaFromGH, setBondMetaFromGH] = useState(null);
   useEffect(()=>{
+    // 1. Cargar localStorage inmediatamente (siempre)
     try{
-      // Solo usar localStorage si GitHub no cargó nada
-      if(syncStatus==="loading") return;
       const sp=localStorage.getItem("gal_port_v1");
       const st=localStorage.getItem("gal_trades_v3");
-      if(sp && !ghSha) setPort(JSON.parse(sp));
-      if(st && !ghSha) setTrades(JSON.parse(st));
+      if(sp) setPort(JSON.parse(sp));
+      if(st) setTrades(JSON.parse(st));
       const bf=localStorage.getItem('gal_bond_flows_v1');
-      if(bf && !ghSha){
-        // Merge: keep user edits but add any new seed flows not yet in localStorage
+      if(bf){
         const saved=JSON.parse(bf);
         const merged={...SEED_BOND_FLOWS,...saved};
         setBondFlows(merged);
       }
     }catch{}
     setStorageReady(true);
+
+    // 2. Intentar cargar desde GitHub (sobreescribe si hay datos más nuevos)
+    const token = import.meta.env?.VITE_PORTFOLIO_TOKEN;
+    if(!token){ setSyncStatus("idle"); return; }
+    setSyncStatus("loading");
+    fetch(`https://api.github.com/repos/MoloMolinaCa/mi-portfolio/contents/public/portfolio_data.json`,{
+      headers:{"Authorization":`token ${token}`}
+    })
+      .then(r=>r.ok?r.json():null)
+      .then(data=>{
+        if(!data?.content) return;
+        setGhSha(data.sha);
+        const decoded = JSON.parse(atob(data.content.replace(/\n/g,'')));
+        if(decoded.port?.length)   setPort(decoded.port);
+        if(decoded.trades?.length) setTrades(decoded.trades);
+        if(decoded.bondFlows && Object.keys(decoded.bondFlows).length){
+          setBondFlows({...SEED_BOND_FLOWS,...decoded.bondFlows});
+        }
+        setSyncStatus("idle");
+      })
+      .catch(()=>{ setSyncStatus("idle"); });
   },[]);
 
   // Guardar en localStorage + GitHub cuando cambian los datos

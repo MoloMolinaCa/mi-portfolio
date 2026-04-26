@@ -5606,11 +5606,16 @@ function App(){
         const localTs = parseInt(localStorage.getItem('gal_last_save')||'0');
         const ghTs = new Date(data.updatedAt||0).getTime();
         if(ghTs > localTs){
+          // Marcar que estamos cargando desde GitHub para no re-guardar
+          isLoadingFromGH.current = true;
           if(data.port?.length)   setPort(data.port);
           if(data.trades?.length) setTrades(data.trades);
           if(data.bondFlows && Object.keys(data.bondFlows).length){
             setBondFlows({...SEED_BOND_FLOWS,...data.bondFlows});
           }
+          // Actualizar timestamp local para que coincida con GitHub
+          localStorage.setItem('gal_last_save', ghTs.toString());
+          setTimeout(()=>{ isLoadingFromGH.current = false; }, 500);
         }
         setSyncStatus("idle");
       })
@@ -5640,12 +5645,20 @@ function App(){
     }catch{}
   },[bondFlows,storageReady]);
 
-  // Sync a GitHub con debounce de 2s para no hacer un commit por cada keystroke
+  // Sync a GitHub con debounce de 2s — solo si hubo cambio local reciente
+  const isLoadingFromGH = React.useRef(false); // true mientras se cargan datos de GitHub
+  const lastSyncRef = React.useRef(0); // timestamp del último sync exitoso
   useEffect(()=>{
     if(!storageReady) return;
     if(saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    const saveTs = Date.now();
     saveTimerRef.current = setTimeout(()=>{
+      // No guardar si estamos cargando datos desde GitHub
+      if(isLoadingFromGH.current) return;
+      // Solo guardar si este save es más nuevo que el último sync
+      if(saveTs < lastSyncRef.current) return;
       const meta = (() => { try{ return JSON.parse(localStorage.getItem('gal_bond_meta_v1')||'{}'); }catch{ return {}; } })();
+      lastSyncRef.current = saveTs;
       saveToGitHub(port, trades, bondFlows, meta);
     }, 2000);
     return ()=>{ if(saveTimerRef.current) clearTimeout(saveTimerRef.current); };

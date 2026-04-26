@@ -1,6 +1,4 @@
 // /api/sync.js — Vercel serverless function
-// Lee y escribe portfolio_data.json en GitHub de forma segura
-
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, PUT, OPTIONS');
@@ -19,32 +17,43 @@ export default async function handler(req, res) {
     'User-Agent': 'portfolio-app'
   };
 
-  // GET — leer datos
   if (req.method === 'GET') {
-    const r = await fetch(API, { headers });
-    if (!r.ok) return res.status(r.status).json({ error: 'Error leyendo GitHub' });
-    const data = await r.json();
-    const content = JSON.parse(Buffer.from(data.content, 'base64').toString('utf8'));
-    return res.status(200).json({ ...content, sha: data.sha });
+    try {
+      const r = await fetch(API, { headers });
+      if (!r.ok) return res.status(r.status).json({ error: 'Error leyendo GitHub' });
+      const data = await r.json();
+      const content = JSON.parse(Buffer.from(data.content, 'base64').toString('utf8'));
+      return res.status(200).json({ ...content, sha: data.sha });
+    } catch(e) {
+      return res.status(500).json({ error: e.message });
+    }
   }
 
-  // PUT — guardar datos
   if (req.method === 'PUT') {
-    const { port, trades, bondFlows, bondMeta, sha } = req.body;
-    const payload = {
-      version: 1,
-      updatedAt: new Date().toISOString(),
-      port, trades, bondFlows: bondFlows || {}, bondMeta: bondMeta || {}
-    };
-    const content = Buffer.from(JSON.stringify(payload)).toString('base64');
-    const body = { message: 'chore: actualizar portfolio data', content, ...(sha ? { sha } : {}) };
-    const r = await fetch(API, { method: 'PUT', headers, body: JSON.stringify(body) });
-    if (!r.ok) {
-      const err = await r.json();
-      return res.status(r.status).json({ error: err.message });
+    try {
+      const { port, trades, bondFlows, bondMeta } = req.body;
+      let sha;
+      const rGet = await fetch(API, { headers });
+      if (rGet.ok) { const dGet = await rGet.json(); sha = dGet.sha; }
+      const payload = {
+        version: 1,
+        updatedAt: new Date().toISOString(),
+        port, trades,
+        bondFlows: bondFlows || {},
+        bondMeta: bondMeta || {}
+      };
+      const content = Buffer.from(JSON.stringify(payload)).toString('base64');
+      const body = { message: 'chore: actualizar portfolio data', content, ...(sha ? { sha } : {}) };
+      const r = await fetch(API, { method: 'PUT', headers, body: JSON.stringify(body) });
+      if (!r.ok) {
+        const err = await r.json();
+        return res.status(r.status).json({ error: err.message });
+      }
+      const data = await r.json();
+      return res.status(200).json({ sha: data.content?.sha });
+    } catch(e) {
+      return res.status(500).json({ error: e.message });
     }
-    const data = await r.json();
-    return res.status(200).json({ sha: data.content?.sha });
   }
 
   return res.status(405).json({ error: 'Método no permitido' });

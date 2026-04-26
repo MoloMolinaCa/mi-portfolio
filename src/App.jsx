@@ -79,6 +79,19 @@ function todayAR() {
   return d.toISOString().slice(0,10);
 }
 
+// Último día hábil (lunes-viernes) <= fecha dada
+function lastHabil(dateStr) {
+  const d = new Date(dateStr+'T12:00:00');
+  const dow = d.getDay(); // 0=dom, 6=sab
+  if(dow===0) d.setDate(d.getDate()-2); // dom → vie
+  else if(dow===6) d.setDate(d.getDate()-1); // sab → vie
+  return d.toISOString().slice(0,10);
+}
+function isHabil(dateStr) {
+  const dow = new Date(dateStr+'T12:00:00').getDay();
+  return dow!==0 && dow!==6;
+}
+
 // ── Mapeo de tickers ─────────────────────────────────────────────────────────
 // data912: bonos, ONs, CEDEARs, acciones AR — precios en vivo (2h cache)
 // Yahoo Finance (.BA): fallback para CEDEARs y acciones si data912 falla
@@ -1013,11 +1026,11 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
 
     const actualEnd=customEnd||today;
     const filtered=allDates.filter(d=>d>=firstValid&&d<=actualEnd);
-    // Solo agregar hoy si no hay customEnd o el customEnd es hoy
-    // Y solo si hoy es día hábil (lunes a viernes)
-    const todayDowDates = new Date(today+'T12:00:00').getDay(); // 0=dom, 6=sab
-    const todayIsMarketDay = todayDowDates!==0 && todayDowDates!==6;
-    if((!customEnd||customEnd>=today) && todayIsMarketDay) filtered.push(today);
+    // Solo agregar hoy si no hay customEnd, es hoy, y es día hábil
+    const effectiveEnd = isHabil(today) ? today : lastHabil(today);
+    if(!customEnd||customEnd>=today) {
+      if(!filtered.includes(effectiveEnd)) filtered.push(effectiveEnd);
+    }
     return[...new Set(filtered)].sort();
   };
 
@@ -1140,9 +1153,9 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
 
       // TWR — Time Weighted Return
       // Solo agregar "hoy" al final si no hay customEnd (o customEnd es hoy)
-      const realToday2=todayAR();
+      const realToday2=lastHabil(todayAR()); // usar último día hábil
       const datesWithToday=[...dates];
-      if(!customEnd||customEnd>=realToday2){
+      if(!customEnd||customEnd>=todayAR()){
         if(datesWithToday[datesWithToday.length-1]!==realToday2)datesWithToday.push(realToday2);
       }
 
@@ -2575,7 +2588,7 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
       const mepBars = _getMEP();
 
       // TWR — Time Weighted Return
-      const today = todayAR();
+      const today = lastHabil(todayAR()); // usar último día hábil
       const datesWithToday=[...dates];
       if(datesWithToday[datesWithToday.length-1]!==today)datesWithToday.push(today);
 

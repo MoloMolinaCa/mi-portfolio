@@ -5581,22 +5581,28 @@ function App(){
     }catch{}
     setStorageReady(true);
 
-    // 2. Intentar cargar desde GitHub (sobreescribe si hay datos más nuevos)
+    // 2. Intentar cargar desde GitHub (solo si es más nuevo que localStorage)
     const token = import.meta.env?.VITE_PORTFOLIO_TOKEN;
     if(!token){ setSyncStatus("idle"); return; }
     setSyncStatus("loading");
+    // Timestamp local — cuándo se guardó por última vez en este dispositivo
+    const localTs = parseInt(localStorage.getItem('gal_last_save')||'0');
     fetch(`https://api.github.com/repos/MoloMolinaCa/mi-portfolio/contents/public/portfolio_data.json`,{
       headers:{"Authorization":`token ${token}`}
     })
       .then(r=>r.ok?r.json():null)
       .then(data=>{
-        if(!data?.content) return;
+        if(!data?.content){ setSyncStatus("idle"); return; }
         setGhSha(data.sha);
         const decoded = JSON.parse(atob(data.content.replace(/\n/g,'')));
-        if(decoded.port?.length)   setPort(decoded.port);
-        if(decoded.trades?.length) setTrades(decoded.trades);
-        if(decoded.bondFlows && Object.keys(decoded.bondFlows).length){
-          setBondFlows({...SEED_BOND_FLOWS,...decoded.bondFlows});
+        const ghTs = new Date(decoded.updatedAt||0).getTime();
+        // Solo aplicar si GitHub tiene datos más nuevos que localStorage
+        if(ghTs > localTs){
+          if(decoded.port?.length)   setPort(decoded.port);
+          if(decoded.trades?.length) setTrades(decoded.trades);
+          if(decoded.bondFlows && Object.keys(decoded.bondFlows).length){
+            setBondFlows({...SEED_BOND_FLOWS,...decoded.bondFlows});
+          }
         }
         setSyncStatus("idle");
       })
@@ -5607,7 +5613,10 @@ function App(){
   const saveTimerRef = React.useRef(null);
   useEffect(()=>{
     if(!storageReady) return;
-    try{ localStorage.setItem("gal_port_v1",JSON.stringify(port)); }catch{}
+    try{ 
+      localStorage.setItem("gal_port_v1",JSON.stringify(port));
+      localStorage.setItem('gal_last_save', Date.now().toString());
+    }catch{}
   },[port,storageReady]);
 
   useEffect(()=>{

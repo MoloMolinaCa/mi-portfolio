@@ -2141,7 +2141,7 @@ function Modal({h,port=[],onSave,onClose,darkMode=true}){
                 return(
                   <button key={op} disabled={disabled}
                     onClick={()=>{
-                      if(op==="venta"&&port.length>0){const first=port[0];setF(p=>({...p,operacion:"venta",ticker:first.ticker,name:first.name,type:first.type,buyCurrency:first.buyCurrency,qty:"",buyPrice:""}));setTickerStatus("confirmed");}
+                      if(op==="venta"){setF(p=>({...p,operacion:"venta",ticker:"",name:"",type:"",buyCurrency:"ARS",qty:"",buyPrice:""}));setTickerStatus("idle");}
                       else{setF(p=>({...p,operacion:op,qty:"",buyPrice:""}));if(op==="compra"){setTickerStatus("idle");setSearchResults([]);setSelectedResult(null);}}
                     }}
                     style={{flex:1,padding:"9px 0",border:"none",borderRadius:6,fontSize:14,fontWeight:700,
@@ -2277,7 +2277,16 @@ function Modal({h,port=[],onSave,onClose,darkMode=true}){
             <div style={{display:"flex",flexDirection:"column",gap:4}}>
               <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>{f.operacion==="venta"?"Precio de venta":"Precio de compra (PPC)"}</span>
               <div style={{display:"flex",gap:8}}>
-                <input type="number" min="0" value={f.buyPrice} onChange={e=>set("buyPrice",e.target.value)} style={{...inp,flex:1}}/>
+                <input type="number" min="0" value={f.buyPrice} onChange={e=>{
+                  set("buyPrice",e.target.value);
+                  // Recalcular comision ARS si hay % cargado
+                  if(f.comisionPct){
+                    const isBondP=f.type==="bono_ars"||f.type==="bono_usd";
+                    const bruto=+(f.qty||0)*(isBondP?+(e.target.value||0)/100:+(e.target.value||0));
+                    const com=bruto>0?+(bruto*parseFloat(f.comisionPct)/100).toFixed(2):0;
+                    setF(p=>({...p,buyPrice:e.target.value,comision:com,netoManual:""}));
+                  }
+                }} style={{...inp,flex:1}}/>
                 <select value={f.buyCurrency} onChange={e=>set("buyCurrency",e.target.value)} style={{...inp,width:90}}>
                   <option value="ARS">🇦🇷 ARS</option>
                   <option value="USD">🇺🇸 USD</option>
@@ -2311,23 +2320,30 @@ function Modal({h,port=[],onSave,onClose,darkMode=true}){
                       {/* Monto comisión */}
                       <div style={{display:"flex",alignItems:"center",gap:4,flex:1}}>
                         <span style={{fontSize:11,color:"var(--text-muted)"}}>{f.buyCurrency}</span>
-                        <input type="number" min="0" value={f.comision||""}
-                          onChange={e=>{
-                            const monto=+e.target.value;
-                            setF(p=>({...p,comision:monto,netoManual:"",
-                              comisionPct:brutoComision>0?+((monto/brutoComision)*100).toFixed(4):p.comisionPct}));
-                          }}
-                          placeholder="0.00"
-                          style={{...inp,padding:"4px 8px",fontSize:13,textAlign:"right"}}/>
+                        <div style={{flex:1,position:"relative"}}>
+                          <input type="number" min="0" value={f.comision||""}
+                            onChange={e=>{
+                              const monto=+e.target.value;
+                              setF(p=>({...p,comision:monto,netoManual:"",
+                                comisionPct:brutoComision>0?+((monto/brutoComision)*100).toFixed(4):p.comisionPct}));
+                            }}
+                            placeholder="0.00"
+                            style={{...inp,padding:"4px 8px",fontSize:13,textAlign:"right",color:"transparent",caretColor:"var(--text-primary)",width:"100%"}}/>
+                          <div style={{position:"absolute",top:0,left:0,right:0,bottom:0,padding:"4px 8px",
+                            fontSize:13,color:"var(--text-primary)",pointerEvents:"none",textAlign:"right",
+                            display:"flex",alignItems:"center",justifyContent:"flex-end"}}>
+                            {f.comision?Number(f.comision).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2}):""}
+                          </div>
+                        </div>
                       </div>
                       <span style={{color:"var(--text-muted)",fontSize:12}}>↔</span>
                       {/* Porcentaje */}
                       <div style={{display:"flex",alignItems:"center",gap:4,flex:1}}>
-                        <input type="number" min="0" step="0.01" value={f.comisionPct||""}
+                        <input type="number" min="0" step="0.001" value={f.comisionPct===0?"0":f.comisionPct||""}
                           onChange={e=>{
-                            const pct=+e.target.value;
+                            const pct=parseFloat(e.target.value)||0;
                             const com=brutoComision>0?+(brutoComision*pct/100).toFixed(2):0;
-                            setF(p=>({...p,comisionPct:pct,comision:com,netoManual:""}));
+                            setF(p=>({...p,comisionPct:e.target.value,comision:com,netoManual:""}));
                           }}
                           placeholder="0.00"
                           style={{...inp,padding:"4px 8px",fontSize:13,textAlign:"right"}}/>

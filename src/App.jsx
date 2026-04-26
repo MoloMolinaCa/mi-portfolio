@@ -3077,18 +3077,44 @@ function OperacionesTab({trades,port,setTrades,setPort,card,livePrices,darkMode}
   const deleteTrade=(trade)=>{
     const newTrades=trades.filter(t=>t.id!==trade.id);
     setTrades(newTrades);
-    // Si no quedan trades de ese ticker, eliminar del portfolio
     const remaining=newTrades.filter(t=>t.ticker===trade.ticker&&t.tipo==="compra");
     const sold=newTrades.filter(t=>t.ticker===trade.ticker&&t.tipo==="venta");
     const netQty=remaining.reduce((a,t)=>a+t.qty,0)-sold.reduce((a,t)=>a+t.qty,0);
+    const totalCost=remaining.reduce((a,t)=>a+t.qty*t.price,0);
+    const totalQty=remaining.reduce((a,t)=>a+t.qty,0);
+    const newPpc=totalQty>0?totalCost/totalQty:0;
+
     if(netQty<=0){
+      // Sin posición neta → eliminar del portfolio
       setPort(prev=>prev.filter(p=>p.ticker!==trade.ticker));
     } else {
-      // Actualizar qty y buyPrice del portfolio
-      const totalCost=remaining.reduce((a,t)=>a+t.qty*t.price,0);
-      const totalQty=remaining.reduce((a,t)=>a+t.qty,0);
-      const newPpc=totalQty>0?totalCost/totalQty:0;
-      setPort(prev=>prev.map(p=>p.ticker===trade.ticker?{...p,qty:netQty,buyPrice:newPpc}:p));
+      setPort(prev=>{
+        const exists=prev.find(p=>p.ticker===trade.ticker);
+        if(exists){
+          // Actualizar qty y PPC
+          return prev.map(p=>p.ticker===trade.ticker?{...p,qty:netQty,buyPrice:newPpc}:p);
+        } else {
+          // La posición no estaba en el portfolio → restaurar
+          const firstBuy=[...remaining].sort((a,b)=>a.date.localeCompare(b.date))[0];
+          // Inferir type desde el ticker si no está disponible
+          const inferredType = trade.ticker?.match(/\d/)
+            ? (firstBuy?.currency==="USD"||trade.currency==="USD" ? "bono_usd" : "bono_ars")
+            : trade.type||firstBuy?.type||"accion_ar";
+          const restoredPos={
+            id: Date.now(),
+            ticker: trade.ticker,
+            name: firstBuy?.name||trade.name||trade.ticker,
+            type: inferredType,
+            qty: netQty,
+            buyPrice: newPpc,
+            buyCurrency: firstBuy?.currency||trade.currency||"ARS",
+            currentPrice: newPpc,
+            rendPct: 0,
+            buyDate: firstBuy?.date||trade.date,
+          };
+          return [...prev, restoredPos];
+        }
+      });
     }
     setConfirmDelete(null);
   };

@@ -1014,7 +1014,10 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
     const actualEnd=customEnd||today;
     const filtered=allDates.filter(d=>d>=firstValid&&d<=actualEnd);
     // Solo agregar hoy si no hay customEnd o el customEnd es hoy
-    if(!customEnd||customEnd>=today)filtered.push(today);
+    // Y solo si hoy es día hábil (lunes a viernes)
+    const todayDowDates = new Date(today+'T12:00:00').getDay(); // 0=dom, 6=sab
+    const todayIsMarketDay = todayDowDates!==0 && todayDowDates!==6;
+    if((!customEnd||customEnd>=today) && todayIsMarketDay) filtered.push(today);
     return[...new Set(filtered)].sort();
   };
 
@@ -3471,7 +3474,10 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
       en.flatMap(h=>(historicos?.[h.ticker]||[]).map(b=>b.date))
     )].filter(d=>d>=startDate&&d<=endDate).sort();
     if(allDates.length<2) return [];
-    if(allDates[allDates.length-1]!==endDate) allDates.push(endDate);
+    // Solo agregar endDate si es día hábil
+    const endDow = new Date(endDate+'T12:00:00').getDay();
+    const endIsHabil = endDow!==0 && endDow!==6;
+    if(allDates[allDates.length-1]!==endDate && endIsHabil) allDates.push(endDate);
     const twr = calcTWR(allDates, trades, en, tickerBars, cclBars, mepBars, "USD_CCL", fxRate, {}, null, endDate);
     return twr.map(p=>({date:p.date, close:p.val}));
   },[en.map(h=>h.ticker).join(','), historicos, trades, startDate, endDate, fxRate]);
@@ -5793,7 +5799,9 @@ function App(){
     });
     // Agregar fechas de trades (cash flows)
     trades.forEach(t=>allDatesSet.add(t.date));
-    allDatesSet.add(today);
+    // Solo agregar hoy si es día hábil
+    const todayDowTWR = new Date(today+'T12:00:00').getDay();
+    if(todayDowTWR!==0 && todayDowTWR!==6) allDatesSet.add(today);
     const allDates = [...allDatesSet].sort();
     if(allDates.length<2) return null;
 

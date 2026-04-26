@@ -839,7 +839,10 @@ function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRa
   if(!dates||dates.length<2) return [];
   if(!realTodayStr){const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset()-180);realTodayStr=d.toISOString().slice(0,10);}
   const todayStr=customEnd&&customEnd<realTodayStr?null:realTodayStr;
-  const liveMap=(todayStr&&livePricesMap)||{};
+  // No usar precios live en fines de semana — el mercado AR no opera
+  const todayDow = todayStr ? new Date(todayStr+'T12:00:00').getDay() : 0; // 0=dom, 6=sab
+  const isMarketDay = todayDow!==0 && todayDow!==6;
+  const liveMap=(todayStr&&isMarketDay&&livePricesMap)||{};
 
   // Pre-indexar trades por ticker para O(1) lookup en vez de O(n) filter en cada fecha
   const tradesByTicker={};
@@ -1040,10 +1043,14 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
 
       const realToday=todayAR();
       const todayStr=customEnd&&customEnd<realToday?null:realToday; // null = no live prices
+      // No usar precios live en fines de semana — mercado AR no opera
+      const todayDowEvo = new Date(realToday+'T12:00:00').getDay();
+      const isMarketDayEvo = todayDowEvo!==0 && todayDowEvo!==6;
+      const todayStrEvo = isMarketDayEvo ? todayStr : null;
 
       // Función que obtiene el precio de una barra, usando el valor live para hoy si está disponible
       const getPriceWithLive=(bars,dateStr,liveVal)=>{
-        if(todayStr&&dateStr===todayStr&&liveVal!=null)return liveVal;
+        if(todayStrEvo&&dateStr===todayStrEvo&&liveVal!=null)return liveVal;
         return findPrice(bars,dateStr);
       };
 

@@ -5425,15 +5425,92 @@ function App(){
 
   // countdown movido a CountdownDisplay component — no re-renderiza el App
 
-  // ── Storage ───────────────────────────────────────────────────────────────
+  // ── GitHub Sync ──────────────────────────────────────────────────────────
+  const REPO = "MoloMolinaCa/mi-portfolio";
+  const DATA_FILE = "public/portfolio_data.json";
+  const [syncStatus, setSyncStatus] = useState("idle"); // idle|loading|saving|error
+  const [ghSha, setGhSha] = useState(null); // SHA del archivo en GitHub para updates
+
+  // Cargar datos desde GitHub al iniciar
+  useEffect(()=>{
+    setSyncStatus("loading");
+    fetch(`https://api.github.com/repos/${REPO}/contents/${DATA_FILE}`)
+      .then(r=>r.ok?r.json():null)
+      .then(data=>{
+        if(!data?.content) return null;
+        setGhSha(data.sha);
+        const decoded = JSON.parse(atob(data.content.replace(/\n/g,'')));
+        return decoded;
+      })
+      .then(decoded=>{
+        if(!decoded) return;
+        if(decoded.port?.length)   setPort(decoded.port);
+        if(decoded.trades?.length) setTrades(decoded.trades);
+        if(decoded.bondFlows && Object.keys(decoded.bondFlows).length){
+          setBondFlows({...SEED_BOND_FLOWS,...decoded.bondFlows});
+        }
+        if(decoded.bondMeta) setBondMetaFromGH(decoded.bondMeta);
+        setSyncStatus("idle");
+      })
+      .catch(e=>{ console.warn("GitHub sync error:", e); setSyncStatus("error"); });
+  },[]);
+
+  // Guardar datos en GitHub
+  const saveToGitHub = async (newPort, newTrades, newFlows, newMeta) => {
+    try{
+      setSyncStatus("saving");
+      const token = import.meta.env.VITE_PORTFOLIO_TOKEN;
+      if(!token){ setSyncStatus("idle"); return; }
+
+      // Obtener SHA actual si no lo tenemos
+      let sha = ghSha;
+      if(!sha){
+        const r = await fetch(`https://api.github.com/repos/${REPO}/contents/${DATA_FILE}`);
+        if(r.ok){ const d=await r.json(); sha=d.sha; setGhSha(d.sha); }
+      }
+
+      const payload = {
+        version: 1,
+        updatedAt: new Date().toISOString(),
+        port: newPort,
+        trades: newTrades,
+        bondFlows: newFlows,
+        bondMeta: newMeta||{}
+      };
+      const content = btoa(unescape(encodeURIComponent(JSON.stringify(payload,null,0))));
+      const body = { message:"chore: actualizar portfolio data", content, ...(sha?{sha}:{}) };
+
+      const res = await fetch(`https://api.github.com/repos/${REPO}/contents/${DATA_FILE}`,{
+        method:"PUT",
+        headers:{"Authorization":`token ${token}`,"Content-Type":"application/json"},
+        body: JSON.stringify(body)
+      });
+      if(res.ok){
+        const d=await res.json();
+        setGhSha(d.content?.sha);
+        setSyncStatus("idle");
+      } else {
+        console.warn("GitHub save error:", res.status);
+        setSyncStatus("error");
+      }
+    }catch(e){
+      console.warn("GitHub save error:", e);
+      setSyncStatus("error");
+    }
+  };
+
+  // ── Storage (localStorage como fallback) ─────────────────────────────────
+  const [bondMetaFromGH, setBondMetaFromGH] = useState(null);
   useEffect(()=>{
     try{
+      // Solo usar localStorage si GitHub no cargó nada
+      if(syncStatus==="loading") return;
       const sp=localStorage.getItem("gal_port_v1");
       const st=localStorage.getItem("gal_trades_v3");
-      if(sp) setPort(JSON.parse(sp));
-      if(st) setTrades(JSON.parse(st));
+      if(sp && !ghSha) setPort(JSON.parse(sp));
+      if(st && !ghSha) setTrades(JSON.parse(st));
       const bf=localStorage.getItem('gal_bond_flows_v1');
-      if(bf){
+      if(bf && !ghSha){
         // Merge: keep user edits but add any new seed flows not yet in localStorage
         const saved=JSON.parse(bf);
         const merged={...SEED_BOND_FLOWS,...saved};
@@ -5443,6 +5520,8 @@ function App(){
     setStorageReady(true);
   },[]);
 
+  // Guardar en localStorage + GitHub cuando cambian los datos
+  const saveTimerRef = React.useRef(null);
   useEffect(()=>{
     if(!storageReady) return;
     try{ localStorage.setItem("gal_port_v1",JSON.stringify(port)); }catch{}
@@ -5457,6 +5536,17 @@ function App(){
     if(!storageReady) return;
     try{ localStorage.setItem("gal_bond_flows_v1",JSON.stringify(bondFlows)); }catch{}
   },[bondFlows,storageReady]);
+
+  // Sync a GitHub con debounce de 2s para no hacer un commit por cada keystroke
+  useEffect(()=>{
+    if(!storageReady) return;
+    if(saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(()=>{
+      const meta = (() => { try{ return JSON.parse(localStorage.getItem('gal_bond_meta_v1')||'{}'); }catch{ return {}; } })();
+      saveToGitHub(port, trades, bondFlows, meta);
+    }, 2000);
+    return ()=>{ if(saveTimerRef.current) clearTimeout(saveTimerRef.current); };
+  },[port, trades, bondFlows, storageReady]);
 
   // ── Live prices ───────────────────────────────────────────────────────────
   const fxRate = liveFX[fx] || FX_FALLBACK[fx];
@@ -5971,8 +6061,11 @@ function App(){
               <div style={{width:28,height:28,flexShrink:0,borderRadius:8,background:"linear-gradient(135deg,var(--accent),var(--accent2))",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>📊</div>
               <div style={{minWidth:0}}>
                 <div style={{fontWeight:700,fontSize:isMobile?13:15,color:"var(--title-color)",letterSpacing:"-0.3px"}}>Mi Portfolio</div>
-                {!isMobile&&<div style={{fontSize:11,color:"var(--text-muted)"}}>
+                {!isMobile&&<div style={{fontSize:11,color:"var(--text-muted)",display:"flex",alignItems:"center",gap:8}}>
                   <CountdownDisplay lastRefresh={lastRefresh} priceStatus={priceStatus} liveCount={liveCount} portLen={port.length}/>
+                  {syncStatus==="saving"&&<span style={{color:"var(--yellow)"}}>↑ guardando...</span>}
+                  {syncStatus==="error"&&<span style={{color:"var(--red)"}}>⚠ error de sync</span>}
+                  {syncStatus==="loading"&&<span style={{color:"var(--text-muted)"}}>↓ cargando datos...</span>}
                 </div>}
               </div>
             </div>
@@ -6004,8 +6097,11 @@ function App(){
               <option value="MEP">MEP {fmtA(liveFX.MEP)}</option>
               <option value="oficial">Oficial {fmtA(liveFX.oficial)}</option>
             </select>
-            <span style={{fontSize:10}}>
+            <span style={{fontSize:10,display:"flex",alignItems:"center",gap:6}}>
               <CountdownDisplay lastRefresh={lastRefresh} priceStatus={priceStatus} liveCount={liveCount} portLen={port.length}/>
+              {syncStatus==="saving"&&<span style={{color:"var(--yellow)",fontSize:9}}>↑ sync</span>}
+              {syncStatus==="error"&&<span style={{color:"var(--red)",fontSize:9}}>⚠ sync</span>}
+              {syncStatus==="loading"&&<span style={{color:"var(--text-muted)",fontSize:9}}>↓ cargando</span>}
             </span>
             <button onClick={downloadTrades} style={{background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:6,padding:"4px 8px",color:"var(--text-secondary)",cursor:"pointer",fontSize:11}}>⬇ CSV</button>
           </div>}

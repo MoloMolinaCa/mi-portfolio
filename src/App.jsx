@@ -5534,6 +5534,13 @@ function App(){
         const d = await res.json();
         if(d.sha) setGhSha(d.sha);
         setSyncStatus("idle");
+      } else if(res.status===409){
+        // SHA desactualizado — refrescar y reintentar una vez
+        try{
+          const r2 = await fetch('/api/sync');
+          if(r2.ok){ const d2=await r2.json(); setGhSha(d2.sha); }
+        }catch{}
+        setSyncStatus("idle"); // reintentar en el próximo save
       } else {
         console.warn("Sync save error:", res.status);
         setSyncStatus("error");

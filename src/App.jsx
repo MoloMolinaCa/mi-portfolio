@@ -5517,46 +5517,29 @@ function App(){
       .catch(e=>{ console.warn("GitHub sync error:", e); setSyncStatus("error"); });
   },[]);
 
-  // Guardar datos en GitHub
+  // Guardar datos via /api/sync (Vercel serverless — token seguro en servidor)
   const saveToGitHub = async (newPort, newTrades, newFlows, newMeta) => {
     try{
       setSyncStatus("saving");
-      const token = "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";
-      if(!token){ setSyncStatus("idle"); return; }
-
-      // Obtener SHA actual si no lo tenemos
-      let sha = ghSha;
-      if(!sha){
-        const r = await fetch(`https://api.github.com/repos/${REPO}/contents/${DATA_FILE}`);
-        if(r.ok){ const d=await r.json(); sha=d.sha; setGhSha(d.sha); }
-      }
-
-      const payload = {
-        version: 1,
-        updatedAt: new Date().toISOString(),
-        port: newPort,
-        trades: newTrades,
-        bondFlows: newFlows,
-        bondMeta: newMeta||{}
-      };
-      const content = btoa(unescape(encodeURIComponent(JSON.stringify(payload,null,0))));
-      const body = { message:"chore: actualizar portfolio data", content, ...(sha?{sha}:{}) };
-
-      const res = await fetch(`https://api.github.com/repos/${REPO}/contents/${DATA_FILE}`,{
-        method:"PUT",
-        headers:{"Authorization":`token ${token}`,"Content-Type":"application/json"},
-        body: JSON.stringify(body)
+      const res = await fetch('/api/sync', {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          port: newPort, trades: newTrades,
+          bondFlows: newFlows||{}, bondMeta: newMeta||{},
+          sha: ghSha
+        })
       });
       if(res.ok){
-        const d=await res.json();
-        setGhSha(d.content?.sha);
+        const d = await res.json();
+        if(d.sha) setGhSha(d.sha);
         setSyncStatus("idle");
       } else {
-        console.warn("GitHub save error:", res.status);
+        console.warn("Sync save error:", res.status);
         setSyncStatus("error");
       }
     }catch(e){
-      console.warn("GitHub save error:", e);
+      console.warn("Sync save error:", e);
       setSyncStatus("error");
     }
   };
@@ -5579,28 +5562,22 @@ function App(){
     }catch{}
     setStorageReady(true);
 
-    // 2. Cargar desde GitHub SOLO si localStorage está vacío (dispositivo nuevo)
-    const localPort = localStorage.getItem("gal_port_v1");
-    const localTrades = localStorage.getItem("gal_trades_v3");
-    const localEmpty = !localPort || JSON.parse(localPort||'[]').length === 0;
-    
-    if(!localEmpty){ setSyncStatus("idle"); return; } // localStorage tiene datos → no tocar
-    
-    const token = "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";
-    if(!token){ setSyncStatus("idle"); return; }
+    // 2. Cargar desde /api/sync — siempre, para tener los datos más recientes
     setSyncStatus("loading");
-    fetch(`https://api.github.com/repos/MoloMolinaCa/mi-portfolio/contents/public/portfolio_data.json`,{
-      headers:{"Authorization":`token ${token}`}
-    })
+    fetch('/api/sync')
       .then(r=>r.ok?r.json():null)
       .then(data=>{
-        if(!data?.content){ setSyncStatus("idle"); return; }
-        setGhSha(data.sha);
-        const decoded = JSON.parse(atob(data.content.replace(/\n/g,'')));
-        if(decoded.port?.length)   setPort(decoded.port);
-        if(decoded.trades?.length) setTrades(decoded.trades);
-        if(decoded.bondFlows && Object.keys(decoded.bondFlows).length){
-          setBondFlows({...SEED_BOND_FLOWS,...decoded.bondFlows});
+        if(!data){ setSyncStatus("idle"); return; }
+        if(data.sha) setGhSha(data.sha);
+        // Comparar timestamps: solo aplicar si GitHub es más nuevo
+        const localTs = parseInt(localStorage.getItem('gal_last_save')||'0');
+        const ghTs = new Date(data.updatedAt||0).getTime();
+        if(ghTs > localTs){
+          if(data.port?.length)   setPort(data.port);
+          if(data.trades?.length) setTrades(data.trades);
+          if(data.bondFlows && Object.keys(data.bondFlows).length){
+            setBondFlows({...SEED_BOND_FLOWS,...data.bondFlows});
+          }
         }
         setSyncStatus("idle");
       })

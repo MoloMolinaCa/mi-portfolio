@@ -5521,9 +5521,7 @@ function App(){
   const saveToGitHub = async (newPort, newTrades, newFlows, newMeta) => {
     try{
       setSyncStatus("saving");
-      // Token inyectado en build por Vite desde variable de entorno VITE_PORTFOLIO_TOKEN
-      const token = (typeof __PORTFOLIO_TOKEN__ !== 'undefined' ? __PORTFOLIO_TOKEN__ : null) 
-                 || (typeof import.meta !== 'undefined' ? import.meta.env?.VITE_PORTFOLIO_TOKEN : null);
+      const token = "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";
       if(!token){ setSyncStatus("idle"); return; }
 
       // Obtener SHA actual si no lo tenemos
@@ -5581,12 +5579,16 @@ function App(){
     }catch{}
     setStorageReady(true);
 
-    // 2. Intentar cargar desde GitHub (solo si es más nuevo que localStorage)
-    const token = import.meta.env?.VITE_PORTFOLIO_TOKEN;
+    // 2. Cargar desde GitHub SOLO si localStorage está vacío (dispositivo nuevo)
+    const localPort = localStorage.getItem("gal_port_v1");
+    const localTrades = localStorage.getItem("gal_trades_v3");
+    const localEmpty = !localPort || JSON.parse(localPort||'[]').length === 0;
+    
+    if(!localEmpty){ setSyncStatus("idle"); return; } // localStorage tiene datos → no tocar
+    
+    const token = "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";
     if(!token){ setSyncStatus("idle"); return; }
     setSyncStatus("loading");
-    // Timestamp local — cuándo se guardó por última vez en este dispositivo
-    const localTs = parseInt(localStorage.getItem('gal_last_save')||'0');
     fetch(`https://api.github.com/repos/MoloMolinaCa/mi-portfolio/contents/public/portfolio_data.json`,{
       headers:{"Authorization":`token ${token}`}
     })
@@ -5595,14 +5597,10 @@ function App(){
         if(!data?.content){ setSyncStatus("idle"); return; }
         setGhSha(data.sha);
         const decoded = JSON.parse(atob(data.content.replace(/\n/g,'')));
-        const ghTs = new Date(decoded.updatedAt||0).getTime();
-        // Solo aplicar si GitHub tiene datos más nuevos que localStorage
-        if(ghTs > localTs){
-          if(decoded.port?.length)   setPort(decoded.port);
-          if(decoded.trades?.length) setTrades(decoded.trades);
-          if(decoded.bondFlows && Object.keys(decoded.bondFlows).length){
-            setBondFlows({...SEED_BOND_FLOWS,...decoded.bondFlows});
-          }
+        if(decoded.port?.length)   setPort(decoded.port);
+        if(decoded.trades?.length) setTrades(decoded.trades);
+        if(decoded.bondFlows && Object.keys(decoded.bondFlows).length){
+          setBondFlows({...SEED_BOND_FLOWS,...decoded.bondFlows});
         }
         setSyncStatus("idle");
       })
@@ -5626,7 +5624,10 @@ function App(){
 
   useEffect(()=>{
     if(!storageReady) return;
-    try{ localStorage.setItem("gal_bond_flows_v1",JSON.stringify(bondFlows)); }catch{}
+    try{ 
+      localStorage.setItem("gal_bond_flows_v1",JSON.stringify(bondFlows));
+      localStorage.setItem('gal_last_save', Date.now().toString());
+    }catch{}
   },[bondFlows,storageReady]);
 
   // Sync a GitHub con debounce de 2s para no hacer un commit por cada keystroke

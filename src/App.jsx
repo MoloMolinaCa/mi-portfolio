@@ -2252,9 +2252,17 @@ function Modal({h,port=[],onSave,onClose,darkMode=true}){
             <label style={{display:"flex",flexDirection:"column",gap:4}}>
               <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>{f.operacion==="venta"?"Cantidad a vender":"Nominales"}</span>
               <div style={{display:"flex",gap:4}}>
-                <input type="number" min="0" max={f.operacion==="venta"?availableQty:undefined} value={f.qty}
-                  onChange={e=>{const v=+e.target.value;set("qty",f.operacion==="venta"?Math.min(v,availableQty):v||e.target.value);}}
-                  style={{...inp,flex:1,borderColor:overSelling?"var(--red)":undefined}}/>
+                <div style={{flex:1,position:"relative"}}>
+                  <input type="number" min="0" max={f.operacion==="venta"?availableQty:undefined} value={f.qty}
+                    onChange={e=>{const v=+e.target.value;set("qty",f.operacion==="venta"?Math.min(v,availableQty):v||e.target.value);}}
+                    style={{...inp,flex:1,width:"100%",color:"transparent",caretColor:"var(--text-primary)",borderColor:overSelling?"var(--red)":undefined}}/>
+                  {/* Display formateado encima del input */}
+                  <div style={{position:"absolute",top:0,left:0,right:0,bottom:0,padding:"8px 12px",
+                    fontSize:14,color:"var(--text-primary)",pointerEvents:"none",
+                    display:"flex",alignItems:"center"}}>
+                    {f.qty?Number(f.qty).toLocaleString("es-AR"):""}
+                  </div>
+                </div>
                 {f.operacion==="venta"&&f.ticker&&(
                   <button onClick={()=>set("qty",availableQty)}
                     style={{background:"var(--accent)",border:"none",borderRadius:8,padding:"0 10px",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>

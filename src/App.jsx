@@ -5547,13 +5547,14 @@ function App(){
   const saveToGitHub = async (newPort, newTrades, newFlows, newMeta) => {
     try{
       setSyncStatus("saving");
+      const deviceId = localStorage.getItem('gal_device_id')||'unknown';
       const res = await fetch('/api/sync', {
         method: 'PUT',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
           port: newPort, trades: newTrades,
           bondFlows: newFlows||{}, bondMeta: newMeta||{},
-          sha: ghSha
+          sha: ghSha, deviceId
         })
       });
       if(res.ok){
@@ -5580,6 +5581,11 @@ function App(){
   // ── Storage ───────────────────────────────────────────────────────────────
   const [bondMetaFromGH, setBondMetaFromGH] = useState(null);
   useEffect(()=>{
+    // 0. Generar device ID único para este dispositivo
+    if(!localStorage.getItem('gal_device_id')){
+      localStorage.setItem('gal_device_id', Math.random().toString(36).slice(2)+Date.now().toString(36));
+    }
+
     // 1. Cargar localStorage inmediatamente (siempre)
     try{
       const sp=localStorage.getItem("gal_port_v1");
@@ -5595,25 +5601,31 @@ function App(){
     }catch{}
     setStorageReady(true);
 
-    // 2. Cargar desde /api/sync — siempre, para tener los datos más recientes
+    // 2. Cargar desde /api/sync — SOLO si localStorage está vacío (dispositivo nuevo)
+    const localPortData = localStorage.getItem("gal_port_v1");
+    const localTradesData = localStorage.getItem("gal_trades_v3");
+    const localHasData = localPortData && JSON.parse(localPortData||'[]').length > 0;
+
+    // Cargar desde GitHub y aplicar si es de otro dispositivo o no hay datos locales
     setSyncStatus("loading");
     fetch('/api/sync')
       .then(r=>r.ok?r.json():null)
       .then(data=>{
         if(!data){ setSyncStatus("idle"); return; }
         if(data.sha) setGhSha(data.sha);
-        // Comparar timestamps: solo aplicar si GitHub es más nuevo
+        const myDeviceId = localStorage.getItem('gal_device_id');
+        const ghDeviceId = data.deviceId;
         const localTs = parseInt(localStorage.getItem('gal_last_save')||'0');
         const ghTs = new Date(data.updatedAt||0).getTime();
-        if(ghTs > localTs){
-          // Marcar que estamos cargando desde GitHub para no re-guardar
+        // Aplicar si: no tengo datos locales, O si GitHub es más nuevo Y fue otro dispositivo
+        const shouldApply = !localHasData || (ghTs > localTs && ghDeviceId !== myDeviceId);
+        if(shouldApply){
           isLoadingFromGH.current = true;
           if(data.port?.length)   setPort(data.port);
           if(data.trades?.length) setTrades(data.trades);
           if(data.bondFlows && Object.keys(data.bondFlows).length){
             setBondFlows({...SEED_BOND_FLOWS,...data.bondFlows});
           }
-          // Actualizar timestamp local para que coincida con GitHub
           localStorage.setItem('gal_last_save', ghTs.toString());
           setTimeout(()=>{ isLoadingFromGH.current = false; }, 500);
         }

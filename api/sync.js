@@ -50,7 +50,8 @@ export default async function handler(req, res) {
       };
 
       const content = Buffer.from(JSON.stringify(payload)).toString('base64');
-      const body = { message: 'chore: actualizar portfolio data', content, ...(sha ? { sha } : {}) };
+      // [skip ci] evita que Vercel haga un deploy por cada guardado de datos
+      const body = { message: 'chore: actualizar portfolio data [skip ci]', content, ...(sha ? { sha } : {}) };
       const r = await fetch(API, { method: 'PUT', headers, body: JSON.stringify(body) });
 
       if (!r.ok) {

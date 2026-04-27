@@ -17,6 +17,7 @@ export default async function handler(req, res) {
     'User-Agent': 'portfolio-app'
   };
 
+  // GET — leer datos
   if (req.method === 'GET') {
     try {
       const r = await fetch(API, { headers });
@@ -29,26 +30,34 @@ export default async function handler(req, res) {
     }
   }
 
+  // PUT — guardar datos
   if (req.method === 'PUT') {
     try {
-      const { port, trades, bondFlows, bondMeta } = req.body;
-      let sha;
+      const { port, trades, bondFlows, bondMeta, deviceId } = req.body;
+      let { sha } = req.body;
+
+      // Siempre obtener el SHA actual para evitar conflictos
       const rGet = await fetch(API, { headers });
       if (rGet.ok) { const dGet = await rGet.json(); sha = dGet.sha; }
+
       const payload = {
         version: 1,
         updatedAt: new Date().toISOString(),
+        deviceId: deviceId || 'unknown',
         port, trades,
         bondFlows: bondFlows || {},
         bondMeta: bondMeta || {}
       };
+
       const content = Buffer.from(JSON.stringify(payload)).toString('base64');
       const body = { message: 'chore: actualizar portfolio data', content, ...(sha ? { sha } : {}) };
       const r = await fetch(API, { method: 'PUT', headers, body: JSON.stringify(body) });
+
       if (!r.ok) {
         const err = await r.json();
         return res.status(r.status).json({ error: err.message });
       }
+
       const data = await r.json();
       return res.status(200).json({ sha: data.content?.sha });
     } catch(e) {

@@ -23,7 +23,11 @@ export default async function handler(req, res) {
       const r = await fetch(API, { headers });
       if (!r.ok) return res.status(r.status).json({ error: 'Error leyendo GitHub' });
       const data = await r.json();
-      const content = JSON.parse(Buffer.from(data.content, 'base64').toString('utf8'));
+      // Limpiar el contenido base64 antes de decodificar
+      const rawContent = (data.content || '').replace(/\s/g, '');
+      if (!rawContent) return res.status(200).json({ sha: data.sha, port: [], trades: [] });
+      const decoded = Buffer.from(rawContent, 'base64').toString('utf8');
+      const content = JSON.parse(decoded);
       return res.status(200).json({ ...content, sha: data.sha });
     } catch(e) {
       return res.status(500).json({ error: e.message });

@@ -64,9 +64,9 @@ const GALICIA_PORTFOLIO = [
 ];
 
 const FX_FALLBACK = { CCL:1481, MEP:1427, oficial:1389 };  // updated Apr 2026
+const T10Y_FALLBACK = 4.35;
 // CER: se carga desde historicos.json (update_historicos.py lo descarga con el token del servidor)
 const YAHOO_PROXY = "https://yahoo-proxy-blue.vercel.app/api/yahoo"; // proxy sin CORS
-const T10Y_FALLBACK = 4.35;
 
 const fmtU = (n,d=0) => new Intl.NumberFormat("es-AR",{style:"currency",currency:"USD",maximumFractionDigits:d}).format(n);
 const fmtA = (n) => new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:0}).format(n);

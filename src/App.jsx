@@ -64,7 +64,7 @@ const GALICIA_PORTFOLIO = [
 ];
 
 const FX_FALLBACK = { CCL:1481, MEP:1427, oficial:1389 };  // updated Apr 2026
-const T10Y_FALLBACK = 4.35;
+const TASA10Y_FALLBACK = 4.35;
 // CER: se carga desde historicos.json (update_historicos.py lo descarga con el token del servidor)
 const YAHOO_PROXY = "https://yahoo-proxy-blue.vercel.app/api/yahoo"; // proxy sin CORS
 
@@ -675,8 +675,8 @@ async function fetchTreasury10Y() {
     const d = await res.json();
     const closes = d?.chart?.result?.[0]?.indicators?.quote?.[0]?.close||[];
     const price = closes.filter(Boolean).pop();
-    return price ? parseFloat(price.toFixed(2)) : T10Y_FALLBACK;
-  } catch { return T10Y_FALLBACK; }
+    return price ? parseFloat(price.toFixed(2)) : TASA10Y_FALLBACK;
+  } catch { return TASA10Y_FALLBACK; }
 }
 
 // ── Orquestador: lanza todo en paralelo ──────────────────────────────────────
@@ -5505,7 +5505,7 @@ function App(){
   const [fx,setFx]             = useState("CCL");
   const [liveFX,setLiveFX]     = useState(FX_FALLBACK);
   const [livePrices,setLivePrices] = useState({});
-  const [liveT10Y,setLiveT10Y] = useState(T10Y_FALLBACK);
+  const [liveT10Y,setLiveT10Y] = useState(TASA10Y_FALLBACK);
   const [liveSP500,setLiveSP500] = useState(null);
   const [priceStatus,setPriceStatus] = useState("idle");
   const [lastRefresh,setLastRefresh] = useState(null);

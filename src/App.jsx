@@ -1061,7 +1061,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
 
       let spy100=null;
       // Precio live CEDEAR SPY en ARS — solo para modo ARS
-      const liveSPYars=livePricesAll["SPY"]?.price||livePricesMap["SPY"]||null;
+      const liveSPYars=livePricesAll["SPY"]?.price||null;
 
       if(currency!=="ARS"){
         // USD CCL / USD MEP: usar índice S&P real en USD (historicos.sp500)

@@ -1061,7 +1061,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
 
       let spy100=null;
       // Precio live CEDEAR SPY en ARS — solo para modo ARS
-      const liveSPYars=livePricesAll["SPY"]?.price||null;
+      const liveSPYars=livePricesAll["SPY"]?.price||livePricesMap["SPY"]||null;
 
       if(currency!=="ARS"){
         // USD CCL / USD MEP: usar índice S&P real en USD (historicos.sp500)
@@ -2051,38 +2051,38 @@ function Modal({h,port=[],onSave,onClose,darkMode=true}){
       }
     }catch(e){console.warn("data912 error",e);}
 
-    // 2. Yahoo Finance via proxy (sin CORS)
+    // 2. Yahoo Finance — busca el ticker directo y con .BA
     try{
-      for(const ySym of [q, q+".BA"]){
-        try{
-          const yRes=await fetch(YAHOO_PROXY+"?symbol="+encodeURIComponent(ySym)+"&range=5d&interval=1d",{signal:AbortSignal.timeout(6000)});
-          if(!yRes.ok) continue;
-          const yD=await yRes.json();
-          const yMeta=yD?.chart?.result?.[0]?.meta;
-          if(!yMeta) continue;
-          const sym=(yMeta.symbol||ySym).replace(".BA","").toUpperCase();
+      const syms=[q,q+".BA"].join(",");
+      const url=YAHOO_PROXY+`?symbol=${encodeURIComponent(syms)}`;
+      const res=await fetch(url,{signal:AbortSignal.timeout(6000)});
+      if(res.ok){
+        const data=await res.json();
+        for(const item of data?.quoteResponse?.result||[]){
+          const sym=(item.symbol||"").replace(".BA","").toUpperCase();
           if(!sym.includes(q))continue;
-          const price=yMeta.regularMarketPrice||0;
+          const price=item.regularMarketPrice||0;
           if(price<=0)continue;
           const alreadyFound=results.find(r=>r.ticker===sym&&r.source.startsWith("data912"));
           if(alreadyFound){
-            if(alreadyFound.name===sym||alreadyFound.name==="")alreadyFound.name=yMeta.shortName||yMeta.longName||alreadyFound.name;
+            // Enriquecer nombre si data912 no lo tenía
+            if(alreadyFound.name===sym||alreadyFound.name==="")alreadyFound.name=item.shortName||alreadyFound.name;
             continue;
           }
-          const cur=(yMeta.currency||"ARS").toUpperCase()==="USD"?"USD":"ARS";
-          const qt=yMeta.instrumentType||"";
+          const cur=(item.currency||"ARS").toUpperCase()==="USD"?"USD":"ARS";
+          const qt=item.quoteType||"";
           let type="accion_ar";
           if(qt==="ETF"||qt==="MUTUALFUND")type="cedear";
           else if(cur==="USD")type="accion_ar";
           results.push({
             ticker:sym,
-            name:yMeta.shortName||yMeta.longName||sym,
+            name:item.shortName||sym,
             type,
             buyCurrency:cur,
             price,
             source:"Yahoo Finance",
           });
-        }catch{}
+        }
       }
     }catch{}
 
@@ -5532,8 +5532,10 @@ function App(){
         return decoded;
       })
       .then(decoded=>{
+        // Legacy path desactivado — ahora usamos /api/sync con deviceId + timestamps
+        // Solo conservamos el SHA para que saveToGitHub pueda hacer PUT
         if(!decoded) return;
-        // Legacy path desactivado — ahora usamos /api/sync
+        // NO setPort/setTrades/setBondFlows acá — lo maneja el bloque /api/sync más abajo
         setSyncStatus("idle");
       })
       .catch(e=>{ console.warn("GitHub sync error:", e); setSyncStatus("error"); });
@@ -6411,7 +6413,7 @@ function App(){
                 </div>
                 <div style={{...card,padding:"10px 18px 18px",display:"flex",flexDirection:"column"}}>
                   <div style={{height:isMobile?260:410}}>
-                    <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} livePricesAll={livePrices} onExpand={()=>setChartModal(true)}/>
+                    <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} livePricesAll={livePrices||{}} onExpand={()=>setChartModal(true)}/>
                   </div>
                 </div>
                 {chartModal&&(
@@ -6425,7 +6427,7 @@ function App(){
                       </button>
                     </div>
                     <div style={{flex:1,padding:"24px",minHeight:0}}>
-                      <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} isModal={true} livePricesAll={livePrices}/>
+                      <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} isModal={true} livePricesAll={livePrices||{}}/>
                     </div>
                   </div>
                 )}

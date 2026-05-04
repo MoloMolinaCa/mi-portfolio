@@ -5646,7 +5646,10 @@ function App(){
 
   useEffect(()=>{
     if(!storageReady) return;
-    try{ localStorage.setItem("gal_trades_v3",JSON.stringify(trades)); }catch{}
+    try{
+      localStorage.setItem("gal_trades_v3",JSON.stringify(trades));
+      localStorage.setItem('gal_last_save', Date.now().toString());
+    }catch{}
   },[trades,storageReady]);
 
   useEffect(()=>{

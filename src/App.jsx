@@ -5482,9 +5482,9 @@ function App(){
     {id:127,ticker:"TZX27",tipo:"compra",qty:112815,price:356.0,currency:"ARS",date:"2026-04-06",ts:127000,name:"BONO REP ARG CER V30/06/27",comision:1200.99},
   ];
 
-    const [port,setPort]         = useState(GALICIA_PORTFOLIO);
-  const [trades,setTrades]     = useState(SEED_TRADES);
-  const [bondFlows,setBondFlows] = useState(SEED_BOND_FLOWS);
+    const [port,setPort]         = useState(()=>{ try{ const s=localStorage.getItem("gal_port_v1"); if(s) return JSON.parse(s); }catch{} return GALICIA_PORTFOLIO; });
+  const [trades,setTrades]     = useState(()=>{ try{ const s=localStorage.getItem("gal_trades_v3"); if(s) return JSON.parse(s); }catch{} return SEED_TRADES; });
+  const [bondFlows,setBondFlows] = useState(()=>{ try{ const s=localStorage.getItem("gal_bond_flows_v1"); if(s) return {...SEED_BOND_FLOWS,...JSON.parse(s)}; }catch{} return SEED_BOND_FLOWS; });
   const [storageReady,setStorageReady] = useState(false);
   const [historicos,setHistoricos] = useState(null);
 

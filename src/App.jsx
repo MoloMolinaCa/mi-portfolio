@@ -5533,12 +5533,7 @@ function App(){
       })
       .then(decoded=>{
         if(!decoded) return;
-        if(decoded.port?.length)   setPort(decoded.port);
-        if(decoded.trades?.length) setTrades(decoded.trades);
-        if(decoded.bondFlows && Object.keys(decoded.bondFlows).length){
-          setBondFlows({...SEED_BOND_FLOWS,...decoded.bondFlows});
-        }
-        if(decoded.bondMeta) setBondMetaFromGH(decoded.bondMeta);
+        // Legacy path desactivado — ahora usamos /api/sync
         setSyncStatus("idle");
       })
       .catch(e=>{ console.warn("GitHub sync error:", e); setSyncStatus("error"); });

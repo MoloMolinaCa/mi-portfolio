@@ -5486,6 +5486,7 @@ function App(){
   const [trades,setTrades]     = useState(()=>{ try{ const s=localStorage.getItem("gal_trades_v3"); if(s) return JSON.parse(s); }catch{} return SEED_TRADES; });
   const [bondFlows,setBondFlows] = useState(()=>{ try{ const s=localStorage.getItem("gal_bond_flows_v1"); if(s) return {...SEED_BOND_FLOWS,...JSON.parse(s)}; }catch{} return SEED_BOND_FLOWS; });
   const [storageReady,setStorageReady] = useState(false);
+  const [syncChecked,setSyncChecked] = useState(false);
   const [historicos,setHistoricos] = useState(null);
 
   // Cargar históricos desde JSON generado por GitHub Actions
@@ -5611,7 +5612,7 @@ function App(){
     fetch('/api/sync')
       .then(r=>r.ok?r.json():null)
       .then(data=>{
-        if(!data){ setSyncStatus("idle"); return; }
+        if(!data){ setSyncChecked(true); setSyncStatus("idle"); return; }
         if(data.sha) setGhSha(data.sha);
         const myDeviceId = localStorage.getItem('gal_device_id');
         const ghDeviceId = data.deviceId;
@@ -5629,9 +5630,10 @@ function App(){
           localStorage.setItem('gal_last_save', ghTs.toString());
           setTimeout(()=>{ isLoadingFromGH.current = false; }, 500);
         }
+        setSyncChecked(true);
         setSyncStatus("idle");
       })
-      .catch(()=>{ setSyncStatus("idle"); });
+      .catch(()=>{ setSyncChecked(true); setSyncStatus("idle"); });
   },[]);
 
   // Guardar en localStorage + GitHub cuando cambian los datos
@@ -5664,7 +5666,7 @@ function App(){
   const isLoadingFromGH = React.useRef(false); // true mientras se cargan datos de GitHub
   const lastSyncRef = React.useRef(0); // timestamp del último sync exitoso
   useEffect(()=>{
-    if(!storageReady) return;
+    if(!storageReady || !syncChecked) return;
     if(saveTimerRef.current) clearTimeout(saveTimerRef.current);
     const saveTs = Date.now();
     saveTimerRef.current = setTimeout(()=>{
@@ -5677,7 +5679,7 @@ function App(){
       saveToGitHub(port, trades, bondFlows, meta);
     }, 2000);
     return ()=>{ if(saveTimerRef.current) clearTimeout(saveTimerRef.current); };
-  },[port, trades, bondFlows, storageReady]);
+  },[port, trades, bondFlows, storageReady, syncChecked]);
 
   // ── Live prices ───────────────────────────────────────────────────────────
   const fxRate = liveFX[fx] || FX_FALLBACK[fx];

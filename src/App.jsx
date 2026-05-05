@@ -577,8 +577,8 @@ async function fetchData912Prices(activeTickers=[]) {
     if (!Array.isArray(arr)) return;
     for (const item of arr) {
       const sym = item.ticker || item.symbol || item.s || "";
-      const price = item.price ?? item.last ?? item.c ?? item.close ?? null;
-      const change = item.change_pct ?? item.dp ?? item.change ?? 0;
+      const price = item.price ?? item.last ?? item.c ?? item.close ?? item.px_ask ?? item.px_bid ?? null;
+      const change = item.change_pct ?? item.dp ?? item.change ?? item.pct_change ?? 0;
       const match = activeTickers.length===0 || activeTickers.includes(sym);
       if (match && price != null && price > 0) {
         result[sym] = { price: parseFloat(price), changePct: parseFloat(change)||0, source: "data912" };
@@ -1061,7 +1061,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
 
       let spy100=null;
       // Precio live CEDEAR SPY en ARS — solo para modo ARS
-      const liveSPYars=livePricesAll["SPY"]?.price||livePricesMap["SPY"]||null;
+      const liveSPYars=livePricesAll["SPY"]?.price||null;
 
       if(currency!=="ARS"){
         // USD CCL / USD MEP: usar índice S&P real en USD (historicos.sp500)
@@ -2051,38 +2051,38 @@ function Modal({h,port=[],onSave,onClose,darkMode=true}){
       }
     }catch(e){console.warn("data912 error",e);}
 
-    // 2. Yahoo Finance — busca el ticker directo y con .BA
+    // 2. Yahoo Finance via proxy (sin CORS)
     try{
-      const syms=[q,q+".BA"].join(",");
-      const url=`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(syms)}&fields=shortName,regularMarketPrice,currency,quoteType`;
-      const res=await fetch(url,{signal:AbortSignal.timeout(6000)});
-      if(res.ok){
-        const data=await res.json();
-        for(const item of data?.quoteResponse?.result||[]){
-          const sym=(item.symbol||"").replace(".BA","").toUpperCase();
+      for(const ySym of [q, q+".BA"]){
+        try{
+          const yRes=await fetch(YAHOO_PROXY+"?symbol="+encodeURIComponent(ySym)+"&range=5d&interval=1d",{signal:AbortSignal.timeout(6000)});
+          if(!yRes.ok) continue;
+          const yD=await yRes.json();
+          const yMeta=yD?.chart?.result?.[0]?.meta;
+          if(!yMeta) continue;
+          const sym=(yMeta.symbol||ySym).replace(".BA","").toUpperCase();
           if(!sym.includes(q))continue;
-          const price=item.regularMarketPrice||0;
+          const price=yMeta.regularMarketPrice||0;
           if(price<=0)continue;
           const alreadyFound=results.find(r=>r.ticker===sym&&r.source.startsWith("data912"));
           if(alreadyFound){
-            // Enriquecer nombre si data912 no lo tenía
-            if(alreadyFound.name===sym||alreadyFound.name==="")alreadyFound.name=item.shortName||alreadyFound.name;
+            if(alreadyFound.name===sym||alreadyFound.name==="")alreadyFound.name=yMeta.shortName||yMeta.longName||alreadyFound.name;
             continue;
           }
-          const cur=(item.currency||"ARS").toUpperCase()==="USD"?"USD":"ARS";
-          const qt=item.quoteType||"";
+          const cur=(yMeta.currency||"ARS").toUpperCase()==="USD"?"USD":"ARS";
+          const qt=yMeta.instrumentType||"";
           let type="accion_ar";
           if(qt==="ETF"||qt==="MUTUALFUND")type="cedear";
           else if(cur==="USD")type="accion_ar";
           results.push({
             ticker:sym,
-            name:item.shortName||sym,
+            name:yMeta.shortName||yMeta.longName||sym,
             type,
             buyCurrency:cur,
             price,
             source:"Yahoo Finance",
           });
-        }
+        }catch{}
       }
     }catch{}
 
@@ -5482,10 +5482,11 @@ function App(){
     {id:127,ticker:"TZX27",tipo:"compra",qty:112815,price:356.0,currency:"ARS",date:"2026-04-06",ts:127000,name:"BONO REP ARG CER V30/06/27",comision:1200.99},
   ];
 
-    const [port,setPort]         = useState(GALICIA_PORTFOLIO);
-  const [trades,setTrades]     = useState(SEED_TRADES);
-  const [bondFlows,setBondFlows] = useState(SEED_BOND_FLOWS);
+    const [port,setPort]         = useState(()=>{ try{ const s=localStorage.getItem("gal_port_v1"); if(s) return JSON.parse(s); }catch{} return GALICIA_PORTFOLIO; });
+  const [trades,setTrades]     = useState(()=>{ try{ const s=localStorage.getItem("gal_trades_v3"); if(s) return JSON.parse(s); }catch{} return SEED_TRADES; });
+  const [bondFlows,setBondFlows] = useState(()=>{ try{ const s=localStorage.getItem("gal_bond_flows_v1"); if(s) return {...SEED_BOND_FLOWS,...JSON.parse(s)}; }catch{} return SEED_BOND_FLOWS; });
   const [storageReady,setStorageReady] = useState(false);
+  const [syncChecked,setSyncChecked] = useState(false);
   const [historicos,setHistoricos] = useState(null);
 
   // Cargar históricos desde JSON generado por GitHub Actions
@@ -5532,12 +5533,7 @@ function App(){
       })
       .then(decoded=>{
         if(!decoded) return;
-        if(decoded.port?.length)   setPort(decoded.port);
-        if(decoded.trades?.length) setTrades(decoded.trades);
-        if(decoded.bondFlows && Object.keys(decoded.bondFlows).length){
-          setBondFlows({...SEED_BOND_FLOWS,...decoded.bondFlows});
-        }
-        if(decoded.bondMeta) setBondMetaFromGH(decoded.bondMeta);
+        // Legacy path desactivado
         setSyncStatus("idle");
       })
       .catch(e=>{ console.warn("GitHub sync error:", e); setSyncStatus("error"); });
@@ -5611,7 +5607,7 @@ function App(){
     fetch('/api/sync')
       .then(r=>r.ok?r.json():null)
       .then(data=>{
-        if(!data){ setSyncStatus("idle"); return; }
+        if(!data){ setSyncChecked(true); setSyncStatus("idle"); return; }
         if(data.sha) setGhSha(data.sha);
         const myDeviceId = localStorage.getItem('gal_device_id');
         const ghDeviceId = data.deviceId;
@@ -5629,9 +5625,10 @@ function App(){
           localStorage.setItem('gal_last_save', ghTs.toString());
           setTimeout(()=>{ isLoadingFromGH.current = false; }, 500);
         }
+        setSyncChecked(true);
         setSyncStatus("idle");
       })
-      .catch(()=>{ setSyncStatus("idle"); });
+      .catch(()=>{ setSyncChecked(true); setSyncStatus("idle"); });
   },[]);
 
   // Guardar en localStorage + GitHub cuando cambian los datos
@@ -5646,7 +5643,10 @@ function App(){
 
   useEffect(()=>{
     if(!storageReady) return;
-    try{ localStorage.setItem("gal_trades_v3",JSON.stringify(trades)); }catch{}
+    try{
+      localStorage.setItem("gal_trades_v3",JSON.stringify(trades));
+      localStorage.setItem('gal_last_save', Date.now().toString());
+    }catch{}
   },[trades,storageReady]);
 
   useEffect(()=>{
@@ -5661,7 +5661,7 @@ function App(){
   const isLoadingFromGH = React.useRef(false); // true mientras se cargan datos de GitHub
   const lastSyncRef = React.useRef(0); // timestamp del último sync exitoso
   useEffect(()=>{
-    if(!storageReady) return;
+    if(!storageReady || !syncChecked) return;
     if(saveTimerRef.current) clearTimeout(saveTimerRef.current);
     const saveTs = Date.now();
     saveTimerRef.current = setTimeout(()=>{
@@ -5674,7 +5674,7 @@ function App(){
       saveToGitHub(port, trades, bondFlows, meta);
     }, 2000);
     return ()=>{ if(saveTimerRef.current) clearTimeout(saveTimerRef.current); };
-  },[port, trades, bondFlows, storageReady]);
+  },[port, trades, bondFlows, storageReady, syncChecked]);
 
   // ── Live prices ───────────────────────────────────────────────────────────
   const fxRate = liveFX[fx] || FX_FALLBACK[fx];

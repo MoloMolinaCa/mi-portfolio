@@ -2051,7 +2051,7 @@ function Modal({h,port=[],onSave,onClose,darkMode=true}){
       }
     }catch(e){console.warn("data912 error",e);}
 
-    // 2. Yahoo Finance via proxy (sin CORS)
+    // 2. Yahoo Finance via proxy
     try{
       for(const ySym of [q, q+".BA"]){
         try{
@@ -2064,24 +2064,14 @@ function Modal({h,port=[],onSave,onClose,darkMode=true}){
           if(!sym.includes(q))continue;
           const price=yMeta.regularMarketPrice||0;
           if(price<=0)continue;
-          const alreadyFound=results.find(r=>r.ticker===sym&&r.source.startsWith("data912"));
-          if(alreadyFound){
-            if(alreadyFound.name===sym||alreadyFound.name==="")alreadyFound.name=yMeta.shortName||yMeta.longName||alreadyFound.name;
-            continue;
-          }
+          const af=results.find(r=>r.ticker===sym&&r.source.startsWith("data912"));
+          if(af){if(af.name===sym||af.name==="")af.name=yMeta.shortName||yMeta.longName||af.name;continue;}
           const cur=(yMeta.currency||"ARS").toUpperCase()==="USD"?"USD":"ARS";
           const qt=yMeta.instrumentType||"";
           let type="accion_ar";
           if(qt==="ETF"||qt==="MUTUALFUND")type="cedear";
           else if(cur==="USD")type="accion_ar";
-          results.push({
-            ticker:sym,
-            name:yMeta.shortName||yMeta.longName||sym,
-            type,
-            buyCurrency:cur,
-            price,
-            source:"Yahoo Finance",
-          });
+          results.push({ticker:sym,name:yMeta.shortName||yMeta.longName||sym,type,buyCurrency:cur,price,source:"Yahoo Finance"});
         }catch{}
       }
     }catch{}
@@ -5723,7 +5713,9 @@ function App(){
     const live=livePrices[h.ticker];
     const isBondH=h.type==="bono_ars"; // solo ARS cotiza por 100 laminas diferente al historico
     const livePrice=live?live.price:null;
-    const currentPrice=livePrice??h.currentPrice;
+    const histBars=historicos?.[h.ticker];
+    const lastHistClose=histBars?.length?histBars[histBars.length-1].close:null;
+    const currentPrice=livePrice??lastHistClose??h.currentPrice;
     const ppc=ppcByTicker[h.ticker]||h.buyPrice;
     let liveChangePct = live?.changePct ?? null;
     if(livePrice && historicos){
@@ -6029,6 +6021,40 @@ function App(){
         const newPort=[...p,{...h,id:ts,buyPrice:priceToSave}];
         const allTickers=[...new Set(newPort.map(x=>x.ticker))];
         setTimeout(()=>refreshPrices(allTickers),100);
+    const existingHistTickers=Object.keys(historicos||{});
+    const newTickers=allTickers.filter(t=>!existingHistTickers.includes(t));
+    if(newTickers.length>0){
+      (async()=>{
+        const updated={...historicos};
+        for(const ticker of newTickers){
+          try{
+            for(const sym of [ticker+'.BA', ticker]){
+              const r=await fetch(YAHOO_PROXY+'?symbol='+encodeURIComponent(sym)+'&range=2y&interval=1d',{signal:AbortSignal.timeout(8000)});
+              if(!r.ok)continue;
+              const d2=await r.json();
+              const res2=d2?.chart?.result?.[0];
+              if(!res2?.timestamp)continue;
+              const ts=res2.timestamp;
+              const closes=res2.indicators?.quote?.[0]?.close||[];
+              const bars=[];
+              for(let k=0;k<ts.length;k++){
+                if(closes[k]==null)continue;
+                const dt=new Date(ts[k]*1000);
+                const dateStr=dt.toISOString().slice(0,10);
+                bars.push({date:dateStr,close:parseFloat(closes[k].toFixed(4))});
+              }
+              if(bars.length>0){
+                updated[ticker]=bars.sort((a,b)=>a.date.localeCompare(b.date));
+                break;
+              }
+            }
+          }catch{}
+        }
+        if(Object.keys(updated).length>Object.keys(historicos||{}).length){
+          setHistoricos(updated);
+        }
+      })();
+    }
         return newPort;
       });
       // portfolio_tickers.json se descarga manualmente desde el botón CSV

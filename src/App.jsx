@@ -2054,7 +2054,7 @@ function Modal({h,port=[],onSave,onClose,darkMode=true}){
     // 2. Yahoo Finance — busca el ticker directo y con .BA
     try{
       const syms=[q,q+".BA"].join(",");
-      const url=YAHOO_PROXY+`?symbol=${encodeURIComponent(syms)}`;
+      const url=`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(syms)}&fields=shortName,regularMarketPrice,currency,quoteType`;
       const res=await fetch(url,{signal:AbortSignal.timeout(6000)});
       if(res.ok){
         const data=await res.json();
@@ -5482,11 +5482,10 @@ function App(){
     {id:127,ticker:"TZX27",tipo:"compra",qty:112815,price:356.0,currency:"ARS",date:"2026-04-06",ts:127000,name:"BONO REP ARG CER V30/06/27",comision:1200.99},
   ];
 
-    const [port,setPort]         = useState(()=>{ try{ const s=localStorage.getItem("gal_port_v1"); if(s) return JSON.parse(s); }catch{} return GALICIA_PORTFOLIO; });
-  const [trades,setTrades]     = useState(()=>{ try{ const s=localStorage.getItem("gal_trades_v3"); if(s) return JSON.parse(s); }catch{} return SEED_TRADES; });
-  const [bondFlows,setBondFlows] = useState(()=>{ try{ const s=localStorage.getItem("gal_bond_flows_v1"); if(s) return {...SEED_BOND_FLOWS,...JSON.parse(s)}; }catch{} return SEED_BOND_FLOWS; });
+    const [port,setPort]         = useState(GALICIA_PORTFOLIO);
+  const [trades,setTrades]     = useState(SEED_TRADES);
+  const [bondFlows,setBondFlows] = useState(SEED_BOND_FLOWS);
   const [storageReady,setStorageReady] = useState(false);
-  const [syncChecked,setSyncChecked] = useState(false);
   const [historicos,setHistoricos] = useState(null);
 
   // Cargar históricos desde JSON generado por GitHub Actions
@@ -5532,10 +5531,13 @@ function App(){
         return decoded;
       })
       .then(decoded=>{
-        // Legacy path desactivado — ahora usamos /api/sync con deviceId + timestamps
-        // Solo conservamos el SHA para que saveToGitHub pueda hacer PUT
         if(!decoded) return;
-        // NO setPort/setTrades/setBondFlows acá — lo maneja el bloque /api/sync más abajo
+        if(decoded.port?.length)   setPort(decoded.port);
+        if(decoded.trades?.length) setTrades(decoded.trades);
+        if(decoded.bondFlows && Object.keys(decoded.bondFlows).length){
+          setBondFlows({...SEED_BOND_FLOWS,...decoded.bondFlows});
+        }
+        if(decoded.bondMeta) setBondMetaFromGH(decoded.bondMeta);
         setSyncStatus("idle");
       })
       .catch(e=>{ console.warn("GitHub sync error:", e); setSyncStatus("error"); });
@@ -5609,7 +5611,7 @@ function App(){
     fetch('/api/sync')
       .then(r=>r.ok?r.json():null)
       .then(data=>{
-        if(!data){ setSyncChecked(true); setSyncStatus("idle"); return; }
+        if(!data){ setSyncStatus("idle"); return; }
         if(data.sha) setGhSha(data.sha);
         const myDeviceId = localStorage.getItem('gal_device_id');
         const ghDeviceId = data.deviceId;
@@ -5627,10 +5629,9 @@ function App(){
           localStorage.setItem('gal_last_save', ghTs.toString());
           setTimeout(()=>{ isLoadingFromGH.current = false; }, 500);
         }
-        setSyncChecked(true);
         setSyncStatus("idle");
       })
-      .catch(()=>{ setSyncChecked(true); setSyncStatus("idle"); });
+      .catch(()=>{ setSyncStatus("idle"); });
   },[]);
 
   // Guardar en localStorage + GitHub cuando cambian los datos
@@ -5645,10 +5646,7 @@ function App(){
 
   useEffect(()=>{
     if(!storageReady) return;
-    try{
-      localStorage.setItem("gal_trades_v3",JSON.stringify(trades));
-      localStorage.setItem('gal_last_save', Date.now().toString());
-    }catch{}
+    try{ localStorage.setItem("gal_trades_v3",JSON.stringify(trades)); }catch{}
   },[trades,storageReady]);
 
   useEffect(()=>{
@@ -5663,7 +5661,7 @@ function App(){
   const isLoadingFromGH = React.useRef(false); // true mientras se cargan datos de GitHub
   const lastSyncRef = React.useRef(0); // timestamp del último sync exitoso
   useEffect(()=>{
-    if(!storageReady || !syncChecked) return;
+    if(!storageReady) return;
     if(saveTimerRef.current) clearTimeout(saveTimerRef.current);
     const saveTs = Date.now();
     saveTimerRef.current = setTimeout(()=>{
@@ -5676,7 +5674,7 @@ function App(){
       saveToGitHub(port, trades, bondFlows, meta);
     }, 2000);
     return ()=>{ if(saveTimerRef.current) clearTimeout(saveTimerRef.current); };
-  },[port, trades, bondFlows, storageReady, syncChecked]);
+  },[port, trades, bondFlows, storageReady]);
 
   // ── Live prices ───────────────────────────────────────────────────────────
   const fxRate = liveFX[fx] || FX_FALLBACK[fx];
@@ -6413,7 +6411,7 @@ function App(){
                 </div>
                 <div style={{...card,padding:"10px 18px 18px",display:"flex",flexDirection:"column"}}>
                   <div style={{height:isMobile?260:410}}>
-                    <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} livePricesAll={livePrices||{}} onExpand={()=>setChartModal(true)}/>
+                    <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} livePricesAll={livePrices} onExpand={()=>setChartModal(true)}/>
                   </div>
                 </div>
                 {chartModal&&(
@@ -6427,7 +6425,7 @@ function App(){
                       </button>
                     </div>
                     <div style={{flex:1,padding:"24px",minHeight:0}}>
-                      <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} isModal={true} livePricesAll={livePrices||{}}/>
+                      <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} isModal={true} livePricesAll={livePrices}/>
                     </div>
                   </div>
                 )}

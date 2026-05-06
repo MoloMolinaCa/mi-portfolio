@@ -5523,7 +5523,12 @@ function App(){
       })
       .then(decoded=>{
         if(!decoded) return;
-        // Legacy path desactivado
+        if(decoded.port?.length)   setPort(decoded.port);
+        if(decoded.trades?.length) setTrades(decoded.trades);
+        if(decoded.bondFlows && Object.keys(decoded.bondFlows).length){
+          setBondFlows({...SEED_BOND_FLOWS,...decoded.bondFlows});
+        }
+        if(decoded.bondMeta) setBondMetaFromGH(decoded.bondMeta);
         setSyncStatus("idle");
       })
       .catch(e=>{ console.warn("GitHub sync error:", e); setSyncStatus("error"); });
@@ -5546,7 +5551,6 @@ function App(){
       if(res.ok){
         const d = await res.json();
         if(d.sha) setGhSha(d.sha);
-        localStorage.setItem('gal_last_save', Date.now().toString());
         setSyncStatus("idle");
       } else if(res.status===409){
         // SHA desactualizado — refrescar y reintentar una vez
@@ -5605,7 +5609,7 @@ function App(){
         const localTs = parseInt(localStorage.getItem('gal_last_save')||'0');
         const ghTs = new Date(data.updatedAt||0).getTime();
         // Aplicar si: no tengo datos locales, O si GitHub es más nuevo Y fue otro dispositivo
-        const shouldApply = !localHasData || (ghTs > localTs);
+        const shouldApply = !localHasData || (ghTs > localTs && ghDeviceId !== myDeviceId);
         if(shouldApply){
           isLoadingFromGH.current = true;
           if(data.port?.length)   setPort(data.port);
@@ -5628,6 +5632,7 @@ function App(){
     if(!storageReady) return;
     try{ 
       localStorage.setItem("gal_port_v1",JSON.stringify(port));
+      localStorage.setItem('gal_last_save', Date.now().toString());
     }catch{}
   },[port,storageReady]);
 
@@ -5635,6 +5640,7 @@ function App(){
     if(!storageReady) return;
     try{
       localStorage.setItem("gal_trades_v3",JSON.stringify(trades));
+      localStorage.setItem('gal_last_save', Date.now().toString());
     }catch{}
   },[trades,storageReady]);
 
@@ -5642,6 +5648,7 @@ function App(){
     if(!storageReady) return;
     try{ 
       localStorage.setItem("gal_bond_flows_v1",JSON.stringify(bondFlows));
+      localStorage.setItem('gal_last_save', Date.now().toString());
     }catch{}
   },[bondFlows,storageReady]);
 
@@ -6021,12 +6028,17 @@ function App(){
         const newPort=[...p,{...h,id:ts,buyPrice:priceToSave}];
         const allTickers=[...new Set(newPort.map(x=>x.ticker))];
         setTimeout(()=>refreshPrices(allTickers),100);
+    // Fetch historicos on-demand para tickers nuevos (Yahoo + BYMA fallback)
     const existingHistTickers=Object.keys(historicos||{});
     const newTickers=allTickers.filter(t=>!existingHistTickers.includes(t));
     if(newTickers.length>0){
       (async()=>{
         const updated={...historicos};
+        const now=Math.floor(Date.now()/1000);
+        const twoYearsAgo=now-2*365*86400;
         for(const ticker of newTickers){
+          let found=false;
+          // 1. Intentar Yahoo (.BA y directo)
           try{
             for(const sym of [ticker+'.BA', ticker]){
               const r=await fetch(YAHOO_PROXY+'?symbol='+encodeURIComponent(sym)+'&range=2y&interval=1d',{signal:AbortSignal.timeout(8000)});
@@ -6045,10 +6057,36 @@ function App(){
               }
               if(bars.length>0){
                 updated[ticker]=bars.sort((a,b)=>a.date.localeCompare(b.date));
-                break;
+                found=true; break;
               }
             }
           }catch{}
+          // 2. Si Yahoo no tiene, intentar BYMA open data
+          if(!found){
+            const settlements=['24HS','48HS','CDO'];
+            for(const sett of settlements){
+              try{
+                const bymaUrl='https://open.bymadata.com.ar/vanoms-be-core/rest/api/bymadata/free/chart/historical-series/history';
+                const params=new URLSearchParams({symbol:ticker+' '+sett,resolution:'D',from:String(twoYearsAgo),to:String(now)});
+                const r=await fetch(bymaUrl+'?'+params,{signal:AbortSignal.timeout(10000)});
+                if(!r.ok)continue;
+                const d3=await r.json();
+                if(d3.s!=='ok'||!d3.t||!d3.c)continue;
+                const bars=[];
+                for(let k=0;k<d3.t.length;k++){
+                  if(d3.c[k]==null)continue;
+                  const dt=new Date(d3.t[k]*1000);
+                  const dateStr=dt.toISOString().slice(0,10);
+                  bars.push({date:dateStr,close:parseFloat(Number(d3.c[k]).toFixed(4))});
+                }
+                if(bars.length>0){
+                  updated[ticker]=bars.sort((a,b)=>a.date.localeCompare(b.date));
+                  found=true; break;
+                }
+              }catch{}
+            }
+          }
+          if(!found) console.warn('No historical data found for '+ticker);
         }
         if(Object.keys(updated).length>Object.keys(historicos||{}).length){
           setHistoricos(updated);

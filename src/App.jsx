@@ -4078,7 +4078,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
           const activos = en.filter(h=>{
             const bars=(historicos?.[h.ticker]||[]);
             return bars.length>=10;
-          });
+          }).slice(0,8);
 
           if(activos.length<2) return <div style={{color:"var(--text-muted)",fontSize:12}}>Se necesitan al menos 2 activos con datos</div>;
 
@@ -5609,7 +5609,7 @@ function App(){
         const localTs = parseInt(localStorage.getItem('gal_last_save')||'0');
         const ghTs = new Date(data.updatedAt||0).getTime();
         // Aplicar si: no tengo datos locales, O si GitHub es más nuevo Y fue otro dispositivo
-        const shouldApply = !localHasData || (ghTs > localTs);
+        const shouldApply = !localHasData || (ghTs > localTs && ghDeviceId !== myDeviceId);
         if(shouldApply){
           isLoadingFromGH.current = true;
           if(data.port?.length)   setPort(data.port);
@@ -5662,7 +5662,7 @@ function App(){
     saveTimerRef.current = setTimeout(()=>{
       // No guardar si estamos cargando datos desde GitHub
       if(isLoadingFromGH.current) return;
-      // No sobreescribir GitHub si tenemos menos datos que lo que ya hay
+      // No sobreescribir GitHub si tenemos menos datos
       if(port.length===0 && trades.length===0) return;
       // Solo guardar si este save es más nuevo que el último sync
       if(saveTs < lastSyncRef.current) return;
@@ -5705,7 +5705,31 @@ function App(){
   };
 
   // Refresh al cargar — esperar que localStorage esté listo
-  useEffect(()=>{ if(storageReady){ refreshPrices(); const iv=setInterval(refreshPrices,5*60*1000); return()=>clearInterval(iv); } },[storageReady]);
+  useEffect(()=>{ if(storageReady){
+      refreshPrices();
+      const iv=setInterval(refreshPrices,5*60*1000);
+      // Auto-sync cuando el usuario vuelve a la app (ej: cel)
+      const onVisible=()=>{
+        if(document.visibilityState==='visible'){
+          fetch('/api/sync').then(r=>r.ok?r.json():null).then(data=>{
+            if(!data) return;
+            const localTs=parseInt(localStorage.getItem('gal_last_save')||'0');
+            const ghTs=new Date(data.updatedAt||0).getTime();
+            if(ghTs>localTs){
+              isLoadingFromGH.current=true;
+              if(data.port?.length) setPort(data.port);
+              if(data.trades?.length) setTrades(data.trades);
+              if(data.bondFlows&&Object.keys(data.bondFlows).length) setBondFlows(prev=>({...SEED_BOND_FLOWS,...data.bondFlows}));
+              localStorage.setItem('gal_last_save',ghTs.toString());
+              setTimeout(()=>{isLoadingFromGH.current=false;},500);
+            }
+          }).catch(()=>{});
+          refreshPrices();
+        }
+      };
+      document.addEventListener('visibilitychange',onVisible);
+      return()=>{clearInterval(iv);document.removeEventListener('visibilitychange',onVisible);};
+    } },[storageReady]);
 
   // ── Portfolio calcs ───────────────────────────────────────────────────────
   const ppcByTicker = useMemo(()=>port.reduce((acc,t)=>{

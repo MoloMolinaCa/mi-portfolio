@@ -1,8 +1,8 @@
 """
 update_historicos.py
 Descarga histórico de precios para todos los tickers del portfolio.
-Los tickers se leen dinámicamente desde public/portfolio_tickers.json
-generado por la app React. Si no existe ese archivo, usa la lista hardcodeada.
+Los tickers se leen dinámicamente desde el sync endpoint de la app.
+Si no está disponible, usa portfolio_tickers.json como fallback.
 
 Fuentes:
   - BYMA open data: acciones AR, bonos, CEDEARs
@@ -20,35 +20,56 @@ DAYS_HISTORY    = 365 * 3
 OUTPUT_FILE     = "public/historicos.json"
 TICKERS_FILE    = "public/portfolio_tickers.json"
 
-# Token estadisticasbcra.com — se lee desde variable de entorno CER_TOKEN
-# En GitHub Actions: Settings → Secrets → Actions → agregar CER_TOKEN
 CER_TOKEN = os.environ.get("CER_TOKEN", "")
 
-# Tickers fijos que siempre se descargan (benchmarks y FX no vienen del portfolio)
 YAHOO_TICKERS = {
     "^GSPC": "sp500",
     "^TNX":  "t10y",
 }
 
-# Fallback hardcodeado si no existe portfolio_tickers.json
 BYMA_TICKERS_FALLBACK = [
     "TZXD6","TZX27","TLCUD","AO27D","GD38D",
     "TXAR","YPFD","GLD","NU","SPY","META","MSFT","VIST",
 ]
 
 def load_portfolio_tickers():
-    """Lee los tickers desde portfolio_tickers.json generado por la app."""
-    if os.path.exists(TICKERS_FILE):
+    """Lee tickers desde el sync endpoint (dinámico) + portfolio_tickers.json (fallback)."""
+    tickers = set()
+
+    # 1. Leer desde el sync endpoint de la app (portfolio real en vivo)
+    sync_url = os.environ.get("SYNC_URL", "")
+    if sync_url:
+        try:
+            r = requests.get(sync_url, timeout=15)
+            if r.ok:
+                data = r.json()
+                for p in data.get("port", []):
+                    if p.get("ticker"): tickers.add(p["ticker"])
+                for t in data.get("trades", []):
+                    if t.get("ticker"): tickers.add(t["ticker"])
+                print(f"  ✓ Sync endpoint: {len(tickers)} tickers dinámicos")
+                # Actualizar archivo local para próximas corridas
+                os.makedirs(os.path.dirname(TICKERS_FILE), exist_ok=True)
+                with open(TICKERS_FILE, "w") as f:
+                    json.dump({"tickers": sorted(tickers), "updatedAt": datetime.now().isoformat()}, f, indent=2)
+        except Exception as e:
+            print(f"  ! Sync endpoint error: {e}")
+
+    # 2. Fallback: leer archivo local
+    if not tickers and os.path.exists(TICKERS_FILE):
         try:
             with open(TICKERS_FILE) as f:
                 data = json.load(f)
-            tickers = data.get("tickers", [])
-            if tickers:
-                print(f"  ✓ Leyendo {len(tickers)} tickers desde {TICKERS_FILE}")
-                return tickers
+            for t in data.get("tickers", []):
+                tickers.add(t)
+            print(f"  ✓ {len(tickers)} tickers desde {TICKERS_FILE}")
         except Exception as e:
             print(f"  ! Error leyendo {TICKERS_FILE}: {e}")
-    print(f"  ⚠ {TICKERS_FILE} no encontrado — usando lista hardcodeada")
+
+    if tickers:
+        return list(tickers)
+
+    print(f"  ⚠ Sin fuentes — usando lista hardcodeada")
     return BYMA_TICKERS_FALLBACK
 
 def load_existing_historicos():
@@ -125,12 +146,6 @@ def argentinadatos_get_fx(tipo, start, end):
         return []
 
 def bcra_get_cer_xls():
-    """
-    Descarga el CER desde los XLS anuales del BCRA.
-    URL: https://www.bcra.gob.ar/pdfs/PublicacionesEstadisticas/cerAAAA.xls
-    Columna 4 = fecha (YYYYMMDD), columna 5 = valor CER.
-    Funciona sin token ni API key.
-    """
     try:
         import io
         import pandas as pd
@@ -142,7 +157,6 @@ def bcra_get_cer_xls():
     seen_dates = set()
     current_year = datetime.now().year
 
-    # Descargar desde 2024 en adelante (antes ya está cubierto por estadisticasbcra)
     for year in range(2024, current_year + 2):
         url = f"https://www.bcra.gob.ar/pdfs/PublicacionesEstadisticas/cer{year}.xls"
         try:
@@ -171,7 +185,6 @@ def bcra_get_cer_xls():
 
 
 def argentinadatos_get_uva():
-    """Descarga la serie UVA desde argentinadatos.com. Respuesta: [{fecha, valor}]"""
     try:
         r = requests.get(
             "https://api.argentinadatos.com/v1/finanzas/indices/uva",
@@ -196,10 +209,6 @@ def argentinadatos_get_uva():
 
 
 def estadisticasbcra_get_cer():
-    """
-    Descarga la serie CER desde estadisticasbcra.com (requiere token).
-    Fallback: si no trae datos recientes, complementa con BCRA oficial.
-    """
     bars_bcra_privado = []
     if CER_TOKEN:
         try:
@@ -219,7 +228,6 @@ def estadisticasbcra_get_cer():
         except Exception as e:
             print(f"  ! estadisticasbcra.com: {e}")
 
-    # Verificar si los datos llegan hasta hoy (menos de 30 días de atraso)
     today = datetime.now().strftime("%Y-%m-%d")
     cutoff = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
     ultimo = bars_bcra_privado[-1]["date"] if bars_bcra_privado else ""
@@ -228,14 +236,12 @@ def estadisticasbcra_get_cer():
         print(f"  ✓ CER (estadisticasbcra): {len(bars_bcra_privado)} pts, último: {bars_bcra_privado[-1]}")
         return bars_bcra_privado
 
-    # Si está desactualizado, complementar con BCRA oficial
     print(f"  ⚠ estadisticasbcra cortado en {ultimo} — complementando con XLS BCRA")
     bars_oficial = bcra_get_cer_xls()
 
     if not bars_oficial:
         return bars_bcra_privado
 
-    # Merge: usar privado como base, agregar fechas nuevas del oficial
     seen = {b["date"] for b in bars_bcra_privado}
     combined = list(bars_bcra_privado)
     for b in bars_oficial:
@@ -247,7 +253,6 @@ def estadisticasbcra_get_cer():
     return combined
 
 def merge_bars(existing, new_bars):
-    """Combina barras existentes con nuevas, sin duplicar fechas. Gana la nueva."""
     if not existing:
         return new_bars
     existing_dates = {b["date"] for b in existing}
@@ -266,18 +271,14 @@ def main():
     print(f"Período: {start.date()} → {end.date()}")
     print(f"Output:  {OUTPUT_FILE}\n")
 
-    # Cargar histórico existente (para preservar datos de tickers vendidos)
     print("── Cargando histórico existente ──────")
     result = load_existing_historicos()
 
-    # Leer tickers del portfolio dinámicamente
     print("\n── Leyendo tickers del portfolio ─────")
     byma_tickers = load_portfolio_tickers()
-    # Filtrar FCIs (no están en BYMA open data) y tickers especiales
     fci_prefixes = ("FIMA-", "BICE-", "SCHRO", "ICBC-")
     byma_tickers = [t for t in byma_tickers if not any(t.startswith(p) for p in fci_prefixes)]
 
-    # BYMA tickers del portfolio
     print("\n── BYMA ──────────────────────────────")
     for ticker in byma_tickers:
         new_bars = byma_get_series(ticker, start, end)
@@ -286,14 +287,12 @@ def main():
         elif ticker not in result:
             print(f"  ⚠ {ticker}: sin datos BYMA y sin histórico previo")
 
-    # Yahoo benchmarks
     print("\n── Yahoo Finance (benchmarks) ────────")
     for sym, key in YAHOO_TICKERS.items():
         new_bars = yahoo_get_series(sym, start, end)
         if new_bars:
             result[key] = merge_bars(result.get(key, []), new_bars)
 
-    # FX histórico
     print("\n── FX histórico (ArgentinaDatos) ─────")
     ccl = argentinadatos_get_fx("contadoconliqui", start, end)
     if ccl:
@@ -303,19 +302,16 @@ def main():
     if mep:
         result["MEP"] = merge_bars(result.get("MEP", []), mep)
 
-    # CER histórico completo
     print("\n── CER (estadisticasbcra.com) ────────")
     cer = estadisticasbcra_get_cer()
     if cer:
         result["cer"] = merge_bars(result.get("cer", []), cer)
 
-    # UVA histórico
     print("\n── UVA (argentinadatos) ──────────────")
     uva = argentinadatos_get_uva()
     if uva:
         result["uva"] = merge_bars(result.get("uva", []), uva)
 
-    # Guardar
     os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
     with open(OUTPUT_FILE, "w") as f:
         json.dump(result, f, separators=(",", ":"))

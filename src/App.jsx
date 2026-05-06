@@ -5662,6 +5662,8 @@ function App(){
     saveTimerRef.current = setTimeout(()=>{
       // No guardar si estamos cargando datos desde GitHub
       if(isLoadingFromGH.current) return;
+      // No sobreescribir GitHub si tenemos menos datos que lo que ya hay
+      if(port.length===0 && trades.length===0) return;
       // Solo guardar si este save es más nuevo que el último sync
       if(saveTs < lastSyncRef.current) return;
       const meta = (() => { try{ return JSON.parse(localStorage.getItem('gal_bond_meta_v1')||'{}'); }catch{ return {}; } })();

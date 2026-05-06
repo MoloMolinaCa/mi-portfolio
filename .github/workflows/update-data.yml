@@ -23,6 +23,7 @@ jobs:
         run: python update_historicos.py
         env:
           CER_TOKEN: ${{ secrets.CER_TOKEN }}
+          SYNC_URL: ${{ secrets.SYNC_URL }}
       - name: Commit y push si hay cambios
         run: |
           git config user.name "github-actions[bot]"

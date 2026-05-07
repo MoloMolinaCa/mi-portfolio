@@ -952,7 +952,7 @@ function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRa
   return twr;
 }
 
-function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=false,livePricesAll={},onExpand=null}){
+function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=false,livePricesAll={},onExpand=null,bondFlows={}}){
   const PERIODS=[{key:"mtd",label:"MTD",days:null,mtd:true},{key:"30d",label:"30d",days:30},{key:"90d",label:"90d",days:90},{key:"ytd",label:"YTD",days:null},{key:"1y",label:"1 año",days:365},{key:"3y",label:"3 años",days:1095}];
   // Persistir preferencias del gráfico en localStorage
   const _chartPrefs = ()=>{ try{ return JSON.parse(localStorage.getItem('gal_chart_prefs_v1')||'{}'); }catch{ return {}; } };
@@ -1209,6 +1209,40 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
   },[liveFX,liveSP500,livePricesAll,historicos,trades,showUVA,uvaTasa,showCER]);
 
   const cd=chartData;
+  const periodPnL = useMemo(()=>{
+    try{
+      if(!cd||!cd.port100||cd.port100.length<2||!historicos) return null;
+      const startDate=cd.startDate;
+      const endDate=cd.endDate;
+      if(!startDate||!endDate) return null;
+      const cclBars=historicos?.CCL||[];
+      const spyBars=historicos?.sp500||[];
+      if(!cclBars.length) return null;
+      const realToday=todayAR();
+      const isEndToday=endDate>=realToday;
+      const fp=(bars,d)=>{if(!bars||!bars.length)return null;let lo=0,hi=bars.length-1,res=-1;while(lo<=hi){const mid=(lo+hi)>>1;if(bars[mid].date<=d){res=mid;lo=mid+1;}else hi=mid-1;}return res>=0?bars[res].close:bars[0].close;};
+      const getCCL=d=>{if(isEndToday&&d>=realToday&&liveFX?.CCL)return liveFX.CCL;const v=fp(cclBars,d);return v&&v>0?v:(cclBars.length?cclBars[cclBars.length-1].close:fxRate);};
+      const getSP=d=>{if(isEndToday&&d>=realToday&&liveSP500)return liveSP500;if(!spyBars.length)return null;return fp(spyBars,d);};
+      const getPrice=(ticker,d)=>{if(isEndToday&&d>=realToday){const liveH=en.find(e=>e.ticker===ticker);if(liveH&&liveH.isLive)return liveH.currentPrice;}return fp(historicos?.[ticker]||[],d);};
+      const buildPos=(cutoff,inclusive)=>{const pos={};for(const t of trades.filter(t2=>inclusive?t2.date<=cutoff:t2.date<cutoff).sort((a,b)=>(a.ts||0)-(b.ts||0))){if(!pos[t.ticker])pos[t.ticker]={qty:0,type:null,cur:t.currency||"ARS"};const p=pos[t.ticker];const ref=en.find(e=>e.ticker===t.ticker);p.type=p.type||ref?.type||"cedear";p.cur=t.currency||p.cur;if(t.tipo==="compra")p.qty+=t.qty;else if(t.tipo==="venta")p.qty-=t.qty;}return pos;};
+      const valuePos=(positions,date)=>{let total=0;const ccl=getCCL(date);for(const[ticker,pos] of Object.entries(positions)){if(pos.qty<=0)continue;const price=getPrice(ticker,date);if(!price)continue;const isBond=pos.type==="bono_usd"||pos.type==="bono_ars";const qtyF=isBond?pos.qty/100:pos.qty;if(pos.cur==="USD")total+=price*qtyF;else total+=(price*qtyF)/ccl;}return total;};
+      const posStart=buildPos(startDate,false);
+      const posEnd=buildPos(endDate,true);
+      const startValUSD=valuePos(posStart,startDate);
+      const endValUSD=valuePos(posEnd,endDate);
+      const periodTrades=trades.filter(t=>t.date>=startDate&&t.date<=endDate);
+      let netCashIn=0;let spNetCashIn=0;
+      const spStart=getSP(startDate);const spEnd=getSP(endDate);
+      for(const t of periodTrades){const isBond=t.type==="bono_usd"||t.type==="bono_ars"||/[0-9]/.test(t.ticker);const qtyF=isBond?t.qty/100:t.qty;const cclD=getCCL(t.date);const gross=(t.price||0)*qtyF;const com=t.comision?+t.comision:0;let flowUSD;if(t.tipo==="compra"){flowUSD=(t.currency==="USD")?(gross+com):(gross+com)/cclD;netCashIn+=flowUSD;}else{flowUSD=(t.currency==="USD")?(gross-com):(gross-com)/cclD;netCashIn-=flowUSD;}if(spStart&&spEnd){const spAtDate=getSP(t.date)||spStart;const spGrowth=spAtDate>0?spEnd/spAtDate:1;if(t.tipo==="compra")spNetCashIn+=flowUSD*spGrowth;else spNetCashIn-=flowUSD*spGrowth;}}
+      let cuponesUSD=0;
+      for(const[ticker,flows] of Object.entries(bondFlows||{})){const posE=posEnd[ticker];const posS=posStart[ticker];const qty=posE?.qty||posS?.qty||0;if(qty<=0)continue;const isBondUSD=(posE?.cur||posS?.cur)==="USD"||(posE?.type||posS?.type)==="bono_usd";for(const fl of(flows||[])){if(!fl.cobrado)continue;const cobDate=fl.fechaCobro||fl.date;if(cobDate<startDate||cobDate>endDate)continue;const cashAmt=(fl.monto/100)*qty;if(isBondUSD)cuponesUSD+=cashAmt;else cuponesUSD+=cashAmt/getCCL(cobDate);}}
+      const realPnL=endValUSD-startValUSD-netCashIn+cuponesUSD;
+      let spPnL=null;
+      if(spStart&&spEnd&&spStart>0){const spGrowthTotal=spEnd/spStart;const spEndVal=startValUSD*spGrowthTotal+spNetCashIn;spPnL=spEndVal-startValUSD-netCashIn;}
+      const alphaPnL=(realPnL!=null&&spPnL!=null)?realPnL-spPnL:null;
+      return{realPnL,spPnL,alphaPnL,startValUSD,endValUSD,netCashIn,cuponesUSD};
+    }catch(e){console.error("periodPnL error:",e);return null;}
+  },[cd,en,trades,historicos,fxRate,liveFX,liveSP500,bondFlows]);
   const series=cd?[
     {key:"port",data:cd.port100,color:"var(--green)",bold:true},
     ...(showSP&&cd.spy100?[{key:"spy",data:cd.spy100,color:"#60A5FA",bold:false}]:[]),
@@ -1415,6 +1449,19 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
             <span style={{fontSize:isModal?11:9,color:"var(--text-muted)",marginLeft:"auto"}}>rf {liveT10Y}% anualizado · {(()=>{const f=s=>s?s.slice(8)+'/'+s.slice(5,7)+'/'+s.slice(0,4):'';return f(cd.startDate)+' → '+f(cd.endDate)})()}</span>
           </div>
         ):null;
+      })()}
+      {cd&&!loading&&periodPnL&&(()=>{
+        const {realPnL,spPnL,alphaPnL,cuponesUSD}=periodPnL;
+        const fU=n=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"USD",maximumFractionDigits:0}).format(n);
+        return(
+          <div style={{display:"flex",alignItems:"center",gap:isModal?16:10,marginTop:isModal?8:4,paddingTop:isModal?8:4,borderTop:"1px solid var(--border)",flexWrap:"wrap"}}>
+            <span style={{fontSize:isModal?11:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,fontWeight:600}}>P&L Real</span>
+            <span style={{fontSize:isModal?15:11,color:"var(--text-muted)"}}>Portfolio: <b style={{color:realPnL>=0?"var(--green)":"var(--red)",fontSize:isModal?18:13}}>{fU(realPnL)}</b></span>
+            {spPnL!=null&&<span style={{fontSize:isModal?15:11,color:"var(--text-muted)"}}>S&P 500: <b style={{color:"#60A5FA",fontSize:isModal?18:13}}>{fU(spPnL)}</b></span>}
+            {alphaPnL!=null&&<span style={{fontSize:isModal?15:11,color:"var(--text-muted)"}}>Alpha: <b style={{color:alphaPnL>=0?"var(--green)":"var(--red)",fontSize:isModal?18:13}}>{fU(alphaPnL)}</b></span>}
+            {cuponesUSD>0&&<span style={{fontSize:isModal?15:11,color:"var(--text-muted)"}}>Cupones: <b style={{color:"var(--yellow)",fontSize:isModal?18:13}}>{fU(cuponesUSD)}</b></span>}
+          </div>
+        );
       })()}
     </div>
   );
@@ -6499,7 +6546,7 @@ function App(){
                 </div>
                 <div style={{...card,padding:"10px 18px 18px",display:"flex",flexDirection:"column"}}>
                   <div style={{height:isMobile?260:410}}>
-                    <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} livePricesAll={livePrices} onExpand={()=>setChartModal(true)}/>
+                    <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} livePricesAll={livePrices} onExpand={()=>setChartModal(true)} bondFlows={bondFlows}/>
                   </div>
                 </div>
                 {chartModal&&(
@@ -6513,7 +6560,7 @@ function App(){
                       </button>
                     </div>
                     <div style={{flex:1,padding:"24px",minHeight:0}}>
-                      <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} isModal={true} livePricesAll={livePrices}/>
+                      <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} isModal={true} livePricesAll={livePrices} bondFlows={bondFlows}/>
                     </div>
                   </div>
                 )}

@@ -4078,6 +4078,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
           const activos = en.filter(h=>{
             const bars=(historicos?.[h.ticker]||[]);
             return bars.length>=10;
+              });
 
           if(activos.length<2) return <div style={{color:"var(--text-muted)",fontSize:12}}>Se necesitan al menos 2 activos con datos</div>;
 

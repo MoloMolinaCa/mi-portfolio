@@ -5613,7 +5613,7 @@ function App(){
         const localTs = parseInt(localStorage.getItem('gal_last_save')||'0');
         const ghTs = new Date(data.updatedAt||0).getTime();
         // Aplicar si: no tengo datos locales, O si GitHub es más nuevo Y fue otro dispositivo
-        const shouldApply = !localHasData || (ghTs > localTs && ghDeviceId !== myDeviceId);
+        const shouldApply = !localHasData || (ghTs > localTs);
         if(shouldApply){
           isLoadingFromGH.current = true;
           if(data.port?.length)   setPort(data.port);
@@ -5658,6 +5658,7 @@ function App(){
 
   // Sync a GitHub con debounce de 2s — solo si hubo cambio local reciente
   const isLoadingFromGH = React.useRef(false); // true mientras se cargan datos de GitHub
+  const userEdited = React.useRef(false);
   const lastSyncRef = React.useRef(0); // timestamp del último sync exitoso
   useEffect(()=>{
     if(!storageReady || !syncChecked) return;
@@ -5666,6 +5667,7 @@ function App(){
     saveTimerRef.current = setTimeout(()=>{
       // No guardar si estamos cargando datos desde GitHub
       if(isLoadingFromGH.current) return;
+      if(!userEdited.current) return;
       // No sobreescribir GitHub si tenemos menos datos
       if(port.length===0 && trades.length===0) return;
       // Solo guardar si este save es más nuevo que el último sync
@@ -6030,6 +6032,7 @@ function App(){
   };
 
   const saveOrDelete=(h)=>{
+    userEdited.current = true;
     if(!h){
       const id=modal?.id;
       if(id){

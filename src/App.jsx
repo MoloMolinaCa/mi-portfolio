@@ -1209,7 +1209,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
   },[liveFX,liveSP500,livePricesAll,historicos,trades,showUVA,uvaTasa,showCER]);
 
   const cd=chartData;
-  const periodPnL=useMemo(()=>{if(!cd||!cd.port100||cd.port100.length<2)return null;const p0=cd.port100[0].val,pN=cd.port100[cd.port100.length-1].val;if(!p0||p0<=0)return null;const portRetPct=(pN/p0-1)*100;let spyRetPct=null;if(cd.spy100&&cd.spy100.length>=2){const s0=cd.spy100[0].val,sN=cd.spy100[cd.spy100.length-1].val;if(s0>0)spyRetPct=(sN/s0-1)*100;}const totVal=en.reduce((a,h)=>{const isBond=h.type==="bono_usd"||h.type==="bono_ars";const qf=isBond?h.qty/100:h.qty;const v=h.currentPrice*qf;return a+(h.buyCurrency==="USD"?v:v/fxRate);},0);let displayVal=totVal,sym="US$ ";if(currency==="ARS"){displayVal=totVal*fxRate;sym="$";}else if(currency==="USD_MEP"&&liveFX?.MEP>0){displayVal=totVal*(liveFX.CCL||fxRate)/(liveFX.MEP);}const gf=1+portRetPct/100;const startVal=gf>0?displayVal/gf:displayVal;const portPnL=displayVal-startVal;const spPnL=spyRetPct!=null?startVal*spyRetPct/100:null;return{portPnL,spPnL,sym};},[cd,en,currency,fxRate,liveFX]);
+  const periodPnL=useMemo(()=>{if(!cd||!cd.port100||cd.port100.length<2)return null;const p0=cd.port100[0].val,pN=cd.port100[cd.port100.length-1].val;if(!p0||p0<=0)return null;const portRetPct=(pN/p0-1)*100;let spyRetPct=null;if(cd.spy100&&cd.spy100.length>=2){const s0=cd.spy100[0].val,sN=cd.spy100[cd.spy100.length-1].val;if(s0>0)spyRetPct=(sN/s0-1)*100;}const totCostL=en.reduce((a,h)=>a+h.costUSD,0);let displayCost=totCostL,sym="US$ ";if(currency==="ARS"){displayCost=totCostL*fxRate;sym="$";}else if(currency==="USD_MEP"&&liveFX?.MEP>0){displayCost=totCostL*(liveFX.CCL||fxRate)/(liveFX.MEP);}const portPnL=displayCost*(portRetPct/100);const spPnL=spyRetPct!=null?displayCost*(spyRetPct/100):null;return{portPnL,spPnL,sym};},[cd,en,currency,fxRate,liveFX]);
   const series=cd?[
     {key:"port",data:cd.port100,color:"var(--green)",bold:true},
     ...(showSP&&cd.spy100?[{key:"spy",data:cd.spy100,color:"#60A5FA",bold:false}]:[]),
@@ -3984,7 +3984,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
             </tbody>
             <tfoot>
               <tr style={{borderTop:"1px solid var(--border)"}}>
-                <td colSpan={3} style={{padding:"8px 12px",fontWeight:700,fontSize:12}}>Total</td>
+                <td colSpan={selP.key!=="todo"?3:2} style={{padding:"8px 12px",fontWeight:700,fontSize:12}}>Total</td>
                 <td/>
                 <td style={{padding:"8px 12px",textAlign:"right",fontWeight:700,color:pc(totalPnlUSD)}}>{hideAmounts?"••••":(totalPnlUSD>=0?"+":"")+fmtU(totalPnlUSD,0)}</td>
                 <td colSpan={2}/>
@@ -6409,7 +6409,7 @@ function App(){
                   baseValUSD+=vAyer;
                 }
                 const dayPct=baseValUSD>0?(dayPnlUSD/baseValUSD)*100:0;
-                const _spB=historicos?.sp500||[];const _spP=_spB.length>=2?_spB[_spB.length-2]:null;const spyDayPct=_spP&&_spP.close>0?((liveSP500||(_spB.length?_spB[_spB.length-1].close:0))-_spP.close)/_spP.close*100:null;
+                const spyDayPct = en.find(x=>x.ticker==="SPY")?.liveChangePct ?? null;
 
                 const kpis=[
                   {
@@ -6433,7 +6433,7 @@ function App(){
                   {
                     icon:"📅", lbl:"Rendimiento del día",
                     main:fmtP(dayPct),
-                    sub:hideAmounts?"••••":(dayPnlUSD>=0?"+":"")+fmtU(dayPnlUSD)+(spyDayPct!=null?" · S&P "+(spyDayPct>=0?"+":"")+spyDayPct.toFixed(2)+"%":""),
+                    sub:hideAmounts?"••••":(dayPnlUSD>=0?"+":"")+fmtU(dayPnlUSD),spyBadge:spyDayPct,
                     subLabel:"P&L hoy USD",
                     mainColor:pc(dayPct),
                     trend:dayPct,
@@ -6471,6 +6471,7 @@ function App(){
                         <div style={{display:"flex",alignItems:"baseline",gap:4,flexWrap:"wrap"}}>
                           <span style={{fontSize:k.bigSub?(isMobile?12:15):(isMobile?10:12),color:k.trend!=null?pc(k.trend):"var(--text-secondary)",fontWeight:k.bigSub?600:k.trend!=null?600:400}}>{k.sub}</span>
                           {k.subLabel&&!isMobile&&<span style={{fontSize:8,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8,marginLeft:3}}>{k.subLabel}</span>}
+                          {k.spyBadge!=null&&<span style={{background:"#2563eb",color:"#fff",borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:600,marginLeft:6}}>S&P {k.spyBadge>=0?"+":""}{k.spyBadge.toFixed(2)}%</span>}
                         </div>
                       </div>
                     ))}

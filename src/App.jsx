@@ -952,7 +952,7 @@ function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRa
   return twr;
 }
 
-function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=false,livePricesAll={},onExpand=null,bondFlows={}}){
+function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=false,livePricesAll={},onExpand=null}){
   const PERIODS=[{key:"mtd",label:"MTD",days:null,mtd:true},{key:"30d",label:"30d",days:30},{key:"90d",label:"90d",days:90},{key:"ytd",label:"YTD",days:null},{key:"1y",label:"1 año",days:365},{key:"3y",label:"3 años",days:1095}];
   // Persistir preferencias del gráfico en localStorage
   const _chartPrefs = ()=>{ try{ return JSON.parse(localStorage.getItem('gal_chart_prefs_v1')||'{}'); }catch{ return {}; } };
@@ -1209,144 +1209,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
   },[liveFX,liveSP500,livePricesAll,historicos,trades,showUVA,uvaTasa,showCER]);
 
   const cd=chartData;
-
-// ── Period P&L: historical prices for past dates, live for today ──
-const periodPnL = useMemo(()=>{
-  if(!cd||!cd.port100||cd.port100.length<2) return null;
-  const _today = todayAR();
-  const _hist = historicos||{};
-  const startDate = cd.startDate;
-  const endDate = cd.endDate;
-  if(!startDate||!endDate) return null;
-
-  // Binary search: last bar with date <= d
-  const findBar = (bars, d) => {
-    if(!bars||!bars.length) return null;
-    let lo=0, hi=bars.length-1, res=-1;
-    while(lo<=hi){ const mid=(lo+hi)>>1; if(bars[mid].date<=d){res=mid;lo=mid+1;}else hi=mid-1; }
-    return res>=0 ? (bars[res].close||null) : null;
-  };
-
-  // TC at a date: live for today, historical for past
-  const getCCLat = (d) => {
-    if(d>=_today && liveFX?.CCL) return liveFX.CCL;
-    const bars = _hist.CCL||[];
-    return findBar(bars, d) || liveFX?.CCL || 1;
-  };
-  const getMEPat = (d) => {
-    if(d>=_today && liveFX?.MEP) return liveFX.MEP;
-    const bars = _hist.MEP||[];
-    return findBar(bars, d) || liveFX?.MEP || 1;
-  };
-  const getTCat = (d) => {
-    if(cd.currency==="USD_MEP") return getMEPat(d);
-    if(cd.currency==="USD_CCL") return getCCLat(d);
-    return 1; // ARS mode: no conversion
-  };
-
-  // Ticker price at a date
-  const getTickerPrice = (ticker, d) => {
-    if(d>=_today){
-      const h = en.find(x=>x.ticker===ticker);
-      if(h && h.currentPrice) return h.currentPrice;
-    }
-    const bars = _hist[ticker]||[];
-    return findBar(bars, d);
-  };
-
-  // Convert native amount to display currency at a given date
-  const toDisplay = (amt, buyCurrency, d) => {
-    if(cd.currency==="ARS"){
-      if(buyCurrency==="USD") return amt * getCCLat(d);
-      return amt;
-    }
-    // USD modes
-    if(buyCurrency==="USD") return amt;
-    return amt / getTCat(d);
-  };
-
-  // Build positions as of a date (qty from trades up to and including that date)
-  const buildPos = (asOf) => {
-    const pos = {};
-    for(const t of trades){
-      if(t.date > asOf) continue;
-      if(!pos[t.ticker]) pos[t.ticker] = 0;
-      if(t.tipo==="compra") pos[t.ticker] += t.qty;
-      else if(t.tipo==="venta") pos[t.ticker] -= t.qty;
-    }
-    return pos;
-  };
-
-  // Value all positions at market prices on a given date
-  const valueAt = (posMap, d) => {
-    let total = 0;
-    for(const [ticker, qty] of Object.entries(posMap)){
-      if(qty <= 0) continue;
-      const h = en.find(x=>x.ticker===ticker);
-      const isBond = h && (h.type==="bono_usd"||h.type==="bono_ars");
-      const price = getTickerPrice(ticker, d);
-      if(!price) continue;
-      const units = isBond ? qty/100 : qty;
-      const native = price * units;
-      const buyCur = h ? h.buyCurrency : "ARS";
-      total += toDisplay(native, buyCur, d);
-    }
-    return total;
-  };
-
-  // Positions at start and end
-  const posStart = buildPos(startDate);
-  const posEnd = buildPos(endDate);
-  const valStart = valueAt(posStart, startDate);
-  const valEnd = valueAt(posEnd, endDate);
-
-  // Cash flows during the period: purchases add cost, sales add proceeds
-  let cashOut = 0; // purchases in display currency
-  let cashIn = 0;  // sales in display currency
-  for(const t of trades){
-    if(t.date <= startDate || t.date > endDate) continue;
-    const h = en.find(x=>x.ticker===t.ticker);
-    const isBond = h && (h.type==="bono_usd"||h.type==="bono_ars");
-    const units = isBond ? t.qty/100 : t.qty;
-    const native = t.price * units;
-    const buyCur = h ? h.buyCurrency : "ARS";
-    const disp = toDisplay(native, buyCur, t.date);
-    if(t.tipo==="compra") cashOut += disp;
-    else if(t.tipo==="venta") cashIn += disp;
-  }
-
-  // Coupons collected during the period
-  let couponsDisp = 0;
-  if(bondFlows && typeof bondFlows === "object"){
-    for(const [ticker, flows] of Object.entries(bondFlows)){
-      if(!Array.isArray(flows)) continue;
-      const h = en.find(x=>x.ticker===ticker);
-      if(!h) continue;
-      const buyCur = h.buyCurrency || "ARS";
-      const posQty = posEnd[ticker] || posStart[ticker] || 0;
-      if(posQty <= 0) continue;
-      for(const fl of flows){
-        if(!fl.cobrado || !fl.fechaCobro) continue;
-        if(fl.fechaCobro <= startDate || fl.fechaCobro > endDate) continue;
-        const native = (fl.monto / 100) * posQty;
-        couponsDisp += toDisplay(native, buyCur, fl.fechaCobro);
-      }
-    }
-  }
-
-  // P&L = ending value + cash received - starting value - cash invested
-  const portPnL = valEnd + cashIn + couponsDisp - valStart - cashOut;
-
-  // S&P P&L for comparison
-  const spyRetPct = cd.spyRet ? parseFloat(cd.spyRet) : null;
-  const spPnL = spyRetPct !== null && valStart > 0 ? valStart * spyRetPct / 100 : null;
-
-  const portRetPct = cd.portRet ? parseFloat(cd.portRet) : null;
-  const sym = cd.currency==="ARS" ? "$" : "USD ";
-
-  return { portPnL, spPnL, portRetPct, spyRetPct, sym, valStart, valEnd };
-},[cd, en, trades, historicos, liveFX, bondFlows]);
-
+  const periodPnL=useMemo(()=>{if(!cd||!cd.port100||cd.port100.length<2)return null;const p0=cd.port100[0].val,pN=cd.port100[cd.port100.length-1].val;if(!p0||p0<=0)return null;const portRetPct=(pN/p0-1)*100;let spyRetPct=null;if(cd.spy100&&cd.spy100.length>=2){const s0=cd.spy100[0].val,sN=cd.spy100[cd.spy100.length-1].val;if(s0>0)spyRetPct=(sN/s0-1)*100;}const totVal=en.reduce((a,h)=>{const isBond=h.type==="bono_usd"||h.type==="bono_ars";const qf=isBond?h.qty/100:h.qty;const v=h.currentPrice*qf;return a+(h.buyCurrency==="USD"?v:v/fxRate);},0);let displayVal=totVal,sym="US$ ";if(currency==="ARS"){displayVal=totVal*fxRate;sym="$";}else if(currency==="USD_MEP"&&liveFX?.MEP>0){displayVal=totVal*(liveFX.CCL||fxRate)/(liveFX.MEP);}const gf=1+portRetPct/100;const startVal=gf>0?displayVal/gf:displayVal;const portPnL=displayVal-startVal;const spPnL=spyRetPct!=null?startVal*spyRetPct/100:null;return{portPnL,spPnL,sym};},[cd,en,currency,fxRate,liveFX]);
   const series=cd?[
     {key:"port",data:cd.port100,color:"var(--green)",bold:true},
     ...(showSP&&cd.spy100?[{key:"spy",data:cd.spy100,color:"#60A5FA",bold:false}]:[]),
@@ -1554,20 +1417,7 @@ const periodPnL = useMemo(()=>{
           </div>
         ):null;
       })()}
-{/* ── Period P&L pills ── */}
-{periodPnL && periodPnL.valStart > 0 && (
-<div style={{display:"flex",alignItems:"center",gap:isModal?16:10,marginTop:isModal?8:4,paddingTop:isModal?8:4,flexWrap:"wrap"}}>
-<span style={{fontSize:isModal?11:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,fontWeight:600}}>P&L período</span>
-<span style={{fontSize:isModal?15:11,color:periodPnL.portPnL>=0?"var(--green)":"var(--red)",fontWeight:700}}>
-{periodPnL.portPnL>=0?"+":""}{periodPnL.sym}{Math.abs(periodPnL.portPnL).toLocaleString("es-AR",{maximumFractionDigits:0})}
-</span>
-{periodPnL.spPnL!==null&&(
-<span style={{fontSize:isModal?15:11,color:"var(--text-muted)"}}>
-S&amp;P: <b style={{color:periodPnL.spPnL>=0?"#60A5FA":"var(--red)"}}>{periodPnL.spPnL>=0?"+":""}{periodPnL.sym}{Math.abs(periodPnL.spPnL).toLocaleString("es-AR",{maximumFractionDigits:0})}</b>
-</span>
-)}
-</div>
-)}
+      {periodPnL&&(()=>{const{portPnL,spPnL,sym}=periodPnL;const fN=n=>{const a=Math.abs(n);return(n>=0?"+":"\u2212")+sym+(a>=1e6?(a/1e6).toFixed(1)+"M":a>=1e3?Math.round(a).toLocaleString("es-AR"):a.toFixed(0));};const pcc=n=>n>=0?"var(--green)":"var(--red)";const pill=(l,v,col)=>{const bg=col==="#60A5FA"?"rgba(96,165,250,0.1)":v>=0?"rgba(16,185,129,0.1)":"rgba(239,68,68,0.1)";const bd=col==="#60A5FA"?"rgba(96,165,250,0.25)":v>=0?"rgba(16,185,129,0.25)":"rgba(239,68,68,0.25)";return(<div key={l} style={{display:"inline-flex",alignItems:"center",gap:isModal?8:5,background:bg,padding:isModal?"5px 14px":"3px 10px",borderRadius:8,border:"1px solid "+bd}}><span style={{fontSize:isModal?11:9,color:"var(--text-muted)",fontWeight:500}}>{l}</span><span style={{fontSize:isModal?16:12,fontWeight:700,color:col,fontFamily:"monospace"}}>{fN(v)}</span></div>);};return(<div style={{display:"flex",alignItems:"center",gap:isModal?14:8,marginTop:isModal?10:6,paddingTop:isModal?10:6,borderTop:"1px solid var(--border)",flexWrap:"wrap"}}><span style={{fontSize:isModal?10:8,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1.5,fontWeight:700}}>P&L</span>{pill("Portfolio",portPnL,pcc(portPnL))}{spPnL!=null&&pill("S&P 500",spPnL,"#60A5FA")}</div>);})()}
 
     </div>
   );
@@ -4135,6 +3985,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
             <tfoot>
               <tr style={{borderTop:"1px solid var(--border)"}}>
                 <td colSpan={3} style={{padding:"8px 12px",fontWeight:700,fontSize:12}}>Total</td>
+                <td/>
                 <td style={{padding:"8px 12px",textAlign:"right",fontWeight:700,color:pc(totalPnlUSD)}}>{hideAmounts?"••••":(totalPnlUSD>=0?"+":"")+fmtU(totalPnlUSD,0)}</td>
                 <td colSpan={2}/>
               </tr>
@@ -6558,6 +6409,7 @@ function App(){
                   baseValUSD+=vAyer;
                 }
                 const dayPct=baseValUSD>0?(dayPnlUSD/baseValUSD)*100:0;
+                const _spB=historicos?.sp500||[];const _spP=_spB.length>=2?_spB[_spB.length-2]:null;const spyDayPct=_spP&&_spP.close>0?((liveSP500||(_spB.length?_spB[_spB.length-1].close:0))-_spP.close)/_spP.close*100:null;
 
                 const kpis=[
                   {
@@ -6581,7 +6433,7 @@ function App(){
                   {
                     icon:"📅", lbl:"Rendimiento del día",
                     main:fmtP(dayPct),
-                    sub:hideAmounts?"••••":(dayPnlUSD>=0?"+":"")+fmtU(dayPnlUSD),
+                    sub:hideAmounts?"••••":(dayPnlUSD>=0?"+":"")+fmtU(dayPnlUSD)+(spyDayPct!=null?" · S&P "+(spyDayPct>=0?"+":"")+spyDayPct.toFixed(2)+"%":""),
                     subLabel:"P&L hoy USD",
                     mainColor:pc(dayPct),
                     trend:dayPct,
@@ -6652,7 +6504,7 @@ function App(){
                 </div>
                 <div style={{...card,padding:"10px 18px 18px",display:"flex",flexDirection:"column"}}>
                   <div style={{height:isMobile?260:410}}>
-                    <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} livePricesAll={livePrices} onExpand={()=>setChartModal(true)} bondFlows={bondFlows}/>
+                    <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} livePricesAll={livePrices} onExpand={()=>setChartModal(true)}/>
                   </div>
                 </div>
                 {chartModal&&(
@@ -6666,7 +6518,7 @@ function App(){
                       </button>
                     </div>
                     <div style={{flex:1,padding:"24px",minHeight:0}}>
-                      <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} isModal={true} livePricesAll={livePrices} bondFlows={bondFlows}/>
+                      <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} isModal={true} livePricesAll={livePrices}/>
                     </div>
                   </div>
                 )}

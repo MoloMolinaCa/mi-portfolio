@@ -1232,7 +1232,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
             </button>
           ))}
           <span style={{color:"var(--text-muted)",fontSize:10}}>|</span>
-          <span style={{fontSize:isMobile?14:10,color:"var(--green)"}}>— Portfolio</span>
+          <span style={{fontSize:window.innerWidth<768?14:10,color:"var(--green)"}}>— Portfolio</span>
           {/* Benchmarks toggleables */}
           {cd?.spy100&&<button onClick={()=>setShowSP(v=>!v)}
             style={{padding:"2px 8px",borderRadius:5,border:"1px solid rgba(96,165,250,0.4)",cursor:"pointer",fontSize:10,
@@ -6508,7 +6508,7 @@ function App(){
                   </div>
                 </div>
                 <div style={{...card,padding:"10px 18px 18px",display:"flex",flexDirection:"column"}}>
-                  <div style={{height:isMobile?340:410}}>
+                  <div style={{height:window.innerWidth<768?340:410}}>
                     <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} livePricesAll={livePrices} onExpand={()=>setChartModal(true)}/>
                   </div>
                 </div>

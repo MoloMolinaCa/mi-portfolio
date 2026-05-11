@@ -5557,6 +5557,7 @@ function App(){
       if(res.ok){
         const d = await res.json();
         if(d.sha) setGhSha(d.sha);
+        localStorage.setItem('gal_last_save', Date.now().toString());
         setSyncStatus("idle");
       } else if(res.status===409){
         // SHA desactualizado — refrescar y reintentar una vez
@@ -5640,7 +5641,6 @@ function App(){
     if(!storageReady) return;
     try{ 
       localStorage.setItem("gal_port_v1",JSON.stringify(port));
-      localStorage.setItem('gal_last_save', Date.now().toString());
     }catch{}
   },[port,storageReady]);
 
@@ -5648,7 +5648,6 @@ function App(){
     if(!storageReady) return;
     try{
       localStorage.setItem("gal_trades_v3",JSON.stringify(trades));
-      localStorage.setItem('gal_last_save', Date.now().toString());
     }catch{}
   },[trades,storageReady]);
 
@@ -5656,7 +5655,6 @@ function App(){
     if(!storageReady) return;
     try{ 
       localStorage.setItem("gal_bond_flows_v1",JSON.stringify(bondFlows));
-      localStorage.setItem('gal_last_save', Date.now().toString());
     }catch{}
   },[bondFlows,storageReady]);
 

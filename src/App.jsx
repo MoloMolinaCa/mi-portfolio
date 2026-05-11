@@ -5640,16 +5640,19 @@ function App(){
   useEffect(()=>{
     if(!storageReady) return;
     try{ localStorage.setItem("gal_port_v1",JSON.stringify(port)); }catch{}
+    if(!isLoadingFromGH.current){ lastSyncRef.current=Date.now(); localStorage.setItem('gal_last_save',String(Date.now())); }
   },[port,storageReady]);
 
   useEffect(()=>{
     if(!storageReady) return;
     try{ localStorage.setItem("gal_trades_v3",JSON.stringify(trades)); }catch{}
+    if(!isLoadingFromGH.current){ lastSyncRef.current=Date.now(); localStorage.setItem('gal_last_save',String(Date.now())); }
   },[trades,storageReady]);
 
   useEffect(()=>{
     if(!storageReady) return;
     try{ localStorage.setItem("gal_bond_flows_v1",JSON.stringify(bondFlows)); }catch{}
+    if(!isLoadingFromGH.current){ lastSyncRef.current=Date.now(); localStorage.setItem('gal_last_save',String(Date.now())); }
   },[bondFlows,storageReady]);
 
   // ══ Sync a GitHub — debounce 1.5s (llega en <2s) ══

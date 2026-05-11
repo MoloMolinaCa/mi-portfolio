@@ -5514,31 +5514,7 @@ function App(){
   const [syncStatus, setSyncStatus] = useState("idle"); // idle|loading|saving|error
   const [ghSha, setGhSha] = useState(null); // SHA del archivo en GitHub para updates
 
-  // Cargar datos desde GitHub al iniciar
-  useEffect(()=>{
-    setSyncStatus("loading");
-    fetch(`https://api.github.com/repos/${REPO}/contents/${DATA_FILE}`)
-      .then(r=>r.ok?r.json():null)
-      .then(data=>{
-        if(!data?.content) return null;
-        setGhSha(data.sha);
-        const decoded = JSON.parse(atob(data.content.replace(/\n/g,'')));
-        return decoded;
-      })
-      .then(decoded=>{
-        if(!decoded) return;
-        isLoadingFromGH.current=true;if(decoded.port?.length)   setPort(decoded.port);
-        if(decoded.trades?.length) setTrades(decoded.trades);
-        if(decoded.bondFlows && Object.keys(decoded.bondFlows).length){
-          setBondFlows({...SEED_BOND_FLOWS,...decoded.bondFlows});
-        }
-        if(decoded.bondMeta) setBondMetaFromGH(decoded.bondMeta);
-        localStorage.setItem('gal_last_save',Date.now().toString());
-        setSyncStatus("idle");
-        setTimeout(()=>{isLoadingFromGH.current=false;},1000);
-      })
-      .catch(e=>{ console.warn("GitHub sync error:", e); setSyncStatus("error"); });
-  },[]);
+  // GitHub data se carga via /api/sync (unica fuente de verdad)
 
   // Guardar datos via /api/sync (Vercel serverless — token seguro en servidor)
   const saveToGitHub = async (newPort, newTrades, newFlows, newMeta) => {
@@ -5585,7 +5561,7 @@ function App(){
     }
 
     // 1. Cargar localStorage inmediatamente (siempre)
-    isLoadingFromGH.current=true;
+
     try{
       const sp=localStorage.getItem("gal_port_v1");
       const st=localStorage.getItem("gal_trades_v3");
@@ -5617,7 +5593,7 @@ function App(){
         const localTs = parseInt(localStorage.getItem('gal_last_save')||'0');
         const ghTs = new Date(data.updatedAt||0).getTime();
         // Aplicar si: no tengo datos locales, O si GitHub es más nuevo Y fue otro dispositivo
-        const shouldApply = true; // siempre aplicar datos de GitHub al abrir
+        const shouldApply = true;
         if(shouldApply){
           isLoadingFromGH.current = true;
           if(data.port?.length)   setPort(data.port);

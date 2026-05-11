@@ -5494,7 +5494,10 @@ function App(){
 
   // ══ Persistir pestaña activa ══
   useEffect(()=>{ try{ localStorage.setItem("gal_tab",tab); }catch{} },[tab]);
-  const [visitedTabs, setVisitedTabs] = useState(new Set(["dashboard"]));
+  const [visitedTabs, setVisitedTabs] = useState(()=>{
+    try{ const t=localStorage.getItem('gal_tab'); if(t) return new Set(["dashboard",t]); }catch{}
+    return new Set(["dashboard"]);
+  });
   const handleTabChange = (t) => { setTab(t); setVisitedTabs(prev=>new Set([...prev,t])); };
   const [modal,setModal]       = useState(null);
   const [bondWizard,setBondWizard] = useState(null); // {ticker, onConfirm}

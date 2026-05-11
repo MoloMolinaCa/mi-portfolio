@@ -3056,7 +3056,7 @@ function OperacionesTab({trades,port,setTrades,setPort,card,livePrices,darkMode}
     setEditData({...t});
   };
 
-  const saveEdit=()=>{
+  const saveEdit=()=>{if(!window.confirm("Confirmar modificacion?"))return;
     if(!editData)return;
     setTrades(prev=>prev.map(t=>t.id===editId?{...editData,qty:+editData.qty,price:+editData.price,tcCompra:editData.tcCompra?+editData.tcCompra:undefined}:t));
     // Recalcular buyPrice del port si cambió
@@ -5626,7 +5626,7 @@ function App(){
         }
         setSyncChecked(true);
         setSyncStatus("idle");
-        setTimeout(()=>{ userEdited.current = true; }, 3000);
+        setTimeout(()=>{  }, 3000);
       })
       .catch(()=>{ setSyncChecked(true); setSyncStatus("idle"); });
   },[]);
@@ -5659,7 +5659,7 @@ function App(){
 
   // Sync a GitHub con debounce de 2s — solo si hubo cambio local reciente
   const isLoadingFromGH = React.useRef(false); // true mientras se cargan datos de GitHub
-  const userEdited = React.useRef(false);
+  const _loadTs = React.useRef(Date.now());
   const lastSyncRef = React.useRef(0); // timestamp del último sync exitoso
   useEffect(()=>{
     if(!storageReady || !syncChecked) return;
@@ -5668,7 +5668,7 @@ function App(){
     saveTimerRef.current = setTimeout(()=>{
       // No guardar si estamos cargando datos desde GitHub
       if(isLoadingFromGH.current) return;
-      if(!userEdited.current) return;
+      if(Date.now() - _loadTs.current < 5000) return;
       // No sobreescribir GitHub si tenemos menos datos
       if(port.length===0 && trades.length===0) return;
       // Solo guardar si este save es más nuevo que el último sync
@@ -6033,7 +6033,7 @@ function App(){
   };
 
   const saveOrDelete=(h)=>{
-    userEdited.current = true;
+    
     if(!h){
       const id=modal?.id;
       if(id){
@@ -6227,8 +6227,10 @@ function App(){
   },[ventaResult?.ticker,ventaResult?.buyDate,ventaResult?.sellDate]);
 
   const card={background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:14,boxShadow:"var(--card-glow)"};
-  const [darkMode, setDarkMode] = useState(true);
-  const [hideAmounts, setHideAmounts] = useState(false);
+  const [darkMode, setDarkMode] = useState(()=>{try{const v=localStorage.getItem("gal_dark");return v!==null?v==="true":true;}catch{return true;}});
+  const [hideAmounts, setHideAmounts] = useState(()=>{try{return localStorage.getItem("gal_hide")==="true";}catch{return false;}});
+  React.useEffect(()=>{try{localStorage.setItem("gal_dark",String(darkMode));}catch{};},[darkMode]);
+  React.useEffect(()=>{try{localStorage.setItem("gal_hide",String(hideAmounts));}catch{};},[hideAmounts]);
   const [chartModal, setChartModal] = useState(false);
 
   return(

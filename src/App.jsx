@@ -5488,12 +5488,12 @@ function App(){
   },[]);
   const isMobile = useIsMobile();
   const [tab,setTab]           = useState(()=>{
-    const h = window.location.hash.replace('#','').toLowerCase();
-    return ['dashboard','portfolio','analisis','flujos','operaciones'].includes(h) ? h : "dashboard";
+    try{ const t=localStorage.getItem('gal_tab'); if(t&&['dashboard','portfolio','analisis','flujos','operaciones'].includes(t)) return t; }catch{}
+    return "dashboard";
   })
 
-  // ══ Persistir pestaña activa en URL hash ══
-  useEffect(()=>{ window.location.hash = tab; },[tab]);
+  // ══ Persistir pestaña activa ══
+  useEffect(()=>{ try{ localStorage.setItem("gal_tab",tab); }catch{} },[tab]);
   const [visitedTabs, setVisitedTabs] = useState(new Set(["dashboard"]));
   const handleTabChange = (t) => { setTab(t); setVisitedTabs(prev=>new Set([...prev,t])); };
   const [modal,setModal]       = useState(null);

@@ -5676,7 +5676,7 @@ function App(){
       const meta = (() => { try{ return JSON.parse(localStorage.getItem('gal_bond_meta_v1')||'{}'); }catch{ return {}; } })();
       lastSyncRef.current = saveTs;
       saveToGitHub(port, trades, bondFlows, meta);
-    }, 2000);
+    }, 800);
     return ()=>{ if(saveTimerRef.current) clearTimeout(saveTimerRef.current); };
   },[port, trades, bondFlows, storageReady, syncChecked]);
 
@@ -5716,7 +5716,7 @@ function App(){
       refreshPrices();
       const iv=setInterval(refreshPrices,5*60*1000);
       // Auto-sync cuando el usuario vuelve a la app (ej: cel)
-      const onVisible=()=>{
+      const onVisible=()=>{const _sinceLastSave=Date.now()-parseInt(localStorage.getItem('gal_last_save')||'0');if(_sinceLastSave<10000)return;
         if(document.visibilityState==='visible'){
           fetch('/api/sync').then(r=>r.ok?r.json():null).then(data=>{
             if(!data) return;

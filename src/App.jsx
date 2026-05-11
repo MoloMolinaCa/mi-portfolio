@@ -5487,7 +5487,13 @@ function App(){
       .catch(()=>{});
   },[]);
   const isMobile = useIsMobile();
-  const [tab,setTab]           = useState("dashboard");
+  const [tab,setTab]           = useState(()=>{
+    const h = window.location.hash.replace('#','').toLowerCase();
+    return ['dashboard','portfolio','analisis','flujos','operaciones'].includes(h) ? h : "dashboard";
+  })
+
+  // ══ Persistir pestaña activa en URL hash ══
+  useEffect(()=>{ window.location.hash = tab; },[tab]);
   const [visitedTabs, setVisitedTabs] = useState(new Set(["dashboard"]));
   const handleTabChange = (t) => { setTab(t); setVisitedTabs(prev=>new Set([...prev,t])); };
   const [modal,setModal]       = useState(null);
@@ -6293,11 +6299,11 @@ function App(){
               </div>}
               <button onClick={refreshPrices} disabled={priceStatus==="loading"} style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"5px 8px",color:"var(--text-secondary)",cursor:"pointer",fontSize:12}}>↻</button>
               {!isMobile&&<button onClick={downloadTrades} style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"6px 10px",color:"var(--text-secondary)",cursor:"pointer",fontSize:13}}>⬇ CSV</button>}
-              <button onClick={()=>setHideAmounts(h=>!h)}
+              <button onClick={()=>setHideAmounts(h=>{const n=!h;try{localStorage.setItem('gal_hide',String(n))}catch{};return n})}
                 style={{background:hideAmounts?"rgba(37,99,235,0.15)":"var(--bg-card)",border:hideAmounts?"1px solid var(--accent)":"1px solid var(--border)",borderRadius:6,padding:"5px 8px",color:hideAmounts?"var(--accent)":"var(--text-secondary)",cursor:"pointer",fontSize:13}}>
                 {hideAmounts?"🙈":"👁"}
               </button>
-              <button onClick={()=>setDarkMode(d=>!d)}
+              <button onClick={()=>setDarkMode(d=>{const n=!d;try{localStorage.setItem('gal_dark',String(n))}catch{};return n})}
                 style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"5px 8px",color:"var(--text-secondary)",cursor:"pointer",fontSize:13}}>
                 {darkMode?"☀️":"🌙"}
               </button>

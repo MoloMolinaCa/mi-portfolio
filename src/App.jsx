@@ -5716,8 +5716,8 @@ function App(){
       refreshPrices();
       const iv=setInterval(refreshPrices,5*60*1000);
       // Auto-sync cuando el usuario vuelve a la app (ej: cel)
-      const onVisible=()=>{const _msSinceEdit=Date.now()-parseInt(localStorage.getItem('gal_last_save')||'0');if(_msSinceEdit<10000){refreshPrices();return;}const _sinceLastSave=Date.now()-parseInt(localStorage.getItem('gal_last_save')||'0');if(_sinceLastSave<10000)return;
-        if(document.visibilityState==='visible'){
+      const onVisible=()=>{const _sinceLastSave=Date.now()-parseInt(localStorage.getItem('gal_last_save')||'0');if(_sinceLastSave<10000)return;
+        if(document.visibilityState==='visible'){if(isLoadingFromGH.current)return;
           fetch('/api/sync').then(r=>r.ok?r.json():null).then(data=>{
             if(!data) return;
             const localTs=parseInt(localStorage.getItem('gal_last_save')||'0');

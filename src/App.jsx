@@ -5716,7 +5716,7 @@ function App(){
       refreshPrices();
       const iv=setInterval(refreshPrices,5*60*1000);
       // Auto-sync cuando el usuario vuelve a la app (ej: cel)
-      const onVisible=()=>{const _sinceLastSave=Date.now()-parseInt(localStorage.getItem('gal_last_save')||'0');if(_sinceLastSave<10000)return;
+      const onVisible=()=>{const _msSinceEdit=Date.now()-parseInt(localStorage.getItem('gal_last_save')||'0');if(_msSinceEdit<10000){refreshPrices();return;}const _sinceLastSave=Date.now()-parseInt(localStorage.getItem('gal_last_save')||'0');if(_sinceLastSave<10000)return;
         if(document.visibilityState==='visible'){
           fetch('/api/sync').then(r=>r.ok?r.json():null).then(data=>{
             if(!data) return;
@@ -6229,6 +6229,8 @@ function App(){
   const card={background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:14,boxShadow:"var(--card-glow)"};
   const [darkMode, setDarkMode] = useState(()=>{try{const v=localStorage.getItem("gal_dark");return v!==null?v==="true":true;}catch{return true;}});
   const [hideAmounts, setHideAmounts] = useState(()=>{try{return localStorage.getItem("gal_hide")==="true";}catch{return false;}});
+  React.useEffect(()=>{try{localStorage.setItem("gal_dark",String(darkMode));}catch{};},[darkMode]);
+  React.useEffect(()=>{try{localStorage.setItem("gal_hide",String(hideAmounts));}catch{};},[hideAmounts]);
   React.useEffect(()=>{try{localStorage.setItem("gal_dark",String(darkMode));}catch{};},[darkMode]);
   React.useEffect(()=>{try{localStorage.setItem("gal_hide",String(hideAmounts));}catch{};},[hideAmounts]);
   const [chartModal, setChartModal] = useState(false);

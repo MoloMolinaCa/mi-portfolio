@@ -5527,13 +5527,15 @@ function App(){
       })
       .then(decoded=>{
         if(!decoded) return;
-        if(decoded.port?.length)   setPort(decoded.port);
+        isLoadingFromGH.current=true;if(decoded.port?.length)   setPort(decoded.port);
         if(decoded.trades?.length) setTrades(decoded.trades);
         if(decoded.bondFlows && Object.keys(decoded.bondFlows).length){
           setBondFlows({...SEED_BOND_FLOWS,...decoded.bondFlows});
         }
         if(decoded.bondMeta) setBondMetaFromGH(decoded.bondMeta);
+        localStorage.setItem('gal_last_save',Date.now().toString());
         setSyncStatus("idle");
+        setTimeout(()=>{isLoadingFromGH.current=false;},1000);
       })
       .catch(e=>{ console.warn("GitHub sync error:", e); setSyncStatus("error"); });
   },[]);
@@ -5582,6 +5584,7 @@ function App(){
     }
 
     // 1. Cargar localStorage inmediatamente (siempre)
+    isLoadingFromGH.current=true;
     try{
       const sp=localStorage.getItem("gal_port_v1");
       const st=localStorage.getItem("gal_trades_v3");
@@ -5716,7 +5719,7 @@ function App(){
       refreshPrices();
       const iv=setInterval(refreshPrices,5*60*1000);
       // Auto-sync cuando el usuario vuelve a la app (ej: cel)
-      const onVisible=()=>{const _sinceLastSave=Date.now()-parseInt(localStorage.getItem('gal_last_save')||'0');if(_sinceLastSave<10000)return;
+      const onVisible=()=>{
         if(document.visibilityState==='visible'){if(isLoadingFromGH.current)return;
           fetch('/api/sync').then(r=>r.ok?r.json():null).then(data=>{
             if(!data) return;

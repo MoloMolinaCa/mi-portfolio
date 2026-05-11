@@ -5617,7 +5617,7 @@ function App(){
         const localTs = parseInt(localStorage.getItem('gal_last_save')||'0');
         const ghTs = new Date(data.updatedAt||0).getTime();
         // Aplicar si: no tengo datos locales, O si GitHub es más nuevo Y fue otro dispositivo
-        const shouldApply = !localHasData || (ghTs > localTs);
+        const shouldApply = true; // siempre aplicar datos de GitHub al abrir
         if(shouldApply){
           isLoadingFromGH.current = true;
           if(data.port?.length)   setPort(data.port);

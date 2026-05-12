@@ -5491,9 +5491,10 @@ function App(){
       .catch(()=>{});
   },[]);
   const isMobile = useIsMobile();
-  const [tab,setTab]           = useState("dashboard");
+  const [tab,setTab]           = useState(()=>{try{return localStorage.getItem("gal_tab")||"dashboard";}catch{return "dashboard";}});
   const [visitedTabs, setVisitedTabs] = useState(new Set(["dashboard"]));
   const handleTabChange = (t) => { setTab(t); setVisitedTabs(prev=>new Set([...prev,t])); };
+  React.useEffect(()=>{try{localStorage.setItem("gal_tab",tab);}catch{};},[tab]);
   const [modal,setModal]       = useState(null);
   const [bondWizard,setBondWizard] = useState(null); // {ticker, onConfirm}
   const [ventaResult,setVentaResult] = useState(null);

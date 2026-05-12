@@ -5492,7 +5492,7 @@ function App(){
   },[]);
   const isMobile = useIsMobile();
   const [tab,setTab]           = useState(()=>{try{return localStorage.getItem("gal_tab")||"dashboard";}catch{return "dashboard";}});
-  const [visitedTabs, setVisitedTabs] = useState(new Set(["dashboard"]));
+  const [visitedTabs, setVisitedTabs] = useState(()=>{const t=localStorage.getItem("gal_tab")||"dashboard";return new Set(["dashboard",t]);});
   const handleTabChange = (t) => { setTab(t); setVisitedTabs(prev=>new Set([...prev,t])); };
   React.useEffect(()=>{try{localStorage.setItem("gal_tab",tab);}catch{};},[tab]);
   const [modal,setModal]       = useState(null);

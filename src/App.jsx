@@ -1209,6 +1209,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
   },[liveFX,liveSP500,livePricesAll,historicos,trades,showUVA,uvaTasa,showCER]);
 
   const cd=chartData;
+  const periodPnL=useMemo(()=>{if(!cd||!cd.port100||cd.port100.length<2)return null;const p0=cd.port100[0].val,pN=cd.port100[cd.port100.length-1].val;if(!p0||p0<=0)return null;const portRetPct=(pN/p0-1)*100;let spyRetPct=null;if(cd.spy100&&cd.spy100.length>=2){const s0=cd.spy100[0].val,sN=cd.spy100[cd.spy100.length-1].val;if(s0>0)spyRetPct=(sN/s0-1)*100;}const totCostL=en.reduce((a,h)=>a+h.costUSD,0);let displayCost=totCostL,sym="US$ ";if(currency==="ARS"){displayCost=totCostL*fxRate;sym="$";}else if(currency==="USD_MEP"&&liveFX?.MEP>0){displayCost=totCostL*(liveFX.CCL||fxRate)/(liveFX.MEP);}const portPnL=displayCost*(portRetPct/100);const spPnL=spyRetPct!=null?displayCost*(spyRetPct/100):null;return{portPnL,spPnL,sym};},[cd,en,currency,fxRate,liveFX]);
   const series=cd?[
     {key:"port",data:cd.port100,color:"var(--green)",bold:true},
     ...(showSP&&cd.spy100?[{key:"spy",data:cd.spy100,color:"#60A5FA",bold:false}]:[]),
@@ -1231,7 +1232,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
             </button>
           ))}
           <span style={{color:"var(--text-muted)",fontSize:10}}>|</span>
-          <span style={{fontSize:10,color:"var(--green)"}}>— Portfolio</span>
+          <span style={{fontSize:window.innerWidth<768?14:10,color:"var(--green)"}}>— Portfolio</span>
           {/* Benchmarks toggleables */}
           {cd?.spy100&&<button onClick={()=>setShowSP(v=>!v)}
             style={{padding:"2px 8px",borderRadius:5,border:"1px solid rgba(96,165,250,0.4)",cursor:"pointer",fontSize:10,
@@ -1416,6 +1417,8 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
           </div>
         ):null;
       })()}
+      {periodPnL&&(()=>{const{portPnL,spPnL,sym}=periodPnL;const fN=n=>{const a=Math.abs(n);return(n>=0?"+":"\u2212")+sym+(a>=1e6?(a/1e6).toFixed(1)+"M":a>=1e3?Math.round(a).toLocaleString("es-AR"):a.toFixed(0));};const pcc=n=>n>=0?"var(--green)":"var(--red)";const pill=(l,v,col)=>{const bg=col==="#60A5FA"?"rgba(96,165,250,0.1)":v>=0?"rgba(16,185,129,0.1)":"rgba(239,68,68,0.1)";const bd=col==="#60A5FA"?"rgba(96,165,250,0.25)":v>=0?"rgba(16,185,129,0.25)":"rgba(239,68,68,0.25)";return(<div key={l} style={{display:"inline-flex",alignItems:"center",gap:isModal?8:5,background:bg,padding:isModal?"5px 14px":"3px 10px",borderRadius:8,border:"1px solid "+bd}}><span style={{fontSize:isModal?11:9,color:"var(--text-muted)",fontWeight:500}}>{l}</span><span style={{fontSize:isModal?16:12,fontWeight:700,color:col,fontFamily:"monospace"}}>{fN(v)}</span></div>);};return(<div style={{display:"flex",alignItems:"center",gap:isModal?14:8,marginTop:isModal?10:6,paddingTop:isModal?10:6,borderTop:"1px solid var(--border)",flexWrap:"wrap"}}><span style={{fontSize:isModal?10:8,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1.5,fontWeight:700}}>P&L</span>{pill("Portfolio",portPnL,pcc(portPnL))}{spPnL!=null&&pill("S&P 500",spPnL,"#60A5FA")}</div>);})()}
+
     </div>
   );
 } 
@@ -3053,7 +3056,7 @@ function OperacionesTab({trades,port,setTrades,setPort,card,livePrices,darkMode}
     setEditData({...t});
   };
 
-  const saveEdit=()=>{
+  const saveEdit=()=>{if(!window.confirm("Confirmar modificacion?"))return;
     if(!editData)return;
     setTrades(prev=>prev.map(t=>t.id===editId?{...editData,qty:+editData.qty,price:+editData.price,tcCompra:editData.tcCompra?+editData.tcCompra:undefined}:t));
     // Recalcular buyPrice del port si cambió
@@ -3981,7 +3984,8 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
             </tbody>
             <tfoot>
               <tr style={{borderTop:"1px solid var(--border)"}}>
-                <td colSpan={3} style={{padding:"8px 12px",fontWeight:700,fontSize:12}}>Total</td>
+                <td colSpan={selP.key!=="todo"?3:2} style={{padding:"8px 12px",fontWeight:700,fontSize:12}}>Total</td>
+                <td/>
                 <td style={{padding:"8px 12px",textAlign:"right",fontWeight:700,color:pc(totalPnlUSD)}}>{hideAmounts?"••••":(totalPnlUSD>=0?"+":"")+fmtU(totalPnlUSD,0)}</td>
                 <td colSpan={2}/>
               </tr>
@@ -4078,7 +4082,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
           const activos = en.filter(h=>{
             const bars=(historicos?.[h.ticker]||[]);
             return bars.length>=10;
-          }).slice(0,8);
+              });
 
           if(activos.length<2) return <div style={{color:"var(--text-muted)",fontSize:12}}>Se necesitan al menos 2 activos con datos</div>;
 
@@ -5472,9 +5476,9 @@ function App(){
     {id:127,ticker:"TZX27",tipo:"compra",qty:112815,price:356.0,currency:"ARS",date:"2026-04-06",ts:127000,name:"BONO REP ARG CER V30/06/27",comision:1200.99},
   ];
 
-    const [port,setPort]         = useState([]);
-  const [trades,setTrades]     = useState([]);
-  const [bondFlows,setBondFlows] = useState(SEED_BOND_FLOWS);
+    const [port,setPort]         = useState(()=>{ try{ const s=localStorage.getItem("gal_port_v1"); if(s) return JSON.parse(s); }catch{} return GALICIA_PORTFOLIO; });
+  const [trades,setTrades]     = useState(()=>{ try{ const s=localStorage.getItem("gal_trades_v3"); if(s) return JSON.parse(s); }catch{} return SEED_TRADES; });
+  const [bondFlows,setBondFlows] = useState(()=>{ try{ const s=localStorage.getItem("gal_bond_flows_v1"); if(s) return {...SEED_BOND_FLOWS,...JSON.parse(s)}; }catch{} return SEED_BOND_FLOWS; });
   const [storageReady,setStorageReady] = useState(false);
   const [syncChecked,setSyncChecked] = useState(false);
   const [historicos,setHistoricos] = useState(null);
@@ -5487,17 +5491,8 @@ function App(){
       .catch(()=>{});
   },[]);
   const isMobile = useIsMobile();
-  const [tab,setTab]           = useState(()=>{
-    try{ const t=localStorage.getItem('gal_tab'); if(t&&['dashboard','portfolio','analisis','flujos','operaciones'].includes(t)) return t; }catch{}
-    return "dashboard";
-  })
-
-  // ══ Persistir pestaña activa ══
-  useEffect(()=>{ try{ localStorage.setItem("gal_tab",tab); }catch{} },[tab]);
-  const [visitedTabs, setVisitedTabs] = useState(()=>{
-    try{ const t=localStorage.getItem('gal_tab'); if(t) return new Set(["dashboard",t]); }catch{}
-    return new Set(["dashboard"]);
-  });
+  const [tab,setTab]           = useState("dashboard");
+  const [visitedTabs, setVisitedTabs] = useState(new Set(["dashboard"]));
   const handleTabChange = (t) => { setTab(t); setVisitedTabs(prev=>new Set([...prev,t])); };
   const [modal,setModal]       = useState(null);
   const [bondWizard,setBondWizard] = useState(null); // {ticker, onConfirm}
@@ -5519,29 +5514,7 @@ function App(){
   const [syncStatus, setSyncStatus] = useState("idle"); // idle|loading|saving|error
   const [ghSha, setGhSha] = useState(null); // SHA del archivo en GitHub para updates
 
-  // Cargar datos desde GitHub al iniciar
-  useEffect(()=>{
-    setSyncStatus("loading");
-    fetch(`https://api.github.com/repos/${REPO}/contents/${DATA_FILE}`)
-      .then(r=>r.ok?r.json():null)
-      .then(data=>{
-        if(!data?.content) return null;
-        setGhSha(data.sha);
-        const decoded = JSON.parse(atob(data.content.replace(/\n/g,'')));
-        return decoded;
-      })
-      .then(decoded=>{
-        if(!decoded) return;
-        if(decoded.port?.length)   setPort(decoded.port);
-        if(decoded.trades?.length) setTrades(decoded.trades);
-        if(decoded.bondFlows && Object.keys(decoded.bondFlows).length){
-          setBondFlows({...SEED_BOND_FLOWS,...decoded.bondFlows});
-        }
-        if(decoded.bondMeta) setBondMetaFromGH(decoded.bondMeta);
-        setSyncStatus("idle");
-      })
-      .catch(e=>{ console.warn("GitHub sync error:", e); setSyncStatus("error"); });
-  },[]);
+  // GitHub data se carga via /api/sync (unica fuente de verdad)
 
   // Guardar datos via /api/sync (Vercel serverless — token seguro en servidor)
   const saveToGitHub = async (newPort, newTrades, newFlows, newMeta) => {
@@ -5560,6 +5533,7 @@ function App(){
       if(res.ok){
         const d = await res.json();
         if(d.sha) setGhSha(d.sha);
+        localStorage.setItem('gal_last_save', Date.now().toString());
         setSyncStatus("idle");
       } else if(res.status===409){
         // SHA desactualizado — refrescar y reintentar una vez
@@ -5581,101 +5555,105 @@ function App(){
   // ── Storage ───────────────────────────────────────────────────────────────
   const [bondMetaFromGH, setBondMetaFromGH] = useState(null);
   useEffect(()=>{
-    // ══ SYNC ENGINE v2 — GitHub = fuente de verdad, localStorage = cache ══
+    // 0. Generar device ID único para este dispositivo
     if(!localStorage.getItem('gal_device_id')){
       localStorage.setItem('gal_device_id', Math.random().toString(36).slice(2)+Date.now().toString(36));
     }
+
+    // 1. Cargar localStorage inmediatamente (siempre)
+
+    try{
+      const sp=localStorage.getItem("gal_port_v1");
+      const st=localStorage.getItem("gal_trades_v3");
+      if(sp) setPort(JSON.parse(sp));
+      if(st) setTrades(JSON.parse(st));
+      const bf=localStorage.getItem('gal_bond_flows_v1');
+      if(bf){
+        const saved=JSON.parse(bf);
+        const merged={...SEED_BOND_FLOWS,...saved};
+        setBondFlows(merged);
+      }
+    }catch{}
+    setStorageReady(true);
+
+    // 2. Cargar desde /api/sync — SOLO si localStorage está vacío (dispositivo nuevo)
+    const localPortData = localStorage.getItem("gal_port_v1");
+    const localTradesData = localStorage.getItem("gal_trades_v3");
+    const localHasData = localPortData && JSON.parse(localPortData||'[]').length > 0;
+
+    // Cargar desde GitHub y aplicar si es de otro dispositivo o no hay datos locales
     setSyncStatus("loading");
-    fetch('/api/sync', {signal: AbortSignal.timeout(12000)})
+    fetch('/api/sync')
       .then(r=>r.ok?r.json():null)
       .then(data=>{
-        if(data && (data.port?.length || data.trades?.length)){
-          if(data.sha) setGhSha(data.sha);
+        if(!data){ setSyncChecked(true); setSyncStatus("idle"); return; }
+        if(data.sha) setGhSha(data.sha);
+        const myDeviceId = localStorage.getItem('gal_device_id');
+        const ghDeviceId = data.deviceId;
+        const localTs = parseInt(localStorage.getItem('gal_last_save')||'0');
+        const ghTs = new Date(data.updatedAt||0).getTime();
+        // Aplicar si: no tengo datos locales, O si GitHub es más nuevo Y fue otro dispositivo
+        const shouldApply = true;
+        if(shouldApply){
           isLoadingFromGH.current = true;
-          if(data.port?.length){
-            setPort(data.port);
-            try{ localStorage.setItem("gal_port_v1", JSON.stringify(data.port)); }catch{}
-          }
-          if(data.trades?.length){
-            setTrades(data.trades);
-            try{ localStorage.setItem("gal_trades_v3", JSON.stringify(data.trades)); }catch{}
-          }
+          if(data.port?.length)   setPort(data.port);
+          if(data.trades?.length) setTrades(data.trades);
           if(data.bondFlows && Object.keys(data.bondFlows).length){
-            const merged = {...SEED_BOND_FLOWS, ...data.bondFlows};
-            setBondFlows(merged);
-            try{ localStorage.setItem("gal_bond_flows_v1", JSON.stringify(merged)); }catch{}
+            setBondFlows({...SEED_BOND_FLOWS,...data.bondFlows});
           }
-          const ghTs = new Date(data.updatedAt||0).getTime();
-          localStorage.setItem('gal_last_save', String(ghTs));
-          lastSyncRef.current = ghTs;
-          setTimeout(()=>{ isLoadingFromGH.current = false; }, 1000);
-          setStorageReady(true);
-          setSyncChecked(true);
-          setSyncStatus("idle");
-        } else {
-          try{
-            const sp=localStorage.getItem("gal_port_v1");
-            const st=localStorage.getItem("gal_trades_v3");
-            if(sp) setPort(JSON.parse(sp));
-            if(st) setTrades(JSON.parse(st));
-            const bf=localStorage.getItem('gal_bond_flows_v1');
-            if(bf) setBondFlows({...SEED_BOND_FLOWS,...JSON.parse(bf)});
-          }catch{}
-          setStorageReady(true);
-          setSyncChecked(true);
-          setSyncStatus("idle");
+          localStorage.setItem('gal_last_save', ghTs.toString());
+          setTimeout(()=>{ isLoadingFromGH.current = false; }, 500);
         }
-      })
-      .catch(()=>{
-        try{
-          const sp=localStorage.getItem("gal_port_v1");
-          const st=localStorage.getItem("gal_trades_v3");
-          if(sp) setPort(JSON.parse(sp));
-          if(st) setTrades(JSON.parse(st));
-          const bf=localStorage.getItem('gal_bond_flows_v1');
-          if(bf) setBondFlows({...SEED_BOND_FLOWS,...JSON.parse(bf)});
-        }catch{}
-        setStorageReady(true);
         setSyncChecked(true);
         setSyncStatus("idle");
-      });
+        setTimeout(()=>{  }, 3000);
+      })
+      .catch(()=>{ setSyncChecked(true); setSyncStatus("idle"); });
   },[]);
 
-  // ══ Cache a localStorage + Sync a GitHub ══════════════════════════════════
+  // Guardar en localStorage + GitHub cuando cambian los datos
   const saveTimerRef = React.useRef(null);
-  const isLoadingFromGH = React.useRef(false);
-  const lastSyncRef = React.useRef(0);
-
   useEffect(()=>{
     if(!storageReady) return;
-    try{ localStorage.setItem("gal_port_v1",JSON.stringify(port)); }catch{}
-    if(!isLoadingFromGH.current){ lastSyncRef.current=Date.now(); localStorage.setItem('gal_last_save',String(Date.now())); }
+    try{ 
+      localStorage.setItem("gal_port_v1",JSON.stringify(port));
+    }catch{}
   },[port,storageReady]);
 
   useEffect(()=>{
     if(!storageReady) return;
-    try{ localStorage.setItem("gal_trades_v3",JSON.stringify(trades)); }catch{}
-    if(!isLoadingFromGH.current){ lastSyncRef.current=Date.now(); localStorage.setItem('gal_last_save',String(Date.now())); }
+    try{
+      localStorage.setItem("gal_trades_v3",JSON.stringify(trades));
+    }catch{}
   },[trades,storageReady]);
 
   useEffect(()=>{
     if(!storageReady) return;
-    try{ localStorage.setItem("gal_bond_flows_v1",JSON.stringify(bondFlows)); }catch{}
-    if(!isLoadingFromGH.current){ lastSyncRef.current=Date.now(); localStorage.setItem('gal_last_save',String(Date.now())); }
+    try{ 
+      localStorage.setItem("gal_bond_flows_v1",JSON.stringify(bondFlows));
+    }catch{}
   },[bondFlows,storageReady]);
 
-  // ══ Sync a GitHub — debounce 1.5s (llega en <2s) ══
+  // Sync a GitHub con debounce de 2s — solo si hubo cambio local reciente
+  const isLoadingFromGH = React.useRef(false); // true mientras se cargan datos de GitHub
+  const _loadTs = React.useRef(Date.now());
+  const lastSyncRef = React.useRef(0); // timestamp del último sync exitoso
   useEffect(()=>{
     if(!storageReady || !syncChecked) return;
     if(saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    const saveTs = Date.now();
     saveTimerRef.current = setTimeout(()=>{
+      // No guardar si estamos cargando datos desde GitHub
       if(isLoadingFromGH.current) return;
+      if(Date.now() - _loadTs.current < 5000) return;
+      // No sobreescribir GitHub si tenemos menos datos
       if(port.length===0 && trades.length===0) return;
-      const meta = (()=>{ try{ return JSON.parse(localStorage.getItem('gal_bond_meta_v1')||'{}'); }catch{ return {}; } })();
+      // Solo guardar si este save es más nuevo que el último sync
+      if(saveTs < lastSyncRef.current) return;
+      const meta = (() => { try{ return JSON.parse(localStorage.getItem('gal_bond_meta_v1')||'{}'); }catch{ return {}; } })();
+      lastSyncRef.current = saveTs;
       saveToGitHub(port, trades, bondFlows, meta);
-      lastSyncRef.current = Date.now();
-      localStorage.setItem('gal_last_save', String(Date.now()));
-    }, 1500);
+    }, 800);
     return ()=>{ if(saveTimerRef.current) clearTimeout(saveTimerRef.current); };
   },[port, trades, bondFlows, storageReady, syncChecked]);
 
@@ -5716,7 +5694,7 @@ function App(){
       const iv=setInterval(refreshPrices,5*60*1000);
       // Auto-sync cuando el usuario vuelve a la app (ej: cel)
       const onVisible=()=>{
-        if(document.visibilityState==='visible'){
+        if(document.visibilityState==='visible'){if(isLoadingFromGH.current)return;
           fetch('/api/sync').then(r=>r.ok?r.json():null).then(data=>{
             if(!data) return;
             const localTs=parseInt(localStorage.getItem('gal_last_save')||'0');
@@ -6032,6 +6010,7 @@ function App(){
   };
 
   const saveOrDelete=(h)=>{
+    
     if(!h){
       const id=modal?.id;
       if(id){
@@ -6225,8 +6204,10 @@ function App(){
   },[ventaResult?.ticker,ventaResult?.buyDate,ventaResult?.sellDate]);
 
   const card={background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:14,boxShadow:"var(--card-glow)"};
-  const [darkMode, setDarkMode] = useState(true);
-  const [hideAmounts, setHideAmounts] = useState(false);
+  const [darkMode, setDarkMode] = useState(()=>{try{const v=localStorage.getItem("gal_dark");return v!==null?v==="true":true;}catch{return true;}});
+  const [hideAmounts, setHideAmounts] = useState(()=>{try{return localStorage.getItem("gal_hide")==="true";}catch{return false;}});
+  React.useEffect(()=>{try{localStorage.setItem("gal_dark",String(darkMode));}catch{};},[darkMode]);
+  React.useEffect(()=>{try{localStorage.setItem("gal_hide",String(hideAmounts));}catch{};},[hideAmounts]);
   const [chartModal, setChartModal] = useState(false);
 
   return(
@@ -6302,11 +6283,11 @@ function App(){
               </div>}
               <button onClick={refreshPrices} disabled={priceStatus==="loading"} style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"5px 8px",color:"var(--text-secondary)",cursor:"pointer",fontSize:12}}>↻</button>
               {!isMobile&&<button onClick={downloadTrades} style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"6px 10px",color:"var(--text-secondary)",cursor:"pointer",fontSize:13}}>⬇ CSV</button>}
-              <button onClick={()=>setHideAmounts(h=>{const n=!h;try{localStorage.setItem('gal_hide',String(n))}catch{};return n})}
+              <button onClick={()=>setHideAmounts(h=>!h)}
                 style={{background:hideAmounts?"rgba(37,99,235,0.15)":"var(--bg-card)",border:hideAmounts?"1px solid var(--accent)":"1px solid var(--border)",borderRadius:6,padding:"5px 8px",color:hideAmounts?"var(--accent)":"var(--text-secondary)",cursor:"pointer",fontSize:13}}>
                 {hideAmounts?"🙈":"👁"}
               </button>
-              <button onClick={()=>setDarkMode(d=>{const n=!d;try{localStorage.setItem('gal_dark',String(n))}catch{};return n})}
+              <button onClick={()=>setDarkMode(d=>!d)}
                 style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"5px 8px",color:"var(--text-secondary)",cursor:"pointer",fontSize:13}}>
                 {darkMode?"☀️":"🌙"}
               </button>
@@ -6411,6 +6392,7 @@ function App(){
                   baseValUSD+=vAyer;
                 }
                 const dayPct=baseValUSD>0?(dayPnlUSD/baseValUSD)*100:0;
+                const spyDayPct = en.find(x=>x.ticker==="SPY")?.liveChangePct ?? null;
 
                 const kpis=[
                   {
@@ -6434,7 +6416,7 @@ function App(){
                   {
                     icon:"📅", lbl:"Rendimiento del día",
                     main:fmtP(dayPct),
-                    sub:hideAmounts?"••••":(dayPnlUSD>=0?"+":"")+fmtU(dayPnlUSD),
+                    sub:hideAmounts?"••••":(dayPnlUSD>=0?"+":"")+fmtU(dayPnlUSD),spyBadge:spyDayPct,
                     subLabel:"P&L hoy USD",
                     mainColor:pc(dayPct),
                     trend:dayPct,
@@ -6472,6 +6454,7 @@ function App(){
                         <div style={{display:"flex",alignItems:"baseline",gap:4,flexWrap:"wrap"}}>
                           <span style={{fontSize:k.bigSub?(isMobile?12:15):(isMobile?10:12),color:k.trend!=null?pc(k.trend):"var(--text-secondary)",fontWeight:k.bigSub?600:k.trend!=null?600:400}}>{k.sub}</span>
                           {k.subLabel&&!isMobile&&<span style={{fontSize:8,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8,marginLeft:3}}>{k.subLabel}</span>}
+                          {k.spyBadge!=null&&<span style={{background:"#2563eb",color:"#fff",borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:600,marginLeft:6}}>S&P {k.spyBadge>=0?"+":""}{k.spyBadge.toFixed(2)}%</span>}
                         </div>
                       </div>
                     ))}
@@ -6504,7 +6487,7 @@ function App(){
                   </div>
                 </div>
                 <div style={{...card,padding:"10px 18px 18px",display:"flex",flexDirection:"column"}}>
-                  <div style={{height:isMobile?260:410}}>
+                  <div style={{height:window.innerWidth<768?340:410}}>
                     <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} livePricesAll={livePrices} onExpand={()=>setChartModal(true)}/>
                   </div>
                 </div>

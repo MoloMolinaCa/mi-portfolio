@@ -1236,6 +1236,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
   const cd=chartData;
   const periodPnL=useMemo(()=>{if(!cd||!cd.port100||cd.port100.length<2)return null;const p0=cd.port100[0].val,pN=cd.port100[cd.port100.length-1].val;if(!p0||p0<=0)return null;const portRetPct=(pN/p0-1)*100;let spyRetPct=null;if(cd.spy100&&cd.spy100.length>=2){const s0=cd.spy100[0].val,sN=cd.spy100[cd.spy100.length-1].val;if(s0>0)spyRetPct=(sN/s0-1)*100;}const totCostL=en.reduce((a,h)=>a+h.costUSD,0);let displayCost=totCostL,sym="US$ ";if(currency==="ARS"){displayCost=totCostL*fxRate;sym="$";}else if(currency==="USD_MEP"&&liveFX?.MEP>0){displayCost=totCostL*(liveFX.CCL||fxRate)/(liveFX.MEP);}const portPnL=displayCost*(portRetPct/100);const spPnL=spyRetPct!=null?displayCost*(spyRetPct/100):null;return{portPnL,spPnL,sym};},[cd,en,currency,fxRate,liveFX]);
 
+  const _bT=useMemo(()=>{const m={};for(const h of en)if((h.type||"").startsWith("bono"))m[h.ticker]=true;return m;},[en]);
   const xirrData=useMemo(()=>{
     if(!cd||!cd.startDate||!cd.endDate||!trades||trades.length===0) return null;
     const s=cd.startDate, e=cd.endDate;
@@ -1250,11 +1251,11 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
       const flows=[];
       if(startValUSD>0) flows.push({date:s, amount:-startValUSD});
       for(const t of periodTrades){
-        const isBond=t.type==="bono_ars"||t.type==="bono_usd";
+        const isBond=!!_bT[t.ticker];
         const rawAmt=t.qty*(t.price||0)*(isBond?0.01:1);
         const com=t.comision||0;
         const amt=t.tipo==="compra"?rawAmt+com:rawAmt-com;
-        const isUSD=t.currency==="USD"||t.buyCurrency==="USD";
+        const isUSD=(t.currency||"ARS")==="USD";
         const fxT=isUSD?1:(liveFX?.CCL||fxRate||1);
         const usd=amt/fxT;
         flows.push({date:t.date, amount:t.tipo==="compra"?-usd:usd});
@@ -1270,19 +1271,19 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
           const spyFlows=[];
           if(startValUSD>0) spyFlows.push({date:s, amount:-startValUSD});
           for(const t of periodTrades){
-            const isBond=t.type==="bono_ars"||t.type==="bono_usd";
+            const isBond=!!_bT[t.ticker];
             const rawAmt=t.qty*(t.price||0)*(isBond?0.01:1);
             const com=t.comision||0;
             const amt=t.tipo==="compra"?rawAmt+com:rawAmt-com;
-            const isUSD=t.currency==="USD"||t.buyCurrency==="USD";
+            const isUSD=(t.currency||"ARS")==="USD";
             const fxT=isUSD?1:(liveFX?.CCL||fxRate||1);
             const usd=amt/fxT;
             spyFlows.push({date:t.date, amount:t.tipo==="compra"?-usd:usd});
           }
           const spyEndVal=startValUSD*(spyEnd/spyStart)+periodTrades.reduce((acc,t)=>{
-            const isBond=t.type==="bono_ars"||t.type==="bono_usd";
+            const isBond=!!_bT[t.ticker];
             const rawAmt=t.qty*(t.price||0)*(isBond?0.01:1);
-            const isUSD=t.currency==="USD"||t.buyCurrency==="USD";
+            const isUSD=(t.currency||"ARS")==="USD";
             const fxT=isUSD?1:(liveFX?.CCL||fxRate||1);
             const usd=rawAmt/fxT;
             const tIdx=cd.spy100.findIndex(x=>x.date>=t.date);
@@ -1298,7 +1299,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
       const alpha=(portXIRR!=null&&spyXIRR!=null)?portXIRR-spyXIRR:null;
       return{portXIRR, spyXIRR, alpha};
     }catch(err){console.warn("XIRR error:",err);return null;}
-  },[cd,trades,en,fxRate,liveFX,currency]);
+  },[cd,trades,en,fxRate,liveFX,currency,_bT]);
 
   const series=cd?[
     {key:"port",data:cd.port100,color:"var(--green)",bold:true},
@@ -1522,14 +1523,6 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
           </div>
         );
       })()}
-      {xirrData&&(()=>{
-        const{portXIRR,spyXIRR,alpha}=xirrData;
-        const fX=v=>v!=null?(v>=0?"+":"")+v.toFixed(1)+"%":"\u2014";
-        const pc2=v=>v>=0?"var(--green)":"var(--red)";
-        const px=(l,v,col,bg,bd)=>(<div key={l} style={{display:"inline-flex",alignItems:"center",gap:isModal?8:5,background:bg,padding:isModal?"5px 14px":"3px 10px",borderRadius:8,border:"1px solid "+bd}}><span style={{fontSize:isModal?11:9,color:"var(--text-muted)",fontWeight:500}}>{l}</span><span style={{fontSize:isModal?16:12,fontWeight:700,color:col,fontFamily:"monospace"}}>{fX(v)}</span></div>);
-        return(<div style={{display:"flex",alignItems:"center",gap:isModal?14:8,marginTop:isModal?10:6,paddingTop:isModal?10:6,borderTop:"1px solid var(--border)",flexWrap:"wrap"}}><span style={{fontSize:isModal?10:8,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1.5,fontWeight:700}}>XIRR</span>{portXIRR!=null&&px("Portfolio",portXIRR,pc2(portXIRR),portXIRR>=0?"rgba(16,185,129,0.1)":"rgba(239,68,68,0.1)",portXIRR>=0?"rgba(16,185,129,0.25)":"rgba(239,68,68,0.25)")}{spyXIRR!=null&&px("S&P 500",spyXIRR,"#60A5FA","rgba(96,165,250,0.1)","rgba(96,165,250,0.25)")}{alpha!=null&&px("Alpha",alpha,pc2(alpha),alpha>=0?"rgba(16,185,129,0.1)":"rgba(239,68,68,0.1)",alpha>=0?"rgba(16,185,129,0.25)":"rgba(239,68,68,0.25)")}<span style={{fontSize:isModal?9:7,color:"var(--text-muted)",marginLeft:"auto"}}>anualizado</span></div>);
-      })()}
-      {xirrData&&(()=>{const{portXIRR:px,spyXIRR:sx,alpha:al}=xirrData;const f=v=>v!=null?(v>=0?"+":"")+v.toFixed(1)+"%":"—";const pc=v=>v>=0?"var(--green)":"var(--red)";const pl=(l,v,co,bg,bd)=>(<div key={l} style={{display:"inline-flex",alignItems:"center",gap:isModal?8:5,background:bg,padding:isModal?"5px 14px":"3px 10px",borderRadius:8,border:"1px solid "+bd}}><span style={{fontSize:isModal?11:9,color:"var(--text-muted)",fontWeight:500}}>{l}</span><span style={{fontSize:isModal?16:12,fontWeight:700,color:co,fontFamily:"monospace"}}>{f(v)}</span></div>);return(<div style={{display:"flex",alignItems:"center",gap:isModal?14:8,marginTop:isModal?10:6,paddingTop:isModal?10:6,borderTop:"1px solid var(--border)",flexWrap:"wrap"}}><span style={{fontSize:isModal?10:8,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1.5,fontWeight:700}}>XIRR</span>{px!=null&&pl("Portfolio",px,pc(px),px>=0?"rgba(16,185,129,0.1)":"rgba(239,68,68,0.1)",px>=0?"rgba(16,185,129,0.25)":"rgba(239,68,68,0.25)")}{sx!=null&&pl("S&P 500",sx,"#60A5FA","rgba(96,165,250,0.1)","rgba(96,165,250,0.25)")}{al!=null&&pl("Alpha",al,pc(al),al>=0?"rgba(16,185,129,0.1)":"rgba(239,68,68,0.1)",al>=0?"rgba(16,185,129,0.25)":"rgba(239,68,68,0.25)")}<span style={{fontSize:isModal?9:7,color:"var(--text-muted)",marginLeft:"auto"}}>anualizado</span></div>);})()}
       {periodPnL&&(()=>{const{portPnL,spPnL,sym}=periodPnL;const fN=n=>{const a=Math.abs(n);return(n>=0?"+":"\u2212")+sym+(a>=1e6?(a/1e6).toFixed(1)+"M":a>=1e3?Math.round(a).toLocaleString("es-AR"):a.toFixed(0));};const pcc=n=>n>=0?"var(--green)":"var(--red)";const pill=(l,v,col)=>{const bg=col==="#60A5FA"?"rgba(96,165,250,0.1)":v>=0?"rgba(16,185,129,0.1)":"rgba(239,68,68,0.1)";const bd=col==="#60A5FA"?"rgba(96,165,250,0.25)":v>=0?"rgba(16,185,129,0.25)":"rgba(239,68,68,0.25)";return(<div key={l} style={{display:"inline-flex",alignItems:"center",gap:isModal?8:5,background:bg,padding:isModal?"5px 14px":"3px 10px",borderRadius:8,border:"1px solid "+bd}}><span style={{fontSize:isModal?11:9,color:"var(--text-muted)",fontWeight:500}}>{l}</span><span style={{fontSize:isModal?16:12,fontWeight:700,color:col,fontFamily:"monospace"}}>{fN(v)}</span></div>);};return(<div style={{display:"flex",alignItems:"center",gap:isModal?14:8,marginTop:isModal?10:6,paddingTop:isModal?10:6,borderTop:"1px solid var(--border)",flexWrap:"wrap"}}><span style={{fontSize:isModal?10:8,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1.5,fontWeight:700}}>P&L</span>{pill("Portfolio",portPnL,pcc(portPnL))}{spPnL!=null&&pill("S&P 500",spPnL,"#60A5FA")}</div>);})()}
 
     </div>

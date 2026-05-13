@@ -952,6 +952,31 @@ function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRa
   return twr;
 }
 
+// ── XIRR (Money-Weighted Return) ─────────────────────────────────────────────
+function calcXIRR(flows, guess=0.1) {
+  if(!flows||flows.length<2) return null;
+  const d0 = new Date(flows[0].date).getTime();
+  const yf = flows.map(f=>({a:f.amount, t:(new Date(f.date).getTime()-d0)/31557600000}));
+  let r = guess;
+  for(let iter=0;iter<300;iter++){
+    let npv=0, dnpv=0;
+    for(const f of yf){
+      const disc = Math.pow(1+r, f.t);
+      if(!disc||!isFinite(disc)) break;
+      npv += f.a / disc;
+      dnpv -= f.t * f.a / (disc*(1+r));
+    }
+    if(Math.abs(npv)<0.01) return r*100;
+    if(!dnpv||!isFinite(dnpv)) break;
+    const rNew = r - npv/dnpv;
+    if(Math.abs(rNew-r)<1e-10) return r*100;
+    r = rNew;
+    if(r<-0.99) r=-0.99;
+    if(r>100) r=100;
+  }
+  return null;
+}
+
 function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=false,livePricesAll={},onExpand=null}){
   const PERIODS=[{key:"mtd",label:"MTD",days:null,mtd:true},{key:"30d",label:"30d",days:30},{key:"90d",label:"90d",days:90},{key:"ytd",label:"YTD",days:null},{key:"1y",label:"1 año",days:365},{key:"3y",label:"3 años",days:1095}];
   // Persistir preferencias del gráfico en localStorage
@@ -1210,6 +1235,71 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
 
   const cd=chartData;
   const periodPnL=useMemo(()=>{if(!cd||!cd.port100||cd.port100.length<2)return null;const p0=cd.port100[0].val,pN=cd.port100[cd.port100.length-1].val;if(!p0||p0<=0)return null;const portRetPct=(pN/p0-1)*100;let spyRetPct=null;if(cd.spy100&&cd.spy100.length>=2){const s0=cd.spy100[0].val,sN=cd.spy100[cd.spy100.length-1].val;if(s0>0)spyRetPct=(sN/s0-1)*100;}const totCostL=en.reduce((a,h)=>a+h.costUSD,0);let displayCost=totCostL,sym="US$ ";if(currency==="ARS"){displayCost=totCostL*fxRate;sym="$";}else if(currency==="USD_MEP"&&liveFX?.MEP>0){displayCost=totCostL*(liveFX.CCL||fxRate)/(liveFX.MEP);}const portPnL=displayCost*(portRetPct/100);const spPnL=spyRetPct!=null?displayCost*(spyRetPct/100):null;return{portPnL,spPnL,sym};},[cd,en,currency,fxRate,liveFX]);
+
+  const xirrData=useMemo(()=>{
+    if(!cd||!cd.startDate||!cd.endDate||!trades||trades.length===0) return null;
+    const s=cd.startDate, e=cd.endDate;
+    try{
+      const totCostNow=en.reduce((a,h)=>a+h.valUSD,0);
+      const lastPort=cd.port100&&cd.port100.length>0?cd.port100[cd.port100.length-1].val:100;
+      const firstPort=cd.port100&&cd.port100.length>0?cd.port100[0].val:100;
+      const scale=lastPort>0?totCostNow/lastPort:0;
+      const startValUSD=firstPort*scale;
+      const endValUSD=lastPort*scale;
+      const periodTrades=trades.filter(t=>t.date>=s&&t.date<=e);
+      const flows=[];
+      if(startValUSD>0) flows.push({date:s, amount:-startValUSD});
+      for(const t of periodTrades){
+        const isBond=t.type==="bono_ars"||t.type==="bono_usd";
+        const rawAmt=t.qty*(t.price||0)*(isBond?0.01:1);
+        const com=t.comision||0;
+        const amt=t.tipo==="compra"?rawAmt+com:rawAmt-com;
+        const isUSD=t.currency==="USD"||t.buyCurrency==="USD";
+        const fxT=isUSD?1:(liveFX?.CCL||fxRate||1);
+        const usd=amt/fxT;
+        flows.push({date:t.date, amount:t.tipo==="compra"?-usd:usd});
+      }
+      if(endValUSD>0) flows.push({date:e, amount:endValUSD});
+      if(flows.length<2) return null;
+      flows.sort((a,b)=>a.date.localeCompare(b.date));
+      const portXIRR=calcXIRR(flows);
+      let spyXIRR=null;
+      if(cd.spy100&&cd.spy100.length>=2){
+        const spyStart=cd.spy100[0].val, spyEnd=cd.spy100[cd.spy100.length-1].val;
+        if(spyStart>0&&spyEnd>0){
+          const spyFlows=[];
+          if(startValUSD>0) spyFlows.push({date:s, amount:-startValUSD});
+          for(const t of periodTrades){
+            const isBond=t.type==="bono_ars"||t.type==="bono_usd";
+            const rawAmt=t.qty*(t.price||0)*(isBond?0.01:1);
+            const com=t.comision||0;
+            const amt=t.tipo==="compra"?rawAmt+com:rawAmt-com;
+            const isUSD=t.currency==="USD"||t.buyCurrency==="USD";
+            const fxT=isUSD?1:(liveFX?.CCL||fxRate||1);
+            const usd=amt/fxT;
+            spyFlows.push({date:t.date, amount:t.tipo==="compra"?-usd:usd});
+          }
+          const spyEndVal=startValUSD*(spyEnd/spyStart)+periodTrades.reduce((acc,t)=>{
+            const isBond=t.type==="bono_ars"||t.type==="bono_usd";
+            const rawAmt=t.qty*(t.price||0)*(isBond?0.01:1);
+            const isUSD=t.currency==="USD"||t.buyCurrency==="USD";
+            const fxT=isUSD?1:(liveFX?.CCL||fxRate||1);
+            const usd=rawAmt/fxT;
+            const tIdx=cd.spy100.findIndex(x=>x.date>=t.date);
+            const spyAtTrade=tIdx>=0?cd.spy100[tIdx].val:spyStart;
+            const spyGrowth=spyAtTrade>0?spyEnd/spyAtTrade:1;
+            return acc+(t.tipo==="compra"?usd*(spyGrowth-1):-usd);
+          },0);
+          spyFlows.push({date:e, amount:spyEndVal>0?spyEndVal:0});
+          spyFlows.sort((a,b)=>a.date.localeCompare(b.date));
+          spyXIRR=calcXIRR(spyFlows);
+        }
+      }
+      const alpha=(portXIRR!=null&&spyXIRR!=null)?portXIRR-spyXIRR:null;
+      return{portXIRR, spyXIRR, alpha};
+    }catch(err){console.warn("XIRR error:",err);return null;}
+  },[cd,trades,en,fxRate,liveFX,currency]);
+
   const series=cd?[
     {key:"port",data:cd.port100,color:"var(--green)",bold:true},
     ...(showSP&&cd.spy100?[{key:"spy",data:cd.spy100,color:"#60A5FA",bold:false}]:[]),
@@ -1416,6 +1506,21 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
             <span style={{fontSize:isModal?11:9,color:"var(--text-muted)",marginLeft:"auto"}}>rf {liveT10Y}% anualizado · {(()=>{const f=s=>s?s.slice(8)+'/'+s.slice(5,7)+'/'+s.slice(0,4):'';return f(cd.startDate)+' → '+f(cd.endDate)})()}</span>
           </div>
         ):null;
+      })()}
+      {xirrData&&(()=>{
+        const{portXIRR,spyXIRR,alpha}=xirrData;
+        const fXP=v=>v!=null?(v>=0?"+":"")+v.toFixed(1)+"%":"—";
+        const pcX=v=>v>=0?"var(--green)":"var(--red)";
+        const pillX=(l,v,col,bg,bd)=>(<div key={l} style={{display:"inline-flex",alignItems:"center",gap:isModal?8:5,background:bg,padding:isModal?"5px 14px":"3px 10px",borderRadius:8,border:"1px solid "+bd}}><span style={{fontSize:isModal?11:9,color:"var(--text-muted)",fontWeight:500}}>{l}</span><span style={{fontSize:isModal?16:12,fontWeight:700,color:col,fontFamily:"monospace"}}>{fXP(v)}</span></div>);
+        return(
+          <div style={{display:"flex",alignItems:"center",gap:isModal?14:8,marginTop:isModal?10:6,paddingTop:isModal?10:6,borderTop:"1px solid var(--border)",flexWrap:"wrap"}}>
+            <span style={{fontSize:isModal?10:8,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1.5,fontWeight:700}}>XIRR</span>
+            {portXIRR!=null&&pillX("Portfolio",portXIRR,pcX(portXIRR),portXIRR>=0?"rgba(16,185,129,0.1)":"rgba(239,68,68,0.1)",portXIRR>=0?"rgba(16,185,129,0.25)":"rgba(239,68,68,0.25)")}
+            {spyXIRR!=null&&pillX("S&P 500",spyXIRR,"#60A5FA","rgba(96,165,250,0.1)","rgba(96,165,250,0.25)")}
+            {alpha!=null&&pillX("Alpha",alpha,pcX(alpha),alpha>=0?"rgba(16,185,129,0.1)":"rgba(239,68,68,0.1)",alpha>=0?"rgba(16,185,129,0.25)":"rgba(239,68,68,0.25)")}
+            <span style={{fontSize:isModal?9:7,color:"var(--text-muted)",marginLeft:"auto"}}>anualizado</span>
+          </div>
+        );
       })()}
       {periodPnL&&(()=>{const{portPnL,spPnL,sym}=periodPnL;const fN=n=>{const a=Math.abs(n);return(n>=0?"+":"\u2212")+sym+(a>=1e6?(a/1e6).toFixed(1)+"M":a>=1e3?Math.round(a).toLocaleString("es-AR"):a.toFixed(0));};const pcc=n=>n>=0?"var(--green)":"var(--red)";const pill=(l,v,col)=>{const bg=col==="#60A5FA"?"rgba(96,165,250,0.1)":v>=0?"rgba(16,185,129,0.1)":"rgba(239,68,68,0.1)";const bd=col==="#60A5FA"?"rgba(96,165,250,0.25)":v>=0?"rgba(16,185,129,0.25)":"rgba(239,68,68,0.25)";return(<div key={l} style={{display:"inline-flex",alignItems:"center",gap:isModal?8:5,background:bg,padding:isModal?"5px 14px":"3px 10px",borderRadius:8,border:"1px solid "+bd}}><span style={{fontSize:isModal?11:9,color:"var(--text-muted)",fontWeight:500}}>{l}</span><span style={{fontSize:isModal?16:12,fontWeight:700,color:col,fontFamily:"monospace"}}>{fN(v)}</span></div>);};return(<div style={{display:"flex",alignItems:"center",gap:isModal?14:8,marginTop:isModal?10:6,paddingTop:isModal?10:6,borderTop:"1px solid var(--border)",flexWrap:"wrap"}}><span style={{fontSize:isModal?10:8,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1.5,fontWeight:700}}>P&L</span>{pill("Portfolio",portPnL,pcc(portPnL))}{spPnL!=null&&pill("S&P 500",spPnL,"#60A5FA")}</div>);})()}
 

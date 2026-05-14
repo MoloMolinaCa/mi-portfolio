@@ -957,24 +957,49 @@ function calcXIRR(flows, guess=0.1) {
   if(!flows||flows.length<2) return null;
   const d0 = new Date(flows[0].date).getTime();
   const yf = flows.map(f=>({a:f.amount, t:(new Date(f.date).getTime()-d0)/31557600000}));
-  let r = guess;
-  for(let iter=0;iter<300;iter++){
-    let npv=0, dnpv=0;
+  const npvAt = (rate) => {
+    let s=0;
     for(const f of yf){
-      const disc = Math.pow(1+r, f.t);
-      if(!disc||!isFinite(disc)) break;
-      npv += f.a / disc;
-      dnpv -= f.t * f.a / (disc*(1+r));
+      const disc=Math.pow(1+rate,f.t);
+      if(!disc||!isFinite(disc)) return NaN;
+      s+=f.a/disc;
     }
-    if(Math.abs(npv)<0.01) return r*100;
-    if(!dnpv||!isFinite(dnpv)) break;
-    const rNew = r - npv/dnpv;
-    if(Math.abs(rNew-r)<1e-10) return r*100;
-    r = rNew;
-    if(r<-0.99) r=-0.99;
-    if(r>100) r=100;
+    return s;
+  };
+  const guesses = [guess, 0.0, -0.5, 0.5, -0.9, 2.0, 10.0];
+  for(const g of guesses){
+    let r = g;
+    for(let iter=0;iter<300;iter++){
+      let npv=0, dnpv=0; let valid=true;
+      for(const f of yf){
+        const disc=Math.pow(1+r,f.t);
+        if(!disc||!isFinite(disc)){valid=false;break;}
+        npv+=f.a/disc;
+        dnpv-=f.t*f.a/(disc*(1+r));
+      }
+      if(!valid) break;
+      if(Math.abs(npv)<0.01) return r*100;
+      if(!dnpv||!isFinite(dnpv)) break;
+      const rNew=r-npv/dnpv;
+      if(Math.abs(rNew-r)<1e-10) return r*100;
+      r=rNew;
+      if(r<-0.99) r=-0.99;
+      if(r>100) r=100;
+    }
   }
-  return null;
+  let lo=-0.99, hi=100;
+  let nLo=npvAt(lo), nHi=npvAt(hi);
+  if(isNaN(nLo)||isNaN(nHi)||nLo*nHi>0) return null;
+  for(let bi=0;bi<200;bi++){
+    const mid=(lo+hi)/2;
+    const nMid=npvAt(mid);
+    if(isNaN(nMid)) return null;
+    if(Math.abs(nMid)<0.01) return mid*100;
+    if(hi-lo<1e-8) return ((lo+hi)/2)*100;
+    if(nMid*nLo<0){hi=mid;nHi=nMid;}else{lo=mid;nLo=nMid;}
+  }
+  return ((lo+hi)/2)*100;
+}
 }
 
 function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=false,livePricesAll={},onExpand=null}){
@@ -1241,14 +1266,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
     if(!cd||!cd.startDate||!cd.endDate||!trades||trades.length===0) return null;
     const s=cd.startDate, e=cd.endDate;
     try{
-      const totCostNow=en.reduce((a,h)=>a+h.valUSD,0);
-      const lastPort=cd.port100&&cd.port100.length>0?cd.port100[cd.port100.length-1].val:100;
-      const firstPort=cd.port100&&cd.port100.length>0?cd.port100[0].val:100;
-      const scale=lastPort>0?totCostNow/lastPort:0;
-      const startValUSD=firstPort*scale;
-      const endValUSD=lastPort*scale;
-      const periodTrades=trades.filter(t=>t.date>=s&&t.date<=e);
-      // Helper: CCL historico por fecha para XIRR (biseccion)
+      // Helper: CCL historico por fecha para XIRR
       const _cclBarsXIRR = historicos?.CCL || [];
       const _getCCLForDate = (dateStr) => {
         if(!_cclBarsXIRR.length) return liveFX?.CCL || fxRate || 1;
@@ -1256,6 +1274,39 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
         while(lo<=hi){ const mid=(lo+hi)>>1; if(_cclBarsXIRR[mid].date<=dateStr){res=mid;lo=mid+1;}else hi=mid-1; }
         return res>=0 ? _cclBarsXIRR[res].close : (liveFX?.CCL || fxRate || 1);
       };
+      const endValUSD=en.reduce((a,h)=>a+h.valUSD,0);
+      // Valor real del portfolio al inicio del periodo
+      const posAtStart={};
+      for(const t2 of trades){
+        if(t2.date>=s) continue;
+        if(t2.tipo==="compra") posAtStart[t2.ticker]=(posAtStart[t2.ticker]||0)+t2.qty;
+        if(t2.tipo==="venta") posAtStart[t2.ticker]=(posAtStart[t2.ticker]||0)-t2.qty;
+      }
+      const _findHistPrice=(ticker,dateStr)=>{
+        const bars=historicos?.[ticker]||[];
+        let lo2=0,hi2=bars.length-1,res2=-1;
+        while(lo2<=hi2){const mid2=(lo2+hi2)>>1;if(bars[mid2].date<=dateStr){res2=mid2;lo2=mid2+1;}else hi2=mid2-1;}
+        return res2>=0?bars[res2].close:0;
+      };
+      const cclAtStart=_getCCLForDate(s);
+      let startValCalc=0;
+      for(const [tkr,qty] of Object.entries(posAtStart)){
+        if(qty<=0) continue;
+        const price=_findHistPrice(tkr,s);
+        if(price<=0) continue;
+        const isBondS=!!_bT[tkr];
+        const posInfo=en.find(h=>h.ticker===tkr);
+        const isUSDpos=(posInfo?.buyCurrency||"ARS")==="USD";
+        startValCalc+=isUSDpos?price*qty:(price*qty)/cclAtStart;
+      }
+      let startValUSD=startValCalc;
+      if(startValUSD<=0){
+        const lastP=cd.port100&&cd.port100.length>0?cd.port100[cd.port100.length-1].val:100;
+        const firstP=cd.port100&&cd.port100.length>0?cd.port100[0].val:100;
+        const sc=lastP>0?endValUSD/lastP:0;
+        startValUSD=firstP*sc;
+      }
+      const periodTrades=trades.filter(t=>t.date>=s&&t.date<=e);
       const flows=[];
       if(startValUSD>0) flows.push({date:s, amount:-startValUSD});
       for(const t of periodTrades){
@@ -1271,7 +1322,14 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
       if(endValUSD>0) flows.push({date:e, amount:endValUSD});
       if(flows.length<2) return null;
       flows.sort((a,b)=>a.date.localeCompare(b.date));
-      const portXIRR=calcXIRR(flows);
+      let portXIRR=calcXIRR(flows);
+      // Fallback: si XIRR no converge, usar TWR anualizado
+      if(portXIRR==null&&cd.port100&&cd.port100.length>=2){
+        const pS=cd.port100[0].val,pE=cd.port100[cd.port100.length-1].val;
+        const dys=Math.max(1,Math.round((new Date(e)-new Date(s))/(1000*60*60*24)));
+        const twrP=(pE/pS-1);
+        portXIRR=(Math.pow(1+twrP,365/dys)-1)*100;
+      }
       let spyXIRR=null;
       if(cd.spy100&&cd.spy100.length>=2){
         const spyStart=cd.spy100[0].val, spyEnd=cd.spy100[cd.spy100.length-1].val;

@@ -1277,7 +1277,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
       // Valor real del portfolio al inicio del periodo
       const posAtStart={};
       for(const t2 of trades){
-        if(t2.date>=s) continue;
+        if(t2.date>s) continue;
         if(t2.tipo==="compra") posAtStart[t2.ticker]=(posAtStart[t2.ticker]||0)+t2.qty;
         if(t2.tipo==="venta") posAtStart[t2.ticker]=(posAtStart[t2.ticker]||0)-t2.qty;
       }
@@ -1305,7 +1305,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
         const sc=lastP>0?endValUSD/lastP:0;
         startValUSD=firstP*sc;
       }
-      const periodTrades=trades.filter(t=>t.date>=s&&t.date<=e);
+      const periodTrades=trades.filter(t=>t.date>s&&t.date<=e);
       const flows=[];
       if(startValUSD>0) flows.push({date:s, amount:-startValUSD});
       for(const t of periodTrades){

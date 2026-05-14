@@ -1248,6 +1248,14 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
       const startValUSD=firstPort*scale;
       const endValUSD=lastPort*scale;
       const periodTrades=trades.filter(t=>t.date>=s&&t.date<=e);
+      // Helper: CCL historico por fecha para XIRR (biseccion)
+      const _cclBarsXIRR = historicos?.CCL || [];
+      const _getCCLForDate = (dateStr) => {
+        if(!_cclBarsXIRR.length) return liveFX?.CCL || fxRate || 1;
+        let lo=0, hi=_cclBarsXIRR.length-1, res=-1;
+        while(lo<=hi){ const mid=(lo+hi)>>1; if(_cclBarsXIRR[mid].date<=dateStr){res=mid;lo=mid+1;}else hi=mid-1; }
+        return res>=0 ? _cclBarsXIRR[res].close : (liveFX?.CCL || fxRate || 1);
+      };
       const flows=[];
       if(startValUSD>0) flows.push({date:s, amount:-startValUSD});
       for(const t of periodTrades){
@@ -1256,7 +1264,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
         const com=t.comision||0;
         const amt=t.tipo==="compra"?rawAmt+com:rawAmt-com;
         const isUSD=(t.currency||"ARS")==="USD";
-        const fxT=isUSD?1:(liveFX?.CCL||fxRate||1);
+        const fxT=isUSD?1:_getCCLForDate(t.date);
         const usd=amt/fxT;
         flows.push({date:t.date, amount:t.tipo==="compra"?-usd:usd});
       }
@@ -1276,7 +1284,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
             const com=t.comision||0;
             const amt=t.tipo==="compra"?rawAmt+com:rawAmt-com;
             const isUSD=(t.currency||"ARS")==="USD";
-            const fxT=isUSD?1:(liveFX?.CCL||fxRate||1);
+            const fxT=isUSD?1:_getCCLForDate(t.date);
             const usd=amt/fxT;
             spyFlows.push({date:t.date, amount:t.tipo==="compra"?-usd:usd});
           }
@@ -1284,7 +1292,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
             const isBond=!!_bT[t.ticker];
             const rawAmt=t.qty*(t.price||0)*(isBond?0.01:1);
             const isUSD=(t.currency||"ARS")==="USD";
-            const fxT=isUSD?1:(liveFX?.CCL||fxRate||1);
+            const fxT=isUSD?1:_getCCLForDate(t.date);
             const usd=rawAmt/fxT;
             const tIdx=cd.spy100.findIndex(x=>x.date>=t.date);
             const spyAtTrade=tIdx>=0?cd.spy100[tIdx].val:spyStart;
@@ -1299,7 +1307,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
       const alpha=(portXIRR!=null&&spyXIRR!=null)?portXIRR-spyXIRR:null;
       return{portXIRR, spyXIRR, alpha};
     }catch(err){console.warn("XIRR error:",err);return null;}
-  },[cd,trades,en,fxRate,liveFX,currency,_bT]);
+  },[cd,trades,en,fxRate,liveFX,currency,_bT,historicos]);
 
   const series=cd?[
     {key:"port",data:cd.port100,color:"var(--green)",bold:true},

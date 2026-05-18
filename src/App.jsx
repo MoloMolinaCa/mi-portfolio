@@ -1273,11 +1273,15 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
         while(lo<=hi){ const mid=(lo+hi)>>1; if(_cclBarsXIRR[mid].date<=dateStr){res=mid;lo=mid+1;}else hi=mid-1; }
         return res>=0 ? _cclBarsXIRR[res].close : (liveFX?.CCL || fxRate || 1);
       };
+
+      const firstTradeDate = [...trades].map(t=>t.date).sort()[0];
+      const includeStartDayAsPosition = (s === firstTradeDate);
+
       const endValUSD=en.reduce((a,h)=>a+h.valUSD,0);
       // Valor real del portfolio al inicio del periodo
       const posAtStart={};
       for(const t2 of trades){
-        if(t2.date>s) continue;
+        if(t2.date > s || (t2.date === s && !includeStartDayAsPosition)) continue;
         if(t2.tipo==="compra") posAtStart[t2.ticker]=(posAtStart[t2.ticker]||0)+t2.qty;
         if(t2.tipo==="venta") posAtStart[t2.ticker]=(posAtStart[t2.ticker]||0)-t2.qty;
       }
@@ -1306,7 +1310,8 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
         const sc=lastP>0?endValUSD/lastP:0;
         startValUSD=firstP*sc;
       }
-      const periodTrades=trades.filter(t=>t.date>s&&t.date<=e);
+
+      const periodTrades=trades.filter(t=>((t.date > s) || (t.date === s && !includeStartDayAsPosition)) && t.date<=e);
       const flows=[];
       if(startValUSD>0) flows.push({date:s, amount:-startValUSD});
       for(const t of periodTrades){
@@ -1322,6 +1327,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
       if(endValUSD>0) flows.push({date:e, amount:endValUSD});
       if(flows.length<2) return null;
       flows.sort((a,b)=>a.date.localeCompare(b.date));
+
       let portXIRR=calcXIRR(flows);
       // Fallback: si XIRR no converge, usar TWR anualizado
       if(portXIRR==null&&cd.port100&&cd.port100.length>=2){

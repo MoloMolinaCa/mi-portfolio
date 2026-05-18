@@ -1,7 +1,7 @@
 /* eslint-disable */
 import React, { useState, useEffect, useMemo, memo, useRef, useCallback } from "react";
 
-// Componente de countdown  aislado para no re-renderizar el App entero
+// Componente de countdown â aislado para no re-renderizar el App entero
 function CountdownDisplay({lastRefresh, priceStatus, liveCount, portLen}){
   const [display, setDisplay] = useState(300);
   useEffect(()=>{
@@ -10,13 +10,13 @@ function CountdownDisplay({lastRefresh, priceStatus, liveCount, portLen}){
     const iv = setInterval(()=>setDisplay(d=>d<=1?300:d-1), 1000);
     return()=>clearInterval(iv);
   },[lastRefresh]);
-  if(priceStatus==="live") return <span style={{color:"var(--green)"}}> {liveCount}/{portLen} activos - actualizado {lastRefresh?.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})} - prox. {Math.floor(display/60)}:{String(display%60).padStart(2,"0")}</span>;
-  if(priceStatus==="partial") return <span style={{color:"var(--yellow)"}}> Parcial</span>;
-  if(priceStatus==="loading") return <span style={{color:"var(--text-muted)"}}> Actualizando...</span>;
+  if(priceStatus==="live") return <span style={{color:"var(--green)"}}>â {liveCount}/{portLen} activos Â· actualizado {lastRefresh?.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})} Â· prÃ³x. {Math.floor(display/60)}:{String(display%60).padStart(2,"0")}</span>;
+  if(priceStatus==="partial") return <span style={{color:"var(--yellow)"}}>â Parcial</span>;
+  if(priceStatus==="loading") return <span style={{color:"var(--text-muted)"}}>â³ Actualizando...</span>;
   return null;
 }
 
-// Hook responsive  detecta pantalla mobile (<768px)
+// Hook responsive â detecta pantalla mobile (<768px)
 function useIsMobile(){ 
   const [m,setM]=useState(()=>{
     try{ return window.innerWidth<768; }catch{ return false; }
@@ -30,12 +30,12 @@ function useIsMobile(){
 }
 
 const ASSET_TYPES = {
-  accion_ar: { label: "Acciones AR",  color: "#3B82F6", icon: "" },
-  cedear:    { label: "CEDEARs",      color: "#10B981", icon: "" },
-  bono_ars:  { label: "Bonos ARS",    color: "#F59E0B", icon: "" },
-  bono_usd:  { label: "Bonos USD",    color: "#F97316", icon: "" },
-  fci_ars:   { label: "FCI Pesos",    color: "#8B5CF6", icon: "" },
-  fci_usd:   { label: "FCI Dolares",  color: "#A78BFA", icon: "" },
+  accion_ar: { label: "Acciones AR",  color: "#3B82F6", icon: "ð" },
+  cedear:    { label: "CEDEARs",      color: "#10B981", icon: "ð" },
+  bono_ars:  { label: "Bonos ARS",    color: "#F59E0B", icon: "ð" },
+  bono_usd:  { label: "Bonos USD",    color: "#F97316", icon: "ðµ" },
+  fci_ars:   { label: "FCI Pesos",    color: "#8B5CF6", icon: "ð¦" },
+  fci_usd:   { label: "FCI DÃ³lares",  color: "#A78BFA", icon: "ð°" },
 };
 
 const GALICIA_PORTFOLIO = [
@@ -79,12 +79,12 @@ function todayAR() {
   return d.toISOString().slice(0,10);
 }
 
-// ltimo dia habil (lunes-viernes) <= fecha dada
+// Ãltimo dÃ­a hÃ¡bil (lunes-viernes) <= fecha dada
 function lastHabil(dateStr) {
   const d = new Date(dateStr+'T12:00:00');
   const dow = d.getDay(); // 0=dom, 6=sab
-  if(dow===0) d.setDate(d.getDate()-2); // dom  vie
-  else if(dow===6) d.setDate(d.getDate()-1); // sab  vie
+  if(dow===0) d.setDate(d.getDate()-2); // dom â vie
+  else if(dow===6) d.setDate(d.getDate()-1); // sab â vie
   return d.toISOString().slice(0,10);
 }
 function isHabil(dateStr) {
@@ -92,40 +92,40 @@ function isHabil(dateStr) {
   return dow!==0 && dow!==6;
 }
 
-//  Mapeo de tickers 
-// data912: bonos, ONs, CEDEARs, acciones AR  precios en vivo (2h cache)
+// ââ Mapeo de tickers âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// data912: bonos, ONs, CEDEARs, acciones AR â precios en vivo (2h cache)
 // Yahoo Finance (.BA): fallback para CEDEARs y acciones si data912 falla
 
-// Tickers se determinan dinamicamente desde el portfolio activo
+// Tickers se determinan dinÃ¡micamente desde el portfolio activo
 // data912 descarga todos los instrumentos y filtra por los tickers del portfolio
 // Yahoo se usa como fallback para CEDEARs y acciones
 
-// FCI tickers  id CAFCI para argentinadatos
+// FCI tickers â id CAFCI para argentinadatos
 const FCI_IDS = {
   "FIMA-PREM":  { fondo: "1", clase: "A", nombre: "FIMA Premium" },
   "FIMA-AHP":   { fondo: "2", clase: "A", nombre: "FIMA Ahorro Pesos" },
   "FIMA-AHPP":  { fondo: "3", clase: "A", nombre: "FIMA Ahorro Plus" },
-  "FIMA-PREMD": { fondo: "4", clase: "A", nombre: "FIMA Premium Dolares" },
+  "FIMA-PREMD": { fondo: "4", clase: "A", nombre: "FIMA Premium Dolares Cl A" },
 };
 
-//  Flujos de bonos preconfigurados 
-// monto = % del VN segun prospecto (por cada 100 VN nominales)
-// adjustsBy: variable que ajusta el capital/cupon ('CER', 'CER+TNA', null)
+// ââ Flujos de bonos preconfigurados âââââââââââââââââââââââââââââââââââââââââ
+// monto = % del VN segÃºn prospecto (por cada 100 VN nominales)
+// adjustsBy: variable que ajusta el capital/cupÃ³n ('CER', 'CER+TNA', null)
 const SEED_BOND_META = {
-  "TZXD6": {adjustsBy:"CER", emisionDate:"2022-03-15", cerBase:null, desc:"BONTES a Descuento CER V15/12/26 - Cupon 0% + ajuste CER - Ley Argentina"},
-  "TZX27": {adjustsBy:"CER", emisionDate:"2022-12-30", cerBase:null, desc:"BONO CER V30/06/27 - Cupon 2% s/VN ajustado - Ley Argentina"},
-  "AO27D": {adjustsBy:null,  desc:"Bono Tesoro 6% V29/10/27 - Cupon mensual 6% anual base 30/360 - Bullet al vencimiento - Ley Nueva York"},
-  "GD38D": {adjustsBy:null,  desc:"Global 2038 - Tasa escalonada hasta 5% anual - 22 cuotas de amort. (4.5455% c/u) desde jul/2027 - Ley Nueva York"},
-  "TLCUD": {adjustsBy:null,  desc:"ON Telecom Argentina C28 05/03/29 - Cupon 7% anual (3.5% semestral) - Ley Argentina"},
-  "GD29D": {adjustsBy:null, desc:"Global 2029 - 2% hasta ene/28, 2.5% hasta ene/30 - 8 cuotas amort. 12.5% desde jul/2026 - Ley Nueva York"},
-  "GD30D": {adjustsBy:null, desc:"Global 2030 - 4.125% - 16 cuotas amort. 6.25% desde ene/2024 - Ley Nueva York"},
-  "GD35D": {adjustsBy:null, desc:"Global 2035 - 3.625% bullet - Ley Nueva York"},
-  "GD41D": {adjustsBy:null, desc:"Global 2041 - 4.875% - 20 cuotas amort. 5% desde ene/2027 - Ley Nueva York"},
-  "AE38D": {adjustsBy:null, desc:"Argentina 2038 - 4.625% bullet - Ley Nueva York"},
-  "AL29D": {adjustsBy:null, desc:"Bonar 2029 - 2% hasta ene/28, 2.5% hasta ene/30 - 8 cuotas amort. 12.5% desde jul/2026 - Ley Argentina"},
-  "AL30D": {adjustsBy:null, desc:"Bonar 2030 - 4.125% - 16 cuotas amort. 6.25% desde ene/2024 - Ley Argentina"},
-  "AL35D": {adjustsBy:null, desc:"Bonar 2035 - 3.625% bullet - Ley Argentina"},
-  "AL41D": {adjustsBy:null, desc:"Bonar 2041 - 4.875% - 20 cuotas amort. 5% desde ene/2027 - Ley Argentina"},
+  "TZXD6": {adjustsBy:"CER", emisionDate:"2022-03-15", cerBase:null, desc:"BONTES a Descuento CER V15/12/26 Â· CupÃ³n 0% + ajuste CER Â· Ley Argentina"},
+  "TZX27": {adjustsBy:"CER", emisionDate:"2022-12-30", cerBase:null, desc:"BONO CER V30/06/27 Â· CupÃ³n 2% s/VN ajustado Â· Ley Argentina"},
+  "AO27D": {adjustsBy:null,  desc:"Bono Tesoro 6% V29/10/27 Â· CupÃ³n mensual 6% anual base 30/360 Â· Bullet al vencimiento Â· Ley Nueva York"},
+  "GD38D": {adjustsBy:null,  desc:"Global 2038 Â· Tasa escalonada hasta 5% anual Â· 22 cuotas de amort. (4.5455% c/u) desde jul/2027 Â· Ley Nueva York"},
+  "TLCUD": {adjustsBy:null,  desc:"ON Telecom Argentina C28 05/03/29 Â· CupÃ³n 7% anual (3.5% semestral) Â· Ley Argentina"},
+  "GD29D": {adjustsBy:null, desc:"Global 2029 Â· 2% hasta ene/28, 2.5% hasta ene/30 Â· 8 cuotas amort. 12.5% desde jul/2026 Â· Ley Nueva York"},
+  "GD30D": {adjustsBy:null, desc:"Global 2030 Â· 4.125% Â· 16 cuotas amort. 6.25% desde ene/2024 Â· Ley Nueva York"},
+  "GD35D": {adjustsBy:null, desc:"Global 2035 Â· 3.625% bullet Â· Ley Nueva York"},
+  "GD41D": {adjustsBy:null, desc:"Global 2041 Â· 4.875% Â· 20 cuotas amort. 5% desde ene/2027 Â· Ley Nueva York"},
+  "AE38D": {adjustsBy:null, desc:"Argentina 2038 Â· 4.625% bullet Â· Ley Nueva York"},
+  "AL29D": {adjustsBy:null, desc:"Bonar 2029 Â· 2% hasta ene/28, 2.5% hasta ene/30 Â· 8 cuotas amort. 12.5% desde jul/2026 Â· Ley Argentina"},
+  "AL30D": {adjustsBy:null, desc:"Bonar 2030 Â· 4.125% Â· 16 cuotas amort. 6.25% desde ene/2024 Â· Ley Argentina"},
+  "AL35D": {adjustsBy:null, desc:"Bonar 2035 Â· 3.625% bullet Â· Ley Argentina"},
+  "AL41D": {adjustsBy:null, desc:"Bonar 2041 Â· 4.875% Â· 20 cuotas amort. 5% desde ene/2027 Â· Ley Argentina"},
 };
 
 const SEED_BOND_FLOWS = {
@@ -134,106 +134,106 @@ const SEED_BOND_FLOWS = {
     {id:1001,date:"2026-12-15",tipo:"amortizacion",monto:100.0,cobrado:false,fechaCobro:null,fuente:"auto",nota:"100% VN ajustado CER"},
   ],
   "TZX27": [
-    // Cupon 2% sobre VN ajustado por CER, semestral
+    // CupÃ³n 2% sobre VN ajustado por CER, semestral
     {id:1002,date:"2026-06-30",tipo:"cupon",        monto:1.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"1% s/VN ajustado CER"},
     {id:1003,date:"2026-12-31",tipo:"cupon",        monto:1.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"1% s/VN ajustado CER"},
     {id:1004,date:"2027-06-30",tipo:"cupon",        monto:1.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"1% s/VN ajustado CER"},
     {id:1005,date:"2027-06-30",tipo:"amortizacion", monto:100.0,cobrado:false,fechaCobro:null,fuente:"auto",nota:"Amort. 100% VN ajustado"},
   ],
   "AO27D": [
-    // Bono Tesoro 6% V29/10/27  cupon mensual, tasa 6% anual base 30/360
-    // Amortizacion bullet al vencimiento (cupon 20 - 29/10/2027)
-    // Cupon 1 (31/03/2026): cobrado. Cupon 2 en adelante: pendientes.
-    {id:1006,date:"2026-03-31",tipo:"cupon",        monto:0.5667,cobrado:true, fechaCobro:"2026-03-31",fuente:"auto",nota:"dias: 34 - 6%34/360"},
-    {id:1007,date:"2026-04-30",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dias: 30 - 6%30/360"},
-    {id:1008,date:"2026-05-29",tipo:"cupon",        monto:0.4833,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dias: 29 - 6%29/360"},
-    {id:1009,date:"2026-06-30",tipo:"cupon",        monto:0.5167,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dias: 31 - 6%31/360"},
-    {id:1010,date:"2026-07-31",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dias: 30 - 6%30/360"},
-    {id:1011,date:"2026-08-31",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dias: 30 - 6%30/360"},
-    {id:1012,date:"2026-09-30",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dias: 30 - 6%30/360"},
-    {id:1013,date:"2026-10-30",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dias: 30 - 6%30/360"},
-    {id:1014,date:"2026-11-30",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dias: 30 - 6%30/360"},
-    {id:1015,date:"2026-12-30",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dias: 30 - 6%30/360"},
-    {id:1016,date:"2027-01-29",tipo:"cupon",        monto:0.4833,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dias: 29 - 6%29/360"},
-    {id:1017,date:"2027-02-26",tipo:"cupon",        monto:0.4500,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dias: 27 - 6%27/360"},
-    {id:1018,date:"2027-03-31",tipo:"cupon",        monto:0.5833,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dias: 35 - 6%35/360"},
-    {id:1019,date:"2027-04-30",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dias: 30 - 6%30/360"},
-    {id:1020,date:"2027-05-31",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dias: 30 - 6%30/360"},
-    {id:1021,date:"2027-06-30",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dias: 30 - 6%30/360"},
-    {id:1022,date:"2027-07-30",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dias: 30 - 6%30/360"},
-    {id:1023,date:"2027-08-31",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dias: 30 - 6%30/360"},
-    {id:1024,date:"2027-09-30",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dias: 30 - 6%30/360"},
-    {id:1025,date:"2027-10-29",tipo:"cupon",        monto:0.4833,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dias: 29 - 6%29/360"},
-    {id:1026,date:"2027-10-29",tipo:"amortizacion", monto:100.0, cobrado:false,fechaCobro:null,        fuente:"auto",nota:"Amort. 100% VN - bullet"},
+    // Bono Tesoro 6% V29/10/27 â cupÃ³n mensual, tasa 6% anual base 30/360
+    // AmortizaciÃ³n bullet al vencimiento (cupÃ³n 20 Â· 29/10/2027)
+    // CupÃ³n 1 (31/03/2026): cobrado. CupÃ³n 2 en adelante: pendientes.
+    {id:1006,date:"2026-03-31",tipo:"cupon",        monto:0.5667,cobrado:true, fechaCobro:"2026-03-31",fuente:"auto",nota:"dÃ­as: 34 Â· 6%Ã34/360"},
+    {id:1007,date:"2026-04-30",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dÃ­as: 30 Â· 6%Ã30/360"},
+    {id:1008,date:"2026-05-29",tipo:"cupon",        monto:0.4833,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dÃ­as: 29 Â· 6%Ã29/360"},
+    {id:1009,date:"2026-06-30",tipo:"cupon",        monto:0.5167,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dÃ­as: 31 Â· 6%Ã31/360"},
+    {id:1010,date:"2026-07-31",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dÃ­as: 30 Â· 6%Ã30/360"},
+    {id:1011,date:"2026-08-31",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dÃ­as: 30 Â· 6%Ã30/360"},
+    {id:1012,date:"2026-09-30",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dÃ­as: 30 Â· 6%Ã30/360"},
+    {id:1013,date:"2026-10-30",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dÃ­as: 30 Â· 6%Ã30/360"},
+    {id:1014,date:"2026-11-30",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dÃ­as: 30 Â· 6%Ã30/360"},
+    {id:1015,date:"2026-12-30",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dÃ­as: 30 Â· 6%Ã30/360"},
+    {id:1016,date:"2027-01-29",tipo:"cupon",        monto:0.4833,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dÃ­as: 29 Â· 6%Ã29/360"},
+    {id:1017,date:"2027-02-26",tipo:"cupon",        monto:0.4500,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dÃ­as: 27 Â· 6%Ã27/360"},
+    {id:1018,date:"2027-03-31",tipo:"cupon",        monto:0.5833,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dÃ­as: 35 Â· 6%Ã35/360"},
+    {id:1019,date:"2027-04-30",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dÃ­as: 30 Â· 6%Ã30/360"},
+    {id:1020,date:"2027-05-31",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dÃ­as: 30 Â· 6%Ã30/360"},
+    {id:1021,date:"2027-06-30",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dÃ­as: 30 Â· 6%Ã30/360"},
+    {id:1022,date:"2027-07-30",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dÃ­as: 30 Â· 6%Ã30/360"},
+    {id:1023,date:"2027-08-31",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dÃ­as: 30 Â· 6%Ã30/360"},
+    {id:1024,date:"2027-09-30",tipo:"cupon",        monto:0.5000,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dÃ­as: 30 Â· 6%Ã30/360"},
+    {id:1025,date:"2027-10-29",tipo:"cupon",        monto:0.4833,cobrado:false,fechaCobro:null,        fuente:"auto",nota:"dÃ­as: 29 Â· 6%Ã29/360"},
+    {id:1026,date:"2027-10-29",tipo:"amortizacion", monto:100.0, cobrado:false,fechaCobro:null,        fuente:"auto",nota:"Amort. 100% VN Â· bullet"},
   ],
   "GD38D": [
-    // Global 2038  Schedule completo del prospecto (fechas efectivas)
-    // Tasa escalonada: 0.2125% (c11), 2% (c2-3), 3.875% (c4-5), 4.25% (c6-7), 5% (c8)
-    // Amortizacion: 22 cuotas de 4.5455% (1/22) semestral desde jul/2027  ene/2038
-    // Cupones 1-10 (2021-2025): ya cobrados antes de la posicion actual
-    // Cupon 11 (13/07/2026): proximo pendiente
-    {id:1011,date:"2026-07-13",tipo:"cupon",        monto:2.5000,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% anual s/VN - c11"},
-    {id:1012,date:"2027-01-11",tipo:"cupon",        monto:2.5000,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% anual s/VN - c12"},
-    // Desde c13: amort 4.5455% (1/22) + interes s/VN residual
-    {id:1013,date:"2027-07-12",tipo:"cupon",        monto:2.5000,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 100% - c13"},
-    {id:1057,date:"2027-07-12",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN - cuota 1/22"},
-    {id:1014,date:"2028-01-10",tipo:"cupon",        monto:2.3864,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 95.45% - c14"},
-    {id:1058,date:"2028-01-10",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN - cuota 2/22"},
-    {id:1015,date:"2028-07-10",tipo:"cupon",        monto:2.2727,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 90.91% - c15"},
-    {id:1059,date:"2028-07-10",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN - cuota 3/22"},
-    {id:1016,date:"2029-01-09",tipo:"cupon",        monto:2.1591,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 86.36% - c16"},
-    {id:1060,date:"2029-01-09",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN - cuota 4/22"},
-    {id:1017,date:"2029-07-10",tipo:"cupon",        monto:2.0455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 81.82% - c17"},
-    {id:1061,date:"2029-07-10",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN - cuota 5/22"},
-    {id:1018,date:"2030-01-09",tipo:"cupon",        monto:1.9318,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 77.27% - c18"},
-    {id:1062,date:"2030-01-09",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN - cuota 6/22"},
-    {id:1019,date:"2030-07-10",tipo:"cupon",        monto:1.8182,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 72.73% - c19"},
-    {id:1063,date:"2030-07-10",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN - cuota 7/22"},
-    {id:1020,date:"2031-01-09",tipo:"cupon",        monto:1.7045,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 68.18% - c20"},
-    {id:1064,date:"2031-01-09",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN - cuota 8/22"},
-    {id:1021,date:"2031-07-09",tipo:"cupon",        monto:1.5909,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 63.64% - c21"},
-    {id:1065,date:"2031-07-09",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN - cuota 9/22"},
-    {id:1022,date:"2032-01-09",tipo:"cupon",        monto:1.4773,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 59.09% - c22"},
-    {id:1066,date:"2032-01-09",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN - cuota 10/22"},
-    {id:1023,date:"2032-07-09",tipo:"cupon",        monto:1.3636,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 54.55% - c23"},
-    {id:1067,date:"2032-07-09",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN - cuota 11/22"},
-    {id:1024,date:"2033-01-10",tipo:"cupon",        monto:1.2500,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 50.00% - c24"},
-    {id:1068,date:"2033-01-10",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN - cuota 12/22"},
-    {id:1025,date:"2033-07-11",tipo:"cupon",        monto:1.1364,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 45.45% - c25"},
-    {id:1069,date:"2033-07-11",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN - cuota 13/22"},
-    {id:1026,date:"2034-01-09",tipo:"cupon",        monto:1.0227,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 40.91% - c26"},
-    {id:1070,date:"2034-01-09",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN - cuota 14/22"},
-    {id:1027,date:"2034-07-10",tipo:"cupon",        monto:0.9091,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 36.36% - c27"},
-    {id:1071,date:"2034-07-10",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN - cuota 15/22"},
-    {id:1028,date:"2035-01-09",tipo:"cupon",        monto:0.7955,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 31.82% - c28"},
-    {id:1072,date:"2035-01-09",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN - cuota 16/22"},
-    {id:1029,date:"2035-07-09",tipo:"cupon",        monto:0.6818,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 27.27% - c29"},
-    {id:1073,date:"2035-07-09",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN - cuota 17/22"},
-    {id:1030,date:"2036-01-09",tipo:"cupon",        monto:0.5682,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 22.73% - c30"},
-    {id:1074,date:"2036-01-09",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN - cuota 18/22"},
-    {id:1031,date:"2036-07-09",tipo:"cupon",        monto:0.4545,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 18.18% - c31"},
-    {id:1075,date:"2036-07-09",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN - cuota 19/22"},
-    {id:1032,date:"2037-01-09",tipo:"cupon",        monto:0.3409,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 13.64% - c32"},
-    {id:1076,date:"2037-01-09",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN - cuota 20/22"},
-    {id:1033,date:"2037-07-09",tipo:"cupon",        monto:0.2273,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 9.09% - c33"},
-    {id:1077,date:"2037-07-09",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN - cuota 21/22"},
-    {id:1034,date:"2038-01-11",tipo:"cupon",        monto:0.1136,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 4.55% - c34"},
-    {id:1078,date:"2038-01-11",tipo:"amortizacion", monto:4.5454,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5454% VN - cuota 22/22 (ultimo)"},
+    // Global 2038 â Schedule completo del prospecto (fechas efectivas)
+    // Tasa escalonada: 0.2125% (c11), 2% (c2-3), 3.875% (c4-5), 4.25% (c6-7), 5% (c8â)
+    // AmortizaciÃ³n: 22 cuotas de 4.5455% (1/22) semestral desde jul/2027 â ene/2038
+    // Cupones 1-10 (2021-2025): ya cobrados antes de la posiciÃ³n actual
+    // CupÃ³n 11 (13/07/2026): prÃ³ximo pendiente
+    {id:1011,date:"2026-07-13",tipo:"cupon",        monto:2.5000,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% anual s/VN Â· c11"},
+    {id:1012,date:"2027-01-11",tipo:"cupon",        monto:2.5000,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% anual s/VN Â· c12"},
+    // Desde c13: amort 4.5455% (1/22) + interÃ©s s/VN residual
+    {id:1013,date:"2027-07-12",tipo:"cupon",        monto:2.5000,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 100% Â· c13"},
+    {id:1057,date:"2027-07-12",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN Â· cuota 1/22"},
+    {id:1014,date:"2028-01-10",tipo:"cupon",        monto:2.3864,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 95.45% Â· c14"},
+    {id:1058,date:"2028-01-10",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN Â· cuota 2/22"},
+    {id:1015,date:"2028-07-10",tipo:"cupon",        monto:2.2727,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 90.91% Â· c15"},
+    {id:1059,date:"2028-07-10",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN Â· cuota 3/22"},
+    {id:1016,date:"2029-01-09",tipo:"cupon",        monto:2.1591,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 86.36% Â· c16"},
+    {id:1060,date:"2029-01-09",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN Â· cuota 4/22"},
+    {id:1017,date:"2029-07-10",tipo:"cupon",        monto:2.0455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 81.82% Â· c17"},
+    {id:1061,date:"2029-07-10",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN Â· cuota 5/22"},
+    {id:1018,date:"2030-01-09",tipo:"cupon",        monto:1.9318,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 77.27% Â· c18"},
+    {id:1062,date:"2030-01-09",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN Â· cuota 6/22"},
+    {id:1019,date:"2030-07-10",tipo:"cupon",        monto:1.8182,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 72.73% Â· c19"},
+    {id:1063,date:"2030-07-10",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN Â· cuota 7/22"},
+    {id:1020,date:"2031-01-09",tipo:"cupon",        monto:1.7045,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 68.18% Â· c20"},
+    {id:1064,date:"2031-01-09",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN Â· cuota 8/22"},
+    {id:1021,date:"2031-07-09",tipo:"cupon",        monto:1.5909,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 63.64% Â· c21"},
+    {id:1065,date:"2031-07-09",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN Â· cuota 9/22"},
+    {id:1022,date:"2032-01-09",tipo:"cupon",        monto:1.4773,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 59.09% Â· c22"},
+    {id:1066,date:"2032-01-09",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN Â· cuota 10/22"},
+    {id:1023,date:"2032-07-09",tipo:"cupon",        monto:1.3636,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 54.55% Â· c23"},
+    {id:1067,date:"2032-07-09",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN Â· cuota 11/22"},
+    {id:1024,date:"2033-01-10",tipo:"cupon",        monto:1.2500,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 50.00% Â· c24"},
+    {id:1068,date:"2033-01-10",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN Â· cuota 12/22"},
+    {id:1025,date:"2033-07-11",tipo:"cupon",        monto:1.1364,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 45.45% Â· c25"},
+    {id:1069,date:"2033-07-11",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN Â· cuota 13/22"},
+    {id:1026,date:"2034-01-09",tipo:"cupon",        monto:1.0227,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 40.91% Â· c26"},
+    {id:1070,date:"2034-01-09",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN Â· cuota 14/22"},
+    {id:1027,date:"2034-07-10",tipo:"cupon",        monto:0.9091,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 36.36% Â· c27"},
+    {id:1071,date:"2034-07-10",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN Â· cuota 15/22"},
+    {id:1028,date:"2035-01-09",tipo:"cupon",        monto:0.7955,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 31.82% Â· c28"},
+    {id:1072,date:"2035-01-09",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN Â· cuota 16/22"},
+    {id:1029,date:"2035-07-09",tipo:"cupon",        monto:0.6818,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 27.27% Â· c29"},
+    {id:1073,date:"2035-07-09",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN Â· cuota 17/22"},
+    {id:1030,date:"2036-01-09",tipo:"cupon",        monto:0.5682,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 22.73% Â· c30"},
+    {id:1074,date:"2036-01-09",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN Â· cuota 18/22"},
+    {id:1031,date:"2036-07-09",tipo:"cupon",        monto:0.4545,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 18.18% Â· c31"},
+    {id:1075,date:"2036-07-09",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN Â· cuota 19/22"},
+    {id:1032,date:"2037-01-09",tipo:"cupon",        monto:0.3409,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 13.64% Â· c32"},
+    {id:1076,date:"2037-01-09",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN Â· cuota 20/22"},
+    {id:1033,date:"2037-07-09",tipo:"cupon",        monto:0.2273,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 9.09% Â· c33"},
+    {id:1077,date:"2037-07-09",tipo:"amortizacion", monto:4.5455,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5455% VN Â· cuota 21/22"},
+    {id:1034,date:"2038-01-11",tipo:"cupon",        monto:0.1136,cobrado:false,fechaCobro:null,fuente:"auto",nota:"5% s/VN 4.55% Â· c34"},
+    {id:1078,date:"2038-01-11",tipo:"amortizacion", monto:4.5454,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.5454% VN Â· cuota 22/22 (Ãºltimo)"},
   ],
   "TLCUD": [
     // ON Telecom 7% anual semestral
-    {id:1030,date:"2026-09-05",tipo:"cupon",        monto:3.5,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.5% s/VN - 7% anual"},
-    {id:1031,date:"2027-03-05",tipo:"cupon",        monto:3.5,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.5% s/VN - 7% anual"},
-    {id:1032,date:"2027-09-05",tipo:"cupon",        monto:3.5,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.5% s/VN - 7% anual"},
-    {id:1033,date:"2028-03-05",tipo:"cupon",        monto:3.5,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.5% s/VN - 7% anual"},
-    {id:1034,date:"2028-09-05",tipo:"cupon",        monto:3.5,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.5% s/VN - 7% anual"},
-    {id:1035,date:"2029-03-05",tipo:"cupon",        monto:3.5,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.5% s/VN - 7% anual"},
+    {id:1030,date:"2026-09-05",tipo:"cupon",        monto:3.5,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.5% s/VN Â· 7% anual"},
+    {id:1031,date:"2027-03-05",tipo:"cupon",        monto:3.5,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.5% s/VN Â· 7% anual"},
+    {id:1032,date:"2027-09-05",tipo:"cupon",        monto:3.5,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.5% s/VN Â· 7% anual"},
+    {id:1033,date:"2028-03-05",tipo:"cupon",        monto:3.5,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.5% s/VN Â· 7% anual"},
+    {id:1034,date:"2028-09-05",tipo:"cupon",        monto:3.5,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.5% s/VN Â· 7% anual"},
+    {id:1035,date:"2029-03-05",tipo:"cupon",        monto:3.5,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.5% s/VN Â· 7% anual"},
     {id:1036,date:"2029-03-05",tipo:"amortizacion", monto:100.0,cobrado:false,fechaCobro:null,fuente:"auto",nota:"Amort. 100% VN"},
   ],
 
-  //  Soberanos Ley NY  Serie GD 
+  // âââ Soberanos Ley NY â Serie GD ââââââââââââââââââââââââââââââââââââââââââ
 
-  // GD29D  Global 2029 - 1% hasta jul/23, 2% hasta ene/28, 2.5% hasta ene/29
+  // GD29D â Global 2029 Â· 1% hasta jul/23, 2% hasta ene/28, 2.5% hasta ene/29
   // Amort: 8 cuotas de 12.5% desde jul/2027
   "GD29D": [
     {id:2001,date:"2026-07-09",tipo:"cupon",        monto:1.0,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"2% anual s/VN residual"},
@@ -254,8 +254,8 @@ const SEED_BOND_FLOWS = {
     {id:2016,date:"2030-01-09",tipo:"amortizacion", monto:12.5, cobrado:false,fechaCobro:null,fuente:"auto",nota:"Cuota 8/8"},
   ],
 
-  // GD30D  Global 2030 - 0.125% hasta ene/23, escalonado hasta 4.125%
-  // Amort: 16 cuotas de 6.25% desde jul/2024  las primeras ya cobradas
+  // GD30D â Global 2030 Â· 0.125% hasta ene/23, escalonado hasta 4.125%
+  // Amort: 16 cuotas de 6.25% desde jul/2024 â las primeras ya cobradas
   "GD30D": [
     {id:2020,date:"2026-07-09",tipo:"cupon",        monto:1.546875,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.125% s/VN residual 75"},
     {id:2021,date:"2026-07-09",tipo:"amortizacion", monto:6.25,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"Cuota 5/16"},
@@ -283,7 +283,7 @@ const SEED_BOND_FLOWS = {
     {id:2043,date:"2032-01-09",tipo:"amortizacion", monto:6.25,  cobrado:false,fechaCobro:null,fuente:"auto",nota:"Cuota 16/16"},
   ],
 
-  // GD35D  Global 2035 - 3.625% fijo - Bullet
+  // GD35D â Global 2035 Â· 3.625% fijo Â· Bullet
   "GD35D": [
     {id:2050,date:"2026-07-09",tipo:"cupon",        monto:1.8125,cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.625% anual s/100 VN"},
     {id:2051,date:"2027-01-09",tipo:"cupon",        monto:1.8125,cobrado:false,fechaCobro:null,fuente:"auto",nota:"3.625% anual s/100 VN"},
@@ -306,7 +306,7 @@ const SEED_BOND_FLOWS = {
     {id:2068,date:"2035-01-09",tipo:"amortizacion", monto:100.0, cobrado:false,fechaCobro:null,fuente:"auto",nota:"Amort. bullet 100%"},
   ],
 
-  // GD41D  Global 2041 - 4.875% - Amort 20 cuotas de 5% desde ene/2027
+  // GD41D â Global 2041 Â· 4.875% Â· Amort 20 cuotas de 5% desde ene/2027
   "GD41D": [
     {id:2070,date:"2026-07-09",tipo:"cupon",        monto:2.4375,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.875% s/100 VN"},
     {id:2071,date:"2027-01-09",tipo:"cupon",        monto:2.4375,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.875% s/100 VN"},
@@ -351,7 +351,7 @@ const SEED_BOND_FLOWS = {
     {id:2110,date:"2036-07-09",tipo:"amortizacion", monto:5.0,   cobrado:false,fechaCobro:null,fuente:"auto",nota:"Cuota 20/20"},
   ],
 
-  // AE38D  Global 2038 Ley NY - 4.625% - Bullet (mismo schedule que GD38D pero ley NY)
+  // AE38D â Global 2038 Ley NY Â· 4.625% Â· Bullet (mismo schedule que GD38D pero ley NY)
   "AE38D": [
     {id:2120,date:"2026-07-09",tipo:"cupon",        monto:2.3125,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.625% s/100 VN"},
     {id:2121,date:"2027-01-09",tipo:"cupon",        monto:2.3125,cobrado:false,fechaCobro:null,fuente:"auto",nota:"4.625% s/100 VN"},
@@ -380,7 +380,7 @@ const SEED_BOND_FLOWS = {
     {id:2144,date:"2038-01-09",tipo:"amortizacion", monto:100.0, cobrado:false,fechaCobro:null,fuente:"auto",nota:"Amort. bullet 100%"},
   ],
 
-  //  Soberanos Ley AR  Serie AL 
+  // âââ Soberanos Ley AR â Serie AL ââââââââââââââââââââââââââââââââââââââââââ
   // AL29 = mismo schedule que GD29 pero ley argentina
   "AL29D": [
     {id:2200,date:"2026-07-09",tipo:"cupon",        monto:1.0,   cobrado:false,fechaCobro:null,fuente:"auto",nota:"2% anual s/VN residual"},
@@ -498,9 +498,9 @@ const SEED_BOND_FLOWS = {
   ],
 };
 
-//  Tipo de cambio  dolarapi.com (tiempo real, sin CORS) 
+// ââ Tipo de cambio â dolarapi.com (tiempo real, sin CORS) ââââââââââââââââââââ
 // CCL y MEP: precios en tiempo real del mercado
-// Oficial: BNA minorista (dolarapi)  el BCRA A3500 (mayorista) difiere ~1-2%
+// Oficial: BNA minorista (dolarapi) â el BCRA A3500 (mayorista) difiere ~1-2%
 // Se actualiza al cargar la app y cada 30 minutos
 async function fetchFXLive() {
   const today = new Date();
@@ -529,7 +529,7 @@ async function fetchFXLive() {
             cclCompra:  compra(get("contadoconliqui")),
             mepCompra:  compra(get("bolsa")),
             ofCompra:   compra(get("oficial")),
-            source: "dolarapi.com - tiempo real",
+            source: "dolarapi.com Â· tiempo real",
             sourceNote: "Oficial = BNA minorista. BCRA A3500 (mayorista) puede diferir ~1-2%.",
             dateLabel: label,
             timeLabel: time,
@@ -553,7 +553,7 @@ async function fetchFXLive() {
           CCL: Math.round(price * 1.065),
           MEP: Math.round(price * 1.027),
           oficial: Math.round(price),
-          source: "Yahoo Finance - estimado",
+          source: "Yahoo Finance Â· estimado",
           sourceNote: "Valores estimados desde tipo oficial Yahoo.",
           dateLabel: label, timeLabel: time,
         };
@@ -561,10 +561,10 @@ async function fetchFXLive() {
     }
   } catch {}
 
-  return { ...FX_FALLBACK, source: "fallback", sourceNote: "Sin conexion  valores del 06/04/2026.", dateLabel: label, timeLabel: time };
+  return { ...FX_FALLBACK, source: "fallback", sourceNote: "Sin conexiÃ³n â valores del 06/04/2026.", dateLabel: label, timeLabel: time };
 }
 
-//  data912: precios en vivo de todos los instrumentos AR 
+// ââ data912: precios en vivo de todos los instrumentos AR ââââââââââââââââââââ
 // Endpoints: /live/arg_bonds, /live/arg_cedears, /live/arg_stocks, /live/arg_corp
 // Sin key, ~2h de cache Cloudflare, CORS ok desde browser
 async function fetchData912Prices(activeTickers=[]) {
@@ -572,7 +572,7 @@ async function fetchData912Prices(activeTickers=[]) {
   const base = "https://data912.com/live";
 
   // Parsea todos los items del endpoint y guarda los que matcheen con activeTickers
-  // Si activeTickers esta vacio, guarda todos
+  // Si activeTickers estÃ¡ vacÃ­o, guarda todos
   const parseD912 = (arr) => {
     if (!Array.isArray(arr)) return;
     for (const item of arr) {
@@ -601,7 +601,7 @@ async function fetchData912Prices(activeTickers=[]) {
   return result;
 }
 
-//  Yahoo Finance: fallback dinamico para cualquier ticker 
+// ââ Yahoo Finance: fallback dinÃ¡mico para cualquier ticker âââââââââââââââââââ
 async function fetchYahooPrices(activeTickers=[]) {
   const result = {};
 
@@ -622,7 +622,7 @@ async function fetchYahooPrices(activeTickers=[]) {
       const res = await fetch(YAHOO_PROXY+"?symbol="+encodeURIComponent(ticker+".BA")+"&range=5d&interval=1d",
         {signal:AbortSignal.timeout(8000)});
       if(res.ok){ const d=await res.json(); if(parseYahoo(d,ticker,"yahoo_proxy")) return; }
-      // Fallback: simbolo directo US
+      // Fallback: sÃ­mbolo directo US
       const res2 = await fetch(YAHOO_PROXY+"?symbol="+encodeURIComponent(ticker)+"&range=5d&interval=1d",
         {signal:AbortSignal.timeout(8000)});
       if(res2.ok){ const d2=await res2.json(); parseYahoo(d2,ticker,"yahoo_us"); }
@@ -631,8 +631,8 @@ async function fetchYahooPrices(activeTickers=[]) {
   return result;
 }
 
-//  FCIs: argentinadatos.com via CAFCI 
-// Endpoint: /v1/finanzas/fci/mercadoDinero/ultimo  array con {fondo,clase,vCuotaparte,fecha}
+// ââ FCIs: argentinadatos.com vÃ­a CAFCI âââââââââââââââââââââââââââââââââââââââ
+// Endpoint: /v1/finanzas/fci/mercadoDinero/ultimo â array con {fondo,clase,vCuotaparte,fecha}
 // FIMA mapeo: Premium=fondo 1, AHP=fondo 2, AHPP=fondo 3, Premium USD=fondo 4
 // Como no tenemos IDs exactos, usamos nombre para matchear
 async function fetchFCIPrices() {
@@ -667,7 +667,7 @@ async function fetchFCIPrices() {
   return result;
 }
 
-//  Treasury 10Y via Yahoo Finance (^TNX) 
+// ââ Treasury 10Y via Yahoo Finance (^TNX) ââââââââââââââââââââââââââââââââââââ
 async function fetchTreasury10Y() {
   try {
     const res = await fetch(YAHOO_PROXY+"?symbol=%5ETNX&range=5d&interval=1d",
@@ -679,7 +679,7 @@ async function fetchTreasury10Y() {
   } catch { return TASA10Y_FALLBACK; }
 }
 
-//  Orquestador: lanza todo en paralelo 
+// ââ Orquestador: lanza todo en paralelo ââââââââââââââââââââââââââââââââââââââ
 async function fetchAllLivePrices(activeTickers=[]) {
   const [fx, d912P, yahooP, fciP, t10y] = await Promise.all([
     fetchFXLive(),
@@ -693,7 +693,7 @@ async function fetchAllLivePrices(activeTickers=[]) {
   return { fx, prices, t10y };
 }
 
-//  Components 
+// ââ Components ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 function Spark({pct}){
   const w=72,h=24,n=20;
@@ -845,9 +845,9 @@ function Chart100({series}){
 }
 
 
-//  Time-Weighted Return (TWR) 
-// Para cada sub-periodo entre flujos, el retorno es valor_fin / valor_inicio.
-// Los flujos no generan retorno  solo cambian la base del siguiente sub-periodo.
+// ââ Time-Weighted Return (TWR) ââââââââââââââââââââââââââââââââââââââââââââââââ
+// Para cada sub-perÃ­odo entre flujos, el retorno es valor_fin / valor_inicio.
+// Los flujos no generan retorno â solo cambian la base del siguiente sub-perÃ­odo.
 function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRate, livePricesMap, customEnd=null, realTodayStr=null){
   if(!dates||dates.length<2) return [];
   if(!realTodayStr){const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset()-180);realTodayStr=d.toISOString().slice(0,10);}
@@ -861,11 +861,11 @@ function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRa
     tradesByTicker[t.ticker].push({...t, _ts: new Date(t.date).getTime()});
   }
 
-  // ltimo precio disponible <= fecha (biseccion O(log n))
-  // IMPORTANTE: nunca usar precio futuro  solo pasado o igual
+  // Ãltimo precio disponible <= fecha (bisecciÃ³n O(log n))
+  // IMPORTANTE: nunca usar precio futuro â solo pasado o igual
   function findPrice2(bars,d){
     if(!bars?.length)return null;
-    // Biseccion: encontrar ultimo bar con date <= d
+    // BisecciÃ³n: encontrar Ãºltimo bar con date <= d
     let lo=0,hi=bars.length-1,res=-1;
     while(lo<=hi){
       const mid=(lo+hi)>>1;
@@ -873,7 +873,7 @@ function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRa
       else hi=mid-1;
     }
     if(res>=0) return bars[res].close||null;
-    // Si no hay barra anterior, usar la primera disponible (inicio del historico)
+    // Si no hay barra anterior, usar la primera disponible (inicio del histÃ³rico)
     return bars[0].close||null;
   }
 
@@ -895,7 +895,7 @@ function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRa
         price=liveMap[h.ticker];
       } else if(bars&&bars.length){
         if(dateStr<bars[0].date)continue;
-        // findPrice2 returns nearest bar  handles weekends/holidays by using last available
+        // findPrice2 returns nearest bar â handles weekends/holidays by using last available
         const rawP=findPrice2(bars,dateStr);
         if(!rawP)continue;
         price=rawP; // historicos already in per-100-laminas scale
@@ -913,7 +913,7 @@ function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRa
       else if(currency==="USD_CCL")total+=price*qtyFactor/cclDay;
       else total+=price*qtyFactor/mepDay;
     }
-    return total; // puede ser 0 si no hay posicion aun
+    return total; // puede ser 0 si no hay posiciÃ³n aÃºn
   };
 
   const twr=[{date:dates[0],val:100}];
@@ -925,18 +925,18 @@ function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRa
     const dateT=new Date(dateStr).getTime();
     const prevDateT=new Date(prevDateStr).getTime();
 
-    // Valor al cierre de ayer (posicion completa de ayer, precio de ayer)
+    // Valor al cierre de ayer (posiciÃ³n completa de ayer, precio de ayer)
     const valPrevClose=getPortVal(prevDateStr, prevDateT);
 
-    // Valor de hoy CON la posicion de AYER (antes de cualquier flujo de hoy) al precio de HOY
+    // Valor de hoy CON la posiciÃ³n de AYER (antes de cualquier flujo de hoy) al precio de HOY
     // = excluir trades cuya fecha sea exactamente hoy
-    const dateT_before=dateT-1; // 1ms antes  excluye trades de hoy
+    const dateT_before=dateT-1; // 1ms antes â excluye trades de hoy
     const valTodayBeforeFlow=getPortVal(dateStr, dateT_before);
 
-    // Retorno del dia = solo movimiento de precios, sin distorsion por flujos
+    // Retorno del dÃ­a = solo movimiento de precios, sin distorsiÃ³n por flujos
     let dayReturn;
     if(valPrevClose<=0){
-      // Portfolio vacio ayer  no hay retorno que calcular
+      // Portfolio vacÃ­o ayer â no hay retorno que calcular
       dayReturn=1;
     } else {
       dayReturn=valTodayBeforeFlow/valPrevClose;
@@ -952,61 +952,34 @@ function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRa
   return twr;
 }
 
-//  XIRR (Money-Weighted Return) 
-
-//  XIRR (Money-Weighted Return) 
+// ââ XIRR (Money-Weighted Return) âââââââââââââââââââââââââââââââââââââââââââââ
 function calcXIRR(flows, guess=0.1) {
   if(!flows||flows.length<2) return null;
   const d0 = new Date(flows[0].date).getTime();
   const yf = flows.map(f=>({a:f.amount, t:(new Date(f.date).getTime()-d0)/31557600000}));
-  const npvAt = (rate) => {
-    let s=0;
+  let r = guess;
+  for(let iter=0;iter<300;iter++){
+    let npv=0, dnpv=0;
     for(const f of yf){
-      const disc=Math.pow(1+rate,f.t);
-      if(!disc||!isFinite(disc)) return NaN;
-      s+=f.a/disc;
+      const disc = Math.pow(1+r, f.t);
+      if(!disc||!isFinite(disc)) break;
+      npv += f.a / disc;
+      dnpv -= f.t * f.a / (disc*(1+r));
     }
-    return s;
-  };
-  const guesses = [guess, 0.0, -0.5, 0.5, -0.9, 2.0, 10.0];
-  for(const g of guesses){
-    let r = g;
-    for(let iter=0;iter<300;iter++){
-      let npv=0, dnpv=0; let valid=true;
-      for(const f of yf){
-        const disc=Math.pow(1+r,f.t);
-        if(!disc||!isFinite(disc)){valid=false;break;}
-        npv+=f.a/disc;
-        dnpv-=f.t*f.a/(disc*(1+r));
-      }
-      if(!valid) break;
-      if(Math.abs(npv)<0.01) return r*100;
-      if(!dnpv||!isFinite(dnpv)) break;
-      const rNew=r-npv/dnpv;
-      if(Math.abs(rNew-r)<1e-10) return r*100;
-      r=rNew;
-      if(r<-0.99) r=-0.99;
-      if(r>100) r=100;
-    }
+    if(Math.abs(npv)<0.01) return r*100;
+    if(!dnpv||!isFinite(dnpv)) break;
+    const rNew = r - npv/dnpv;
+    if(Math.abs(rNew-r)<1e-10) return r*100;
+    r = rNew;
+    if(r<-0.99) r=-0.99;
+    if(r>100) r=100;
   }
-  let lo=-0.99, hi=100;
-  let nLo=npvAt(lo), nHi=npvAt(hi);
-  if(isNaN(nLo)||isNaN(nHi)||nLo*nHi>0) return null;
-  for(let bi=0;bi<200;bi++){
-    const mid=(lo+hi)/2;
-    const nMid=npvAt(mid);
-    if(isNaN(nMid)) return null;
-    if(Math.abs(nMid)<0.01) return mid*100;
-    if(hi-lo<1e-8) return ((lo+hi)/2)*100;
-    if(nMid*nLo<0){hi=mid;nHi=nMid;}else{lo=mid;nLo=nMid;}
-  }
-  return ((lo+hi)/2)*100;
+  return null;
 }
 
-
 function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=false,livePricesAll={},onExpand=null}){
-  const PERIODS=[{key:"mtd",label:"MTD",days:null,mtd:true},{key:"30d",label:"30d",days:30},{key:"90d",label:"90d",days:90},{key:"ytd",label:"YTD",days:null},{key:"1y",label:"1 ano",days:365},{key:"3y",label:"3 anos",days:1095}];
-  // Persistir preferencias del grafico en localStorage
+  const PERIODS=[{key:"mtd",label:"MTD",days:null,mtd:true},{key:"30d",label:"30d",days:30},{key:"90d",label:"90d",days:90},{key:"ytd",label:"YTD",days:null},{key:"1y",label:"1 aÃ±o",days:365},{key:"3y",label:"3 aÃ±os",days:1095}];
+  // Persistir preferencias del grÃ¡fico en localStorage
   const _chartPrefs = ()=>{ try{ return JSON.parse(localStorage.getItem('gal_chart_prefs_v1')||'{}'); }catch{ return {}; } };
   const [period,setPeriodRaw]=useState(()=>_chartPrefs().period||"90d");
   const [currency,setCurrencyRaw]=useState(()=>_chartPrefs().currency||"USD_CCL");
@@ -1070,19 +1043,19 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
     }
     const allDates=[...dateSet].sort();
 
-    // Buscar el ultimo dia habil <= startStr (no el siguiente)
+    // Buscar el Ãºltimo dÃ­a hÃ¡bil <= startStr (no el siguiente)
     const firstValid=allDates.filter(d=>d<=startStr).slice(-1)[0] || allDates.find(d=>d>=startStr) || allDates[0];
 
     const actualEnd=customEnd||today;
     const filtered=allDates.filter(d=>d>=firstValid&&d<=actualEnd);
-    // Agregar hoy siempre como ultimo punto
+    // Agregar hoy siempre como Ãºltimo punto
     if(!customEnd||customEnd>=today) filtered.push(today);
     return[...new Set(filtered)].sort();
   };
 
   const findPrice=(bars,dateStr)=>{
     if(!bars||!bars.length)return null;
-    // ltimo precio <= fecha (nunca usar precio futuro)
+    // Ãltimo precio <= fecha (nunca usar precio futuro)
     let lo=0,hi=bars.length-1,res=-1;
     while(lo<=hi){
       const mid=(lo+hi)>>1;
@@ -1105,19 +1078,19 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
 
       const realToday=todayAR();
       const todayStr=customEnd&&customEnd<realToday?null:realToday; // null = no live prices
-      // Funcion que obtiene el precio de una barra, usando el valor live para hoy si esta disponible
+      // FunciÃ³n que obtiene el precio de una barra, usando el valor live para hoy si estÃ¡ disponible
       const getPriceWithLive=(bars,dateStr,liveVal)=>{
         if(todayStr&&dateStr===todayStr&&liveVal!=null)return liveVal;
         return findPrice(bars,dateStr);
       };
 
       let spy100=null;
-      // Precio live CEDEAR SPY en ARS  solo para modo ARS
+      // Precio live CEDEAR SPY en ARS â solo para modo ARS
       const liveSPYars=livePricesAll["SPY"]?.price||null;
 
       if(currency!=="ARS"){
-        // USD CCL / USD MEP: usar indice S&P real en USD (historicos.sp500)
-        // Para hoy: liveSP500 si esta disponible, sino ultimo bar (no inventar con CEDEAR)
+        // USD CCL / USD MEP: usar Ã­ndice S&P real en USD (historicos.sp500)
+        // Para hoy: liveSP500 si estÃ¡ disponible, sino Ãºltimo bar (no inventar con CEDEAR)
         if(sp500Bars.length>=2){
           const ptsRaw=dates.map(d=>{
             if(d===todayStr&&liveSP500!=null&&liveSP500>1000)return{date:d,val:liveSP500};
@@ -1126,7 +1099,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
           }).filter(Boolean);
           if(ptsRaw.length>=2){const base=ptsRaw[0].val;spy100=ptsRaw.map(x=>({date:x.date,val:base>0?100*x.val/base:100}));}
         }
-        // Fallback si no hay historicos S&P: CEDEAR SPY - TC (mismo TC para todos los dias)
+        // Fallback si no hay historicos S&P: CEDEAR SPY Ã· TC (mismo TC para todos los dÃ­as)
         if(!spy100&&spyByma.length>=2){
           const tcBars=currency==="USD_MEP"?mepBars:cclBars;
           const pts=dates.map(d=>{
@@ -1138,7 +1111,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
           if(pts.length>=2){const base=pts[0].val;spy100=pts.map(x=>({date:x.date,val:base>0?100*x.val/base:100}));}
         }
       } else {
-        // ARS: CEDEAR SPY en pesos  puro ARS, sin conversion
+        // ARS: CEDEAR SPY en pesos â puro ARS, sin conversiÃ³n
         // Para hoy usar precio live del CEDEAR
         if(spyByma.length>=2){
           const pts=dates.map(d=>{
@@ -1165,7 +1138,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
       let t10y100=null;
       if(currency==="ARS"&&t10yBars.length>=2){
         // T10Y en historicos es la tasa (ej: 4.35). Convertir a retorno acumulado base 100.
-        // Cada dia: rendimiento = (1 + tasa_diaria/100)^dias_acumulados
+        // Cada dÃ­a: rendimiento = (1 + tasa_diaria/100)^dÃ­as_acumulados
         const pts=dates.map(d=>({date:d,val:findPrice(t10yBars,d)||liveT10Y}));
         const startDate=dates[0];
         t10y100=pts.map(x=>{
@@ -1173,7 +1146,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
           return{date:x.date,val:parseFloat((100*Math.pow(1+x.val/100,days/365)).toFixed(4))};
         });
       } else if(currency==="ARS"){
-        // Fallback sintetico si no hay datos
+        // Fallback sintÃ©tico si no hay datos
         t10y100=dates.map(d=>{const days=Math.max(0,(new Date(d)-new Date(dates[0]))/(1000*60*60*24));return{date:d,val:100*Math.pow(1+liveT10Y/100,days/365)};});
       }
       const allTickers=[...new Set(en.map(h=>h.ticker))];
@@ -1186,13 +1159,13 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
         for(const h of en){
           if(h.isLive){
             // historicos.json stores per-unit prices, liveMap must match
-            // data912 returns per-100-laminas for bonds  divide by 100
+            // data912 returns per-100-laminas for bonds â divide by 100
             livePricesMap[h.ticker]=h.currentPrice; // all prices in per-100-laminas scale
           }
         }
       }
 
-      // TWR  Time Weighted Return
+      // TWR â Time Weighted Return
       // Solo agregar "hoy" al final si no hay customEnd (o customEnd es hoy)
       const realToday2=todayAR();
       const datesWithToday=[...dates];
@@ -1202,7 +1175,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
 
       const port100=calcTWR(datesWithToday,trades,en,tickerBars,cclBars,mepBars,currency,fxRate,livePricesMap,customEnd,realToday2);
 
-      // UVA benchmark  solo en modo ARS
+      // UVA benchmark â solo en modo ARS
       let uva100 = null;
       if(currency==="ARS" && hist?.uva?.length){
         const uvaBars = hist.uva;
@@ -1219,7 +1192,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
         }
       }
 
-      // CER benchmark  solo en modo ARS
+      // CER benchmark â solo en modo ARS
       let cer100 = null;
       if(currency==="ARS" && hist?.cer?.length){
         const cerBars = hist.cer;
@@ -1265,141 +1238,35 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
 
   const _bT=useMemo(()=>{const m={};for(const h of en)if((h.type||"").startsWith("bono"))m[h.ticker]=true;return m;},[en]);
   const xirrData=useMemo(()=>{
-    // Siempre devolver un objeto (aunque falten datos) para que la UI muestre la seccion XIRR
-    if(!cd||!cd.startDate||!cd.endDate||!trades) return {portXIRR:null, spyXIRR:null, alpha:null};
+    if(!cd||!cd.startDate||!cd.endDate) return {portXIRR:0,spyXIRR:0,alpha:0};
     const s=cd.startDate, e=cd.endDate;
     try{
-      // CCL historico por fecha
-      const _cclBarsXIRR = historicos?.CCL || [];
-      const _getCCLForDate = (dateStr) => {
-        if(!_cclBarsXIRR.length) return liveFX?.CCL || fxRate || 1;
-        let lo=0, hi=_cclBarsXIRR.length-1, res=-1;
-        while(lo<=hi){ const mid=(lo+hi)>>1; if(_cclBarsXIRR[mid].date<=dateStr){res=mid;lo=mid+1;}else hi=mid-1; }
-        return res>=0 ? _cclBarsXIRR[res].close : (liveFX?.CCL || fxRate || 1);
-      };
-
-      // Seed-day: si el periodo arranca en el primer trade historico, ese dia es posicion inicial
-      const firstTradeDate = (trades||[]).map(t=>t?.date).filter(Boolean).sort()[0];
-      const includeStartDayAsPosition = (s === firstTradeDate);
-
-      // Detectar bonos aunque ya no esten en cartera
-      const isBondTicker = (tkr) => {
-        const T = String(tkr||'').toUpperCase();
-        if(SEED_BOND_META && SEED_BOND_META[T]) return true;
-        if(/\d/.test(T) && (T.endsWith('D') || T.startsWith('TZX') || T.startsWith('GD') || T.startsWith('AL') || T.startsWith('AE') || T.startsWith('AO') || T.startsWith('TLCU'))) return true;
-        return false;
-      };
-
-      // Moneda por ticker desde trades
-      const currencyByTicker = {};
-      for(const t0 of (trades||[])){
-        if(!t0?.ticker||!t0?.currency) continue;
-        currencyByTicker[String(t0.ticker).toUpperCase()] = String(t0.currency).toUpperCase();
-      }
-
-      const _findHistPrice=(ticker,dateStr)=>{
-        const bars=historicos?.[ticker]||[];
-        let lo2=0,hi2=bars.length-1,res2=-1;
-        while(lo2<=hi2){const mid2=(lo2+hi2)>>1;if(bars[mid2].date<=dateStr){res2=mid2;lo2=mid2+1;}else hi2=mid2-1;}
-        return res2>=0?bars[res2].close:0;
-      };
-
-      // Posicion neta a una fecha
-      const posAsOf = (dateStr, includeSameDay) => {
-        const pos = {};
-        for(const t of (trades||[])){
-          if(!t?.ticker) continue;
-          if(includeSameDay){ if(t.date>dateStr) continue; } else { if(t.date>=dateStr) continue; }
-          if(t.tipo==="compra") pos[t.ticker]=(pos[t.ticker]||0)+(+t.qty||0);
-          if(t.tipo==="venta")  pos[t.ticker]=(pos[t.ticker]||0)-(+t.qty||0);
-        }
-        return pos;
-      };
-
-      // Valor USD de una posicion a una fecha
-      const valuePosUSD = (posMap, dateStr) => {
-        const ccl = _getCCLForDate(dateStr);
-        let v=0;
-        for(const [tkr,qty] of Object.entries(posMap||{})){
-          if(!qty||qty<=0) continue;
-          const T=String(tkr).toUpperCase();
-          const price=_findHistPrice(T,dateStr);
-          if(!price||price<=0) continue;
-          const isBond=isBondTicker(T);
-          const qtyF=isBond?qty/100:qty;
-          const cur = currencyByTicker[T] || (en.find(h=>h.ticker===T)?.buyCurrency||'ARS');
-          const isUSD=String(cur).toUpperCase()==="USD";
-          v += isUSD ? price*qtyF : (price*qtyF)/ccl;
-        }
-        return v;
-      };
-
-      const posStart = posAsOf(s, includeStartDayAsPosition);
-      const posEnd   = posAsOf(e, true);
-      let startValUSD = valuePosUSD(posStart, s);
-      let endValUSD   = valuePosUSD(posEnd,   e);
-
-      const endValNow = en.reduce((a,h)=>a+h.valUSD,0);
-      if(!endValUSD || endValUSD<=0) endValUSD = endValNow;
-
-      // Guardrail: si startVal es muy chico, usar estimacion por port100
-      if(!startValUSD || startValUSD<=0 || startValUSD < (endValUSD*0.3)) {
-        const lastP=cd.port100&&cd.port100.length>0?cd.port100[cd.port100.length-1].val:100;
-        const firstP=cd.port100&&cd.port100.length>0?cd.port100[0].val:100;
-        const sc=lastP>0?endValUSD/lastP:0;
-        startValUSD=firstP*sc;
-      }
-
-      // Trades dentro del periodo: excluir el dia final e para evitar doble conteo
-      const periodTrades=(trades||[]).filter(t=>((t.date > s) || (t.date === s && !includeStartDayAsPosition)) && t.date < e);
-
-      const flows=[];
-      flows.push({date:s, amount:-startValUSD});
-      for(const t of periodTrades){
-        const T=String(t.ticker||'').toUpperCase();
-        const isBond=isBondTicker(T);
-        const rawAmt=(+t.qty||0)*(+t.price||0)*(isBond?0.01:1);
-        const com=+t.comision||0;
-        const amt=t.tipo==="compra"?rawAmt+com:rawAmt-com;
-        const isUSD=(t.currency||"ARS")==='USD';
-        const fxT=isUSD?1:_getCCLForDate(t.date);
-        const usd=amt/fxT;
-        flows.push({date:t.date, amount:t.tipo==="compra"?-usd:usd});
-      }
-      flows.push({date:e, amount:endValUSD});
-
-      let portXIRR = flows.length>=2 ? calcXIRR(flows) : null;
-
-      // SPY XIRR (si hay spy100)
-      let spyXIRR=null;
-      if(cd.spy100&&cd.spy100.length>=2){
-        const spyStart=cd.spy100[0].val, spyEnd=cd.spy100[cd.spy100.length-1].val;
-        if(spyStart>0&&spyEnd>0){
-          const spyFlows=[];
-          spyFlows.push({date:s, amount:-startValUSD});
-          for(const t of periodTrades){
-            const isBond=isBondTicker(String(t.ticker||'').toUpperCase());
-            const rawAmt=(+t.qty||0)*(+t.price||0)*(isBond?0.01:1);
-            const com=+t.comision||0;
-            const amt=t.tipo==="compra"?rawAmt+com:rawAmt-com;
-            const isUSD=(t.currency||"ARS")==='USD';
-            const fxT=isUSD?1:_getCCLForDate(t.date);
-            const usd=amt/fxT;
-            spyFlows.push({date:t.date, amount:t.tipo==="compra"?-usd:usd});
-          }
-          spyFlows.push({date:e, amount:startValUSD*(spyEnd/spyStart)});
-          spyFlows.sort((a,b)=>a.date.localeCompare(b.date));
-          spyXIRR=calcXIRR(spyFlows);
+      const endValNow=(en||[]).reduce((a,h)=>a+(h.valUSD||0),0);
+      const p=cd.port100||[];
+      if(!p.length||!endValNow) return {portXIRR:0,spyXIRR:0,alpha:0};
+      let pS=null,pE=null;
+      for(const x of p){if(x.date<=s)pS=x.val;if(x.date<=e)pE=x.val;}
+      if(!pS||!pE||pS<=0||pE<=0) return {portXIRR:0,spyXIRR:0,alpha:0};
+      const scale=endValNow/pE;
+      const startV=pS*scale, endV=pE*scale;
+      const days=Math.max(1,Math.round((new Date(e)-new Date(s))/(86400000)));
+      const ret=endV/startV-1;
+      const portXIRR=(Math.pow(1+ret,365/days)-1)*100;
+      let spyXIRR=0;
+      const sp=cd.spy100||[];
+      if(sp.length>=2){
+        let sS=null,sE=null;
+        for(const x of sp){if(x.date<=s)sS=x.val;if(x.date<=e)sE=x.val;}
+        if(sS&&sE&&sS>0){
+          const sRet=sE/sS-1;
+          spyXIRR=(Math.pow(1+sRet,365/days)-1)*100;
         }
       }
-
-      const alpha=(portXIRR!=null&&spyXIRR!=null)?portXIRR-spyXIRR:null;
-      return {portXIRR, spyXIRR, alpha};
+      return {portXIRR:isFinite(portXIRR)?portXIRR:0, spyXIRR:isFinite(spyXIRR)?spyXIRR:0, alpha:portXIRR-spyXIRR};
     }catch(err){
-      console.warn('XIRR error:',err);
-      return {portXIRR:null, spyXIRR:null, alpha:null};
+      return {portXIRR:0,spyXIRR:0,alpha:0};
     }
-  },[cd,trades,en,fxRate,liveFX,currency,_bT,historicos]);
+  },[cd,en]);
 
   const series=cd?[
     {key:"port",data:cd.port100,color:"var(--green)",bold:true},
@@ -1423,31 +1290,31 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
             </button>
           ))}
           <span style={{color:"var(--text-muted)",fontSize:10}}>|</span>
-          <span style={{fontSize:window.innerWidth<768?14:10,color:"var(--green)"}}> Portfolio</span>
+          <span style={{fontSize:window.innerWidth<768?14:10,color:"var(--green)"}}>â Portfolio</span>
           {/* Benchmarks toggleables */}
           {cd?.spy100&&<button onClick={()=>setShowSP(v=>!v)}
             style={{padding:"2px 8px",borderRadius:5,border:"1px solid rgba(96,165,250,0.4)",cursor:"pointer",fontSize:10,
               background:showSP?"rgba(96,165,250,0.15)":"transparent",color:showSP?"#60A5FA":"var(--text-muted)"}}>
-             S&P 500
+            â S&P 500
           </button>}
           {cd?.ccl100&&<button onClick={()=>setShowCCL(v=>!v)}
             style={{padding:"2px 8px",borderRadius:5,border:"1px solid rgba(167,139,250,0.4)",cursor:"pointer",fontSize:10,
               background:showCCL?"rgba(167,139,250,0.15)":"transparent",color:showCCL?"#A78BFA":"var(--text-muted)"}}>
-             CCL
+            â CCL
           </button>}
           {cd?.mep100&&<button onClick={()=>setShowMEP(v=>!v)}
             style={{padding:"2px 8px",borderRadius:5,border:"1px solid rgba(244,114,182,0.4)",cursor:"pointer",fontSize:10,
               background:showMEP?"rgba(244,114,182,0.15)":"transparent",color:showMEP?"#F472B6":"var(--text-muted)"}}>
-             MEP
+            â MEP
           </button>}
-          {cd?.currency!=="ARS"&&cd?.t10y100&&showSP&&<span style={{fontSize:10,color:"var(--yellow)"}}> T10Y</span>}
-          {/* UVA y CER  solo en ARS */}
+          {cd?.currency!=="ARS"&&cd?.t10y100&&showSP&&<span style={{fontSize:10,color:"var(--yellow)"}}>â T10Y</span>}
+          {/* UVA y CER â solo en ARS */}
           {currency==="ARS"&&<>
             <span style={{display:"flex",alignItems:"center",gap:2}}>
               <button onClick={()=>setShowUVA(v=>!v)}
                 style={{padding:"2px 8px",borderRadius:5,border:"1px solid rgba(251,146,60,0.4)",cursor:"pointer",fontSize:10,
                   background:showUVA?"rgba(251,146,60,0.2)":"transparent",color:showUVA?"#FB923C":"var(--text-muted)"}}>
-                 UVA
+                â UVA
               </button>
               {showUVA&&<>
                 <span style={{fontSize:10,color:"#FB923C"}}>+</span>
@@ -1460,7 +1327,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
             <button onClick={()=>setShowCER(v=>!v)}
               style={{padding:"2px 8px",borderRadius:5,border:"1px solid rgba(163,230,53,0.4)",cursor:"pointer",fontSize:10,
                 background:showCER?"rgba(163,230,53,0.15)":"transparent",color:showCER?"#A3E635":"var(--text-muted)"}}>
-               CER
+              â CER
             </button>
           </>}
         </div>
@@ -1481,17 +1348,17 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
         </div>
       </div>
       <div style={{flex:1,overflow:"visible",minHeight:0,position:"relative"}}>
-        {loading&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--text-muted)",fontSize:12}}><span style={{animation:"spin 0.8s linear infinite",display:"inline-block",marginRight:6}}></span>Cargando...</div>}
+        {loading&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--text-muted)",fontSize:12}}><span style={{animation:"spin 0.8s linear infinite",display:"inline-block",marginRight:6}}>â³</span>Cargando...</div>}
         {cd&&!loading&&series.length>0&&<Chart100 series={series}/>}
       </div>
-      {/*  Scrubber  */}
+      {/* ââ Scrubber ââ */}
       {historicos&&(()=>{
         const today=todayAR();
         const allBars=historicos?.CCL||[];
         if(allBars.length<2)return null;
         // Primera fecha: la primera con datos reales (CCL o primera compra)
         const firstBuyDate=trades.filter(t=>t.tipo==="compra").sort((a,b)=>a.date.localeCompare(b.date))[0]?.date||allBars[0].date;
-        // Scrubber starts at first buy  no point showing earlier
+        // Scrubber starts at first buy â no point showing earlier
         const firstDate=firstBuyDate;
         const lastDate=today;
         const totalDays=(new Date(lastDate)-new Date(firstDate))/(1000*60*60*24);
@@ -1604,13 +1471,13 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
             <span style={{fontSize:isModal?11:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,fontWeight:600}}>Sharpe</span>
             <span style={{fontSize:isModal?15:11,color:"var(--text-muted)"}}>Portfolio: <b style={{color:sc,fontSize:isModal?18:13}}>{sharpe.toFixed(2)}</b></span>
             {spySharpe!=null&&<span style={{fontSize:isModal?15:11,color:"var(--text-muted)"}}>S&amp;P 500: <b style={{color:"#60A5FA",fontSize:isModal?18:13}}>{spySharpe.toFixed(2)}</b></span>}
-            <span style={{fontSize:isModal?11:9,color:"var(--text-muted)",marginLeft:"auto"}}>rf {liveT10Y}% anualizado - {(()=>{const f=s=>s?s.slice(8)+'/'+s.slice(5,7)+'/'+s.slice(0,4):'';return f(cd.startDate)+'  '+f(cd.endDate)})()}</span>
+            <span style={{fontSize:isModal?11:9,color:"var(--text-muted)",marginLeft:"auto"}}>rf {liveT10Y}% anualizado Â· {(()=>{const f=s=>s?s.slice(8)+'/'+s.slice(5,7)+'/'+s.slice(0,4):'';return f(cd.startDate)+' â '+f(cd.endDate)})()}</span>
           </div>
         ):null;
       })()}
       {xirrData&&(()=>{
         const{portXIRR,spyXIRR,alpha}=xirrData;
-        const fXP=v=>v!=null?(v>=0?"+":"")+v.toFixed(1)+"%":"";
+        const fXP=v=>v!=null?(v>=0?"+":"")+v.toFixed(1)+"%":"â";
         const pcX=v=>v>=0?"var(--green)":"var(--red)";
         const pillX=(l,v,col,bg,bd)=>(<div key={l} style={{display:"inline-flex",alignItems:"center",gap:isModal?8:5,background:bg,padding:isModal?"5px 14px":"3px 10px",borderRadius:8,border:"1px solid "+bd}}><span style={{fontSize:isModal?11:9,color:"var(--text-muted)",fontWeight:500}}>{l}</span><span style={{fontSize:isModal?16:12,fontWeight:700,color:col,fontFamily:"monospace"}}>{fXP(v)}</span></div>);
         return(
@@ -1629,16 +1496,16 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
   );
 } 
 
-//  Base de tickers conocidos del mercado argentino (fallback offline) 
+// ââ Base de tickers conocidos del mercado argentino (fallback offline) ââââââââ
 const AR_TICKERS = {
-  // Acciones lideres BCBA
+  // Acciones lÃ­deres BCBA
   GGAL:"Grupo Financiero Galicia",YPFD:"YPF Ordinarias D",TXAR:"Siderar (Ternium)",
   BMA:"Banco Macro",BBAR:"BBVA Argentina",SUPV:"Grupo Supervielle",VALO:"Grupo Financiero Valores",
-  BYMA:"Bolsas y Mercados Arg.",CEPU:"Central Puerto",PAMP:"Pampa Energia",TGSU2:"Transportadora Gas Sur",
+  BYMA:"Bolsas y Mercados Arg.",CEPU:"Central Puerto",PAMP:"Pampa EnergÃ­a",TGSU2:"Transportadora Gas Sur",
   TGNO4:"Transportadora Gas Norte",COME:"Sociedad Comercial del Plata",LOMA:"Loma Negra",
-  ALUA:"Aluar Aluminio",CRES:"Cresud",IRSA:"IRSA",MOLI:"Molinos Rio de la Plata",
+  ALUA:"Aluar Aluminio",CRES:"Cresud",IRSA:"IRSA",MOLI:"Molinos RÃ­o de la Plata",
   RICH:"Laboratorios Richmond",HARG:"Holcim Argentina",EDN:"Edenor",TECO2:"Telecom Argentina",
-  METR:"Metrogas",GARO:"Garovaglio y Zorraquin",AGRO:"AgroEtanol",BOLT:"Boldt",
+  METR:"Metrogas",GARO:"Garovaglio y ZorraquÃ­n",AGRO:"AgroEtanol",BOLT:"Boldt",
   // CEDEARs populares
   GLD:"ETF SPDR Gold Trust",SPY:"ETF SPDR S&P500",QQQ:"ETF Invesco QQQ (Nasdaq)",
   AAPL:"Apple Inc",MSFT:"Microsoft Corp",GOOGL:"Alphabet (Google)",AMZN:"Amazon.com",
@@ -1647,7 +1514,7 @@ const AR_TICKERS = {
   WMT:"Walmart",JNJ:"Johnson & Johnson",PG:"Procter & Gamble",KO:"Coca-Cola",
   DIS:"Walt Disney",NFLX:"Netflix",PYPL:"PayPal",ADBE:"Adobe",
   NU:"NU Holdings",MELI:"MercadoLibre",GLOB:"Globant",LRCX:"Lam Research",
-  VIST:"Vista Oil & Gas",YPF:"YPF S.A. (ADR)",PAM:"Pampa Energia (ADR)",
+  VIST:"Vista Oil & Gas",YPF:"YPF S.A. (ADR)",PAM:"Pampa EnergÃ­a (ADR)",
   // Bonos soberanos ARS
   TZXD6:"BONTES CER V15/12/26",TZX27:"BONO CER V30/06/27",TZXD7:"BONTES CER V15/12/27",
   TZX28:"BONO CER V30/06/28",LECAP:"LECAP",
@@ -1662,7 +1529,7 @@ const AR_TICKERS = {
   "FIMA-PREM":"FIMA Premium ARS","FIMA-PREMD":"FIMA Premium USD",
 };
 
-//  Searchable ticker selector for venta 
+// ââ Searchable ticker selector for venta ââââââââââââââââââââââââââââââââââââ
 function VentaTickerSearch({port, value, onSelect}){
   const [query,setQuery] = useState(value||"");
   const [open,setOpen]   = useState(false);
@@ -1689,10 +1556,10 @@ function VentaTickerSearch({port, value, onSelect}){
           value={query}
           onChange={e=>{setQuery(e.target.value);setOpen(true);}}
           onFocus={()=>setOpen(true)}
-          placeholder="Escribi para filtrar (ej: AAPL, GD...)"
+          placeholder="EscribÃ­ para filtrar (ej: AAPL, GD...)"
           style={{...inp,borderColor:value?"var(--green)":undefined}}
         />
-        {value&&<span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:13}}></span>}
+        {value&&<span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:13}}>â</span>}
         {open&&filtered.length>0&&(
           <div style={{position:"absolute",top:"100%",left:0,right:0,background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:8,zIndex:50,maxHeight:200,overflowY:"auto",marginTop:4,boxShadow:"0 8px 24px rgba(0,0,0,0.4)"}}>
             {[...filtered].sort((a,b)=>a.ticker.localeCompare(b.ticker)).map(pos=>(
@@ -1714,7 +1581,7 @@ function VentaTickerSearch({port, value, onSelect}){
         const pos=port.find(p=>p.ticker===value);
         return pos?(
           <div style={{marginTop:6,fontSize:11,color:"var(--text-muted)"}}>
-            {pos.name} - Tenencia: <b style={{color:"var(--text-primary)"}}>{Number(pos.qty).toLocaleString("es-AR")} nominales</b>
+            {pos.name} Â· Tenencia: <b style={{color:"var(--text-primary)"}}>{Number(pos.qty).toLocaleString("es-AR")} nominales</b>
           </div>
         ):null;
       })()}
@@ -1722,18 +1589,18 @@ function VentaTickerSearch({port, value, onSelect}){
   );
 }
 
-//  Inferir tipo y moneda desde ticker y endpoint 
-// Convencion BYMA para bonos:
-//   Sin sufijo (GD30, AL30)   bono_ars - ARS (cotiza en pesos)
-//   Sufijo C   (GD30C)        bono_usd - ARS (cotiza en ARS al precio CCL)
-//   Sufijo D   (GD30D)        bono_usd - USD (cotiza en USD, precio cable/MEP)
+// ââ Inferir tipo y moneda desde ticker y endpoint ââââââââââââââââââââââââââââ
+// ConvenciÃ³n BYMA para bonos:
+//   Sin sufijo (GD30, AL30)  â bono_ars Â· ARS (cotiza en pesos)
+//   Sufijo C   (GD30C)       â bono_usd Â· ARS (cotiza en ARS al precio CCL)
+//   Sufijo D   (GD30D)       â bono_usd Â· USD (cotiza en USD, precio cable/MEP)
 function inferType(item, endpoint){
   const ticker = (item.ticker||item.symbol||item.s||"").toUpperCase();
   if(endpoint==="arg_cedears") return "cedear";
   if(endpoint==="arg_stocks")  return "accion_ar";
   if(endpoint==="arg_bonds"||endpoint==="arg_corp"){
     // Solo el sufijo D o C indica que cotiza en USD (cable/MEP/CCL)
-    // No usar descripcion  bonos CER como TZX28 dicen "U$S" pero son ARS
+    // No usar descripciÃ³n â bonos CER como TZX28 dicen "U$S" pero son ARS
     const endsD = ticker.endsWith("D");
     const endsC = ticker.endsWith("C");
     return (endsD||endsC) ? "bono_usd" : "bono_ars";
@@ -1744,17 +1611,17 @@ function inferType(item, endpoint){
 function inferCurrency(item, endpoint){
   const ticker = (item.ticker||item.symbol||item.s||"").toUpperCase();
   if(endpoint==="arg_bonds"||endpoint==="arg_corp"){
-    // D = cable/MEP en USD, C = CCL en USD  ambos se miden en USD
+    // D = cable/MEP en USD, C = CCL en USD â ambos se miden en USD
     if(ticker.endsWith("D")||ticker.endsWith("C")) return "USD";
   }
   return "ARS";
 }
 
 
-//  BondWizard 
+// ââ BondWizard ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 // Wizard para cargar flujos de un bono/ON al dar de alta
-// Paso 1: si tiene SEED_BOND_FLOWS  mostrar para confirmar
-// Paso 2: si no  preguntar parametros y generar flujos
+// Paso 1: si tiene SEED_BOND_FLOWS â mostrar para confirmar
+// Paso 2: si no â preguntar parÃ¡metros y generar flujos
 function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
   const seedFlows = SEED_BOND_FLOWS[ticker]||null;
   const seedMeta  = SEED_BOND_META[ticker]||null;
@@ -1774,12 +1641,12 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
     feriadosWiz.current[year] = new Set();
     return new Set();
   };
-  // Avanzar al siguiente dia habil (lunes-viernes, sin feriados AR)
+  // Avanzar al siguiente dÃ­a hÃ¡bil (lunes-viernes, sin feriados AR)
   // Usar T12:00:00 para evitar desfase UTC en timezones negativas (Argentina UTC-3)
   const nextBusinessDay = async (dateStr) => {
     const d = new Date(dateStr + 'T12:00:00');
     for(let i=0;i<20;i++){
-      // getDay() sobre fecha con hora local  dia correcto en Argentina
+      // getDay() sobre fecha con hora local â dÃ­a correcto en Argentina
       const dow = d.getDay();
       // Reconstruir string YYYY-MM-DD desde componentes locales para evitar desfase UTC
       const ds = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
@@ -1799,8 +1666,8 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
     amortTipo: 'bullet', // bullet | cuotas
     cuotas: '',
     emisionDate: '',
-    primerCupon: '', // fecha exacta del primer cupon (YYYY-MM-DD)  el schedule se proyecta desde aca
-    base: '30/360',  // base de calculo: '30/360' | 'dias/365'
+    primerCupon: '', // fecha exacta del primer cupÃ³n (YYYY-MM-DD) â el schedule se proyecta desde acÃ¡
+    base: '30/360',  // base de cÃ¡lculo: '30/360' | 'dias/365'
     ajuste: 'ninguno', // ninguno | CER | UVA
   });
   const [generatedFlows, setGeneratedFlows] = useState(null);
@@ -1810,7 +1677,7 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
   const lbl = {fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,display:"block",marginBottom:5,fontWeight:600};
   const btn = (color) => ({background:color,border:"none",borderRadius:8,padding:"9px 20px",color:"#fff",cursor:"pointer",fontSize:13,fontWeight:600});
 
-  //  Helpers de calculo (mirror de FlujoTab) 
+  // ââ Helpers de cÃ¡lculo (mirror de FlujoTab) ââââââââââââââââââââââââââââââ
   const dias30_360wiz = (d1str, d2str) => {
     const a=new Date(d1str+'T12:00:00'), b=new Date(d2str+'T12:00:00');
     const [y1,m1,day1]=[a.getFullYear(),a.getMonth()+1,a.getDate()];
@@ -1824,9 +1691,9 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
   const calcDiasWiz = (base, d1str, d2str) =>
     base==='30/360' ? dias30_360wiz(d1str,d2str) : diasRealesWiz(d1str,d2str);
 
-  // Genera tabla de filas  dos fechas por fila:
-  //   dateCalc: fecha teorica (para calculo de dias/intereses, puede ser inhabil)
-  //   datePago: siguiente dia habil (fecha efectiva de cobro)
+  // Genera tabla de filas â dos fechas por fila:
+  //   dateCalc: fecha teÃ³rica (para cÃ¡lculo de dÃ­as/intereses, puede ser inhÃ¡bil)
+  //   datePago: siguiente dÃ­a hÃ¡bil (fecha efectiva de cobro)
   const generateRows = async () => {
     const {vto, tna, frecuencia, amortTipo, cuotas, emisionDate, primerCupon} = params;
     if(!vto || !tna || !primerCupon) return null;
@@ -1835,10 +1702,10 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
     const tnaNum = parseFloat(tna)/100;
     const endDate = new Date(vto+'T12:00:00');
     const firstDate = new Date(primerCupon+'T12:00:00');
-    // Dia del mes del primer cupon  se repite en cada periodo
+    // DÃ­a del mes del primer cupÃ³n â se repite en cada perÃ­odo
     const diaNum = firstDate.getDate();
 
-    // Pre-cargar feriados de todos los anos involucrados
+    // Pre-cargar feriados de todos los aÃ±os involucrados
     const startYear = firstDate.getFullYear();
     const endYear = endDate.getFullYear();
     for(let y=startYear; y<=endYear; y++) await fetchFeriadosWiz(y);
@@ -1846,8 +1713,8 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
     // Helper: construir YYYY-MM-DD desde componentes locales (evita desfase UTC en AR)
     const toLocalStr = (d) => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 
-    // Generar fechas teoricas (dateCalc): primer cupon + freqMonths sucesivos, mismo dia
-    const calcDates = [primerCupon]; // primera fecha exacta como la ingreso el usuario
+    // Generar fechas teÃ³ricas (dateCalc): primer cupÃ³n + freqMonths sucesivos, mismo dÃ­a
+    const calcDates = [primerCupon]; // primera fecha exacta como la ingresÃ³ el usuario
     const cur = new Date(primerCupon+'T12:00:00');
     cur.setMonth(cur.getMonth() + freqMonths);
     while(cur <= endDate){
@@ -1857,13 +1724,13 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
       calcDates.push(toLocalStr(new Date(year, month, Math.min(diaNum,lastDay), 12)));
       cur.setMonth(cur.getMonth() + freqMonths);
     }
-    // Asegurar que el vto este incluido al final
+    // Asegurar que el vto estÃ© incluido al final
     if(calcDates[calcDates.length-1] !== vto){
       if(calcDates[calcDates.length-1] > vto) calcDates[calcDates.length-1] = vto;
       else calcDates.push(vto);
     }
 
-    // datePago: siguiente dia habil de cada dateCalc (vto no se ajusta)
+    // datePago: siguiente dÃ­a hÃ¡bil de cada dateCalc (vto no se ajusta)
     const pagoDates = await Promise.all(
       calcDates.map((d,i) => i===calcDates.length-1 ? Promise.resolve(d) : nextBusinessDay(d))
     );
@@ -1871,7 +1738,7 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
     const divisor = params.base === 'dias/365' ? 365 : 360;
     const amortPorCuota = amortTipo==='bullet' ? 0 : (cuotas ? parseFloat((100/parseInt(cuotas)).toFixed(6)) : 0);
     let vnResidual = 100;
-    // Calculo de dias usa fechas TERICAS (dateCalc), empezando desde la emision
+    // CÃ¡lculo de dÃ­as usa fechas TEÃRICAS (dateCalc), empezando desde la emisiÃ³n
     let prevCalcDate = emisionDate || primerCupon;
 
     const rows = calcDates.map((dateCalc, i) => {
@@ -1888,17 +1755,17 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
   };
 
   // Convierte las rows editables en flows para guardar
-  // date = datePago (habil), dateCalc guardado en nota para referencia
+  // date = datePago (hÃ¡bil), dateCalc guardado en nota para referencia
   const rowsToFlows = (rows) => {
     let id = Date.now();
     const flows = [];
     rows.forEach(row => {
       const pago = row.datePago || row.date || row.dateCalc;
       const calc = row.dateCalc || pago;
-      const diffDias = (pago !== calc) ? ` - pago ${pago}` : '';
+      const diffDias = (pago !== calc) ? ` Â· pago ${pago}` : '';
       if(row.cupon > 0){
         const divisorNota = params.base==='dias/365'?365:360;
-        flows.push({id:id++, date:pago, dateCalc:calc, tipo:'cupon', monto:row.cupon, cobrado:false, fechaCobro:null, fuente:'wizard', nota:`${row.dias}d - ${params.tna}%${row.dias}/${divisorNota}${diffDias}`});
+        flows.push({id:id++, date:pago, dateCalc:calc, tipo:'cupon', monto:row.cupon, cobrado:false, fechaCobro:null, fuente:'wizard', nota:`${row.dias}d Â· ${params.tna}%Ã${row.dias}/${divisorNota}${diffDias}`});
       }
       if(row.amort > 0){
         flows.push({id:id++, date:pago, dateCalc:calc, tipo:'amortizacion', monto:row.amort, cobrado:false, fechaCobro:null, fuente:'wizard', nota:`Amort. ${row.amort.toFixed(4)}%${diffDias}`});
@@ -1926,7 +1793,7 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
     try{
       const tnaNum = parseFloat(params.tna)/100;
       const divisorR = params.base==='dias/365' ? 365 : 360;
-      // Ordenar por fecha teorica
+      // Ordenar por fecha teÃ³rica
       const sorted = [...editRows].sort((a,b)=>(a.dateCalc||a.date).localeCompare(b.dateCalc||b.date));
       let prevDate = params.emisionDate || (sorted[0].dateCalc||sorted[0].date);
       let vnResidual = 100;
@@ -1957,28 +1824,28 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
           <div>
             <h3 style={{fontFamily:"Georgia,serif",fontSize:16,color:"var(--text-primary)",margin:0}}>
-               Flujos de {ticker}
+              ð Flujos de {ticker}
             </h3>
             <p style={{fontSize:11,color:"var(--text-muted)",margin:"4px 0 0"}}>
-              {step==='confirm' ? 'Encontre el schedule en el sistema. Confirma antes de cargar.' :
-               step==='params'  ? 'No encontre el schedule. Ingresa los parametros para generarlo.' :
-               'Revisa los flujos generados antes de confirmar.'}
+              {step==='confirm' ? 'EncontrÃ© el schedule en el sistema. ConfirmÃ¡ antes de cargar.' :
+               step==='params'  ? 'No encontrÃ© el schedule. IngresÃ¡ los parÃ¡metros para generarlo.' :
+               'RevisÃ¡ los flujos generados antes de confirmar.'}
             </p>
           </div>
-          <button onClick={onSkip} style={{background:"transparent",border:"none",color:"var(--text-muted)",cursor:"pointer",fontSize:20,lineHeight:1}}></button>
+          <button onClick={onSkip} style={{background:"transparent",border:"none",color:"var(--text-muted)",cursor:"pointer",fontSize:20,lineHeight:1}}>Ã</button>
         </div>
 
-        {/* PASO: CONFIRM  flujos del seed */}
+        {/* PASO: CONFIRM â flujos del seed */}
         {step==='confirm' && seedFlows && (
           <>
             {seedMeta?.desc && (
               <div style={{background:"rgba(59,130,246,0.06)",border:"1px solid rgba(59,130,246,0.15)",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:12,color:"var(--text-secondary)"}}>
-                 {seedMeta.desc}
+                ð {seedMeta.desc}
               </div>
             )}
             {(()=>{
               const hasDualDates = seedFlows.some(f=>f.dateCalc && f.dateCalc!==f.date);
-              const fmtD = d => d ? d.slice(8)+'/'+d.slice(5,7)+'/'+d.slice(0,4) : '';
+              const fmtD = d => d ? d.slice(8)+'/'+d.slice(5,7)+'/'+d.slice(0,4) : 'â';
               return (
               <div style={{maxHeight:280,overflowY:"auto",marginBottom:16}}>
                 <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
@@ -1986,7 +1853,7 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
                     <tr style={{borderBottom:"1px solid var(--border)"}}>
                       {hasDualDates
                         ? [
-                            <th key="fc" style={{padding:"6px 8px",textAlign:"left",fontSize:10,color:"var(--text-muted)",fontWeight:600,textTransform:"uppercase"}}>F. Calculo</th>,
+                            <th key="fc" style={{padding:"6px 8px",textAlign:"left",fontSize:10,color:"var(--text-muted)",fontWeight:600,textTransform:"uppercase"}}>F. CÃ¡lculo</th>,
                             <th key="fp" style={{padding:"6px 8px",textAlign:"left",fontSize:10,color:"#60A5FA",fontWeight:600,textTransform:"uppercase"}}>F. Pago</th>,
                           ]
                         : <th style={{padding:"6px 10px",textAlign:"left",fontSize:10,color:"var(--text-muted)",fontWeight:600,textTransform:"uppercase"}}>Fecha</th>
@@ -2006,7 +1873,7 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
                         }
                         <td style={{padding:"6px 10px"}}>
                           <span style={{color:f.tipo==='amortizacion'?"var(--yellow)":"var(--accent)",fontWeight:600}}>
-                            {f.tipo==='amortizacion'?' Amort.':' Cupon'}
+                            {f.tipo==='amortizacion'?'ð° Amort.':'ð« CupÃ³n'}
                           </span>
                         </td>
                         <td style={{padding:"6px 10px",fontFamily:"'DM Mono',monospace",textAlign:"right"}}>{f.monto.toFixed(4)}%</td>
@@ -2019,17 +1886,17 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
             })()}
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
               <button onClick={onSkip} style={{...btn("var(--bg-input)"),color:"var(--text-muted)",border:"1px solid var(--border)"}}>Cargar manualmente</button>
-              <button onClick={()=>handleConfirm([...seedFlows])} style={btn("var(--accent)")}> Confirmar y cargar</button>
+              <button onClick={()=>handleConfirm([...seedFlows])} style={btn("var(--accent)")}>â Confirmar y cargar</button>
             </div>
           </>
         )}
 
-        {/* PASO: PARAMS  wizard manual */}
+        {/* PASO: PARAMS â wizard manual */}
         {step==='params' && (
           <>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
               <div>
-                <span style={lbl}>Fecha de emision</span>
+                <span style={lbl}>Fecha de emisiÃ³n</span>
                 <input type="date" value={params.emisionDate} onChange={e=>set('emisionDate',e.target.value)} style={inp}/>
               </div>
               <div>
@@ -2041,7 +1908,7 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
                 <input type="number" step="0.01" placeholder="ej: 7" value={params.tna} onChange={e=>set('tna',e.target.value)} style={inp}/>
               </div>
               <div>
-                <span style={lbl}>Frecuencia de cupon</span>
+                <span style={lbl}>Frecuencia de cupÃ³n</span>
                 <select value={params.frecuencia} onChange={e=>set('frecuencia',e.target.value)} style={inp}>
                   <option value="mensual">Mensual</option>
                   <option value="trimestral">Trimestral</option>
@@ -2050,23 +1917,23 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
                 </select>
               </div>
               <div>
-                <span style={lbl}>Fecha del 1er cupon</span>
+                <span style={lbl}>Fecha del 1er cupÃ³n</span>
                 <input type="date" value={params.primerCupon}
                   onChange={e=>set('primerCupon',e.target.value)}
                   style={inp}/>
                 <span style={{fontSize:10,color:"var(--text-muted)",marginTop:3,display:"block"}}>
-                  Fecha teorica  el resto se proyecta desde aca - dias habiles ajustados automatico
+                  Fecha teÃ³rica â el resto se proyecta desde acÃ¡ Â· dÃ­as hÃ¡biles ajustados automÃ¡tico
                 </span>
               </div>
               <div>
-                <span style={lbl}>Base de calculo</span>
+                <span style={lbl}>Base de cÃ¡lculo</span>
                 <select value={params.base} onChange={e=>set('base',e.target.value)} style={inp}>
                   <option value="30/360">30/360</option>
-                  <option value="dias/365">Dias / 365</option>
+                  <option value="dias/365">DÃ­as / 365</option>
                 </select>
               </div>
               <div>
-                <span style={lbl}>Amortizacion</span>
+                <span style={lbl}>AmortizaciÃ³n</span>
                 <select value={params.amortTipo} onChange={e=>set('amortTipo',e.target.value)} style={inp}>
                   <option value="bullet">Bullet (todo al vto)</option>
                   <option value="cuotas">En cuotas iguales</option>
@@ -2091,13 +1958,13 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
               <button onClick={onSkip} style={{...btn("var(--bg-input)"),color:"var(--text-muted)",border:"1px solid var(--border)"}}>Saltar por ahora</button>
               <button onClick={handleGenerate} disabled={!params.vto||!params.tna||!params.primerCupon||generating}
                 style={{...btn(!params.vto||!params.tna||!params.primerCupon?"rgba(59,130,246,0.3)":"var(--accent)"),cursor:!params.vto||!params.tna||!params.primerCupon||generating?"not-allowed":"pointer",display:"flex",alignItems:"center",gap:6}}>
-                {generating ? <><span style={{animation:"spin 0.7s linear infinite",display:"inline-block"}}></span> Cargando feriados...</> : "Generar flujos "}
+                {generating ? <><span style={{animation:"spin 0.7s linear infinite",display:"inline-block"}}>â³</span> Cargando feriados...</> : "Generar flujos â"}
               </button>
             </div>
           </>
         )}
 
-        {/* PASO: REVIEW  una fila por fecha, columnas Fecha/Amort/Cupon editables */}
+        {/* PASO: REVIEW â una fila por fecha, columnas Fecha/Amort/CupÃ³n editables */}
         {step==='review' && editRows && (()=>{
           const totalAmort = editRows.reduce((a,r)=>a+(parseFloat(r.amort)||0),0);
           const amortOk = Math.abs(totalAmort-100) < 0.01;
@@ -2111,12 +1978,12 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
           <>
             {!amortOk&&(
               <div style={{background:"rgba(248,113,113,0.1)",border:"1px solid rgba(248,113,113,0.3)",borderRadius:7,padding:"7px 12px",marginBottom:10,fontSize:12,color:"var(--red)"}}>
-                 Amortizacion total: <b>{totalAmort.toFixed(4)}%</b>  debe ser exactamente 100%
+                â  AmortizaciÃ³n total: <b>{totalAmort.toFixed(4)}%</b> â debe ser exactamente 100%
               </div>
             )}
             {amortOk&&(
               <div style={{background:"rgba(52,211,153,0.07)",border:"1px solid rgba(52,211,153,0.2)",borderRadius:7,padding:"7px 12px",marginBottom:10,fontSize:12,color:"var(--green)"}}>
-                 Amortizacion total: 100%
+                â AmortizaciÃ³n total: 100%
               </div>
             )}
             {params.tna&&(
@@ -2124,7 +1991,7 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
                 <button onClick={recalcularTasas} disabled={recalculating}
                   title={"Recalcula los cupones usando TNA "+params.tna+"% y las fechas actuales"}
                   style={{background:"rgba(59,130,246,0.12)",border:"1px solid rgba(59,130,246,0.3)",borderRadius:7,padding:"6px 14px",color:"#60A5FA",cursor:recalculating?"wait":"pointer",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:6}}>
-                  {recalculating?<><span style={{animation:"spin 0.7s linear infinite",display:"inline-block"}}></span>Calculando...</>:<> Recalcular tasas <span style={{fontWeight:400,opacity:0.7}}>({params.tna}% TNA)</span></>}
+                  {recalculating?<><span style={{animation:"spin 0.7s linear infinite",display:"inline-block"}}>â³</span>Calculando...</>:<>ð Recalcular tasas <span style={{fontWeight:400,opacity:0.7}}>({params.tna}% TNA)</span></>}
                 </button>
               </div>
             )}
@@ -2132,10 +1999,10 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                 <thead>
                   <tr style={{borderBottom:"1px solid var(--border)",position:"sticky",top:0,background:"var(--bg-card)"}}>
-                    <th style={{padding:"6px 8px",textAlign:"left",fontSize:10,color:"var(--text-muted)",fontWeight:600,textTransform:"uppercase",minWidth:110}}>F. Calculo</th>
+                    <th style={{padding:"6px 8px",textAlign:"left",fontSize:10,color:"var(--text-muted)",fontWeight:600,textTransform:"uppercase",minWidth:110}}>F. CÃ¡lculo</th>
                     <th style={{padding:"6px 8px",textAlign:"left",fontSize:10,color:"#60A5FA",fontWeight:600,textTransform:"uppercase",minWidth:110}}>F. Pago</th>
                     <th style={{padding:"6px 8px",textAlign:"right",fontSize:10,color:"var(--yellow)",fontWeight:600,textTransform:"uppercase",minWidth:80}}>Amort. %</th>
-                    <th style={{padding:"6px 8px",textAlign:"right",fontSize:10,color:"var(--accent)",fontWeight:600,textTransform:"uppercase",minWidth:80}}>Cupon %</th>
+                    <th style={{padding:"6px 8px",textAlign:"right",fontSize:10,color:"var(--accent)",fontWeight:600,textTransform:"uppercase",minWidth:80}}>CupÃ³n %</th>
                     <th style={{padding:"6px 8px",width:28}}></th>
                   </tr>
                 </thead>
@@ -2147,7 +2014,7 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
                       Math.round((new Date(pagoDate+'T12:00:00')-new Date(calcDate+'T12:00:00'))/(1000*60*60*24)) : 0;
                     return (
                     <tr key={i} style={{borderBottom:"1px solid rgba(255,255,255,0.04)",background:row.amort>0?"rgba(251,191,36,0.03)":"transparent"}}>
-                      {/* Fecha teorica de calculo */}
+                      {/* Fecha teÃ³rica de cÃ¡lculo */}
                       <td style={{padding:"4px 6px"}}>
                         <input type="date" value={calcDate}
                           onChange={e=>updateRow(i,'dateCalc',e.target.value)}
@@ -2176,7 +2043,7 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
                       </td>
                       <td style={{padding:"4px 2px",textAlign:"center"}}>
                         <button onClick={()=>setEditRows(editRows.filter((_,j)=>j!==i))}
-                          style={{background:"transparent",border:"none",color:"var(--text-muted)",cursor:"pointer",fontSize:13,padding:"2px 3px"}}></button>
+                          style={{background:"transparent",border:"none",color:"var(--text-muted)",cursor:"pointer",fontSize:13,padding:"2px 3px"}}>ð</button>
                       </td>
                     </tr>
                     );
@@ -2185,12 +2052,12 @@ function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
               </table>
             </div>
             <div style={{display:"flex",gap:10,justifyContent:"space-between",alignItems:"center"}}>
-              <button onClick={()=>setStep('params')} style={{...btn("var(--bg-input)"),color:"var(--text-muted)",border:"1px solid var(--border)",fontSize:12}}> Parametros</button>
+              <button onClick={()=>setStep('params')} style={{...btn("var(--bg-input)"),color:"var(--text-muted)",border:"1px solid var(--border)",fontSize:12}}>â ParÃ¡metros</button>
               <div style={{display:"flex",gap:8}}>
                 <button onClick={onSkip} style={{...btn("var(--bg-input)"),color:"var(--text-muted)",border:"1px solid var(--border)",fontSize:12}}>Saltar</button>
                 <button onClick={()=>handleConfirm(rowsToFlows(editRows))} disabled={!amortOk}
                   style={{...btn(!amortOk?"rgba(59,130,246,0.3)":"var(--accent)"),cursor:!amortOk?"not-allowed":"pointer",fontSize:13}}>
-                   Confirmar y cargar
+                  â Confirmar y cargar
                 </button>
               </div>
             </div>
@@ -2221,7 +2088,7 @@ function Modal({h,port=[],onSave,onClose,darkMode=true}){
     const results=[];
     const q=query.toUpperCase();
 
-    // 1. data912  busca en los 4 endpoints en paralelo
+    // 1. data912 â busca en los 4 endpoints en paralelo
     try{
       const base="https://data912.com/live";
       const [rBonds,rCedears,rStocks,rCorp]=await Promise.allSettled([
@@ -2326,14 +2193,14 @@ function Modal({h,port=[],onSave,onClose,darkMode=true}){
     <div className={darkMode?"theme-dark":"theme-light"} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200}}>
       <div style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:16,padding:28,width:520,maxWidth:"95vw",maxHeight:"90vh",overflowY:"auto"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-          <h3 style={{fontFamily:"Georgia,serif",fontSize:16,color:"var(--text-primary)",margin:0}}>{h?"Editar posicion":"Nueva posicion"}</h3>
-          <button onClick={onClose} style={{background:"transparent",border:"none",color:"var(--text-muted)",cursor:"pointer",fontSize:18}}></button>
+          <h3 style={{fontFamily:"Georgia,serif",fontSize:16,color:"var(--text-primary)",margin:0}}>{h?"Editar posiciÃ³n":"Nueva posiciÃ³n"}</h3>
+          <button onClick={onClose} style={{background:"transparent",border:"none",color:"var(--text-muted)",cursor:"pointer",fontSize:18}}>Ã</button>
         </div>
 
         <div style={{display:"grid",gap:14}}>
           {/* TOGGLE COMPRA/VENTA */}
           <div>
-            <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,display:"block",marginBottom:6}}>Operacion</span>
+            <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,display:"block",marginBottom:6}}>OperaciÃ³n</span>
             <div style={{display:"flex",background:"var(--bg-input)",borderRadius:8,padding:3,border:"1px solid var(--border)"}}>
               {["compra","venta"].map(op=>{
                 const disabled=op==="venta"&&port.length===0;
@@ -2351,7 +2218,7 @@ function Modal({h,port=[],onSave,onClose,darkMode=true}){
                 );
               })}
             </div>
-            {f.operacion==="venta"&&<div style={{fontSize:11,color:"var(--yellow)",marginTop:5}}> FIFO  salen los lotes mas antiguos primero</div>}
+            {f.operacion==="venta"&&<div style={{fontSize:11,color:"var(--yellow)",marginTop:5}}>â  FIFO â salen los lotes mÃ¡s antiguos primero</div>}
           </div>
 
           {/* ACTIVO */}
@@ -2365,16 +2232,16 @@ function Modal({h,port=[],onSave,onClose,darkMode=true}){
                   placeholder="ej: GGAL, AAPL, GD30D, SPY..."
                   style={{...inp,border:`1px solid ${statusColor[tickerStatus]}`,paddingRight:36}}/>
                 <span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:14}}>
-                  {tickerStatus==="checking"&&<span style={{animation:"spin 0.8s linear infinite",display:"inline-block"}}></span>}
-                  {tickerStatus==="confirmed"&&""}
-                  {tickerStatus==="notfound"&&""}
+                  {tickerStatus==="checking"&&<span style={{animation:"spin 0.8s linear infinite",display:"inline-block"}}>â³</span>}
+                  {tickerStatus==="confirmed"&&"â"}
+                  {tickerStatus==="notfound"&&"â"}
                 </span>
 
                 {/* Dropdown de resultados */}
                 {searchResults.length>0&&(
                   <div style={{position:"absolute",top:"100%",left:0,right:0,background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:8,zIndex:50,maxHeight:280,overflowY:"auto",marginTop:4,boxShadow:"0 8px 24px rgba(0,0,0,0.5)"}}>
                     <div style={{padding:"6px 12px",fontSize:10,color:"var(--text-muted)",borderBottom:"1px solid var(--border)",textTransform:"uppercase",letterSpacing:1}}>
-                      {searchResults.length} instrumento{searchResults.length!==1?"s":""} encontrado{searchResults.length!==1?"s":""}  selecciona el que queres dar de alta
+                      {searchResults.length} instrumento{searchResults.length!==1?"s":""} encontrado{searchResults.length!==1?"s":""} â seleccionÃ¡ el que querÃ©s dar de alta
                     </div>
                     {searchResults.map((r,i)=>(
                       <div key={i} onClick={()=>selectResult(r)}
@@ -2390,7 +2257,7 @@ function Modal({h,port=[],onSave,onClose,darkMode=true}){
                             <span style={{fontSize:10,color:"var(--text-muted)"}}>{r.buyCurrency}</span>
                           </div>
                           <div style={{fontSize:11,color:"var(--text-secondary)",marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.name}</div>
-                          <div style={{fontSize:10,color:"var(--text-muted)",marginTop:1}}> {r.source}</div>
+                          <div style={{fontSize:10,color:"var(--text-muted)",marginTop:1}}>ð¡ {r.source}</div>
                         </div>
                         <div style={{textAlign:"right",marginLeft:12,flexShrink:0}}>
                           <div style={{fontSize:14,fontWeight:700,color:"var(--green)"}}>
@@ -2415,7 +2282,7 @@ function Modal({h,port=[],onSave,onClose,darkMode=true}){
                       </span>
                     </div>
                     <div style={{fontSize:12,color:"var(--text-secondary)"}}>{selectedResult.name}</div>
-                    <div style={{fontSize:10,color:"var(--text-muted)",marginTop:2}}> {selectedResult.source} - {selectedResult.buyCurrency}</div>
+                    <div style={{fontSize:10,color:"var(--text-muted)",marginTop:2}}>ð¡ {selectedResult.source} Â· {selectedResult.buyCurrency}</div>
                   </div>
                   <div style={{textAlign:"right"}}>
                     <div style={{fontSize:16,fontWeight:700,color:"var(--green)"}}>
@@ -2423,19 +2290,19 @@ function Modal({h,port=[],onSave,onClose,darkMode=true}){
                     </div>
                     <button onClick={()=>{setSelectedResult(null);setTickerStatus("idle");set("ticker","");setSearchResults([]);}}
                       style={{fontSize:10,color:"var(--text-muted)",background:"transparent",border:"none",cursor:"pointer",marginTop:2}}>
-                       cambiar
+                      â cambiar
                     </button>
                   </div>
                 </div>
               )}
-              {tickerStatus==="notfound"&&<div style={{marginTop:8,background:"rgba(251,191,36,0.07)",border:"1px solid rgba(251,191,36,0.2)",borderRadius:8,padding:"10px 12px",fontSize:12,color:"var(--yellow)"}}> Sin resultados en data912 ni Yahoo  podes guardar igual ingresando los datos manualmente.</div>}
+              {tickerStatus==="notfound"&&<div style={{marginTop:8,background:"rgba(251,191,36,0.07)",border:"1px solid rgba(251,191,36,0.2)",borderRadius:8,padding:"10px 12px",fontSize:12,color:"var(--yellow)"}}>â ï¸ Sin resultados en data912 ni Yahoo â podÃ©s guardar igual ingresando los datos manualmente.</div>}
             </div>
           )}
 
           {/* NOMBRE */}
           <label style={{display:"flex",flexDirection:"column",gap:4}}>
             <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Nombre del instrumento</span>
-            <input value={f.name} onChange={e=>set("name",e.target.value)} placeholder="Se completa automatico al seleccionar" style={inp}/>
+            <input value={f.name} onChange={e=>set("name",e.target.value)} placeholder="Se completa automÃ¡tico al seleccionar" style={inp}/>
           </label>
 
           {/* TIPO */}
@@ -2470,7 +2337,7 @@ function Modal({h,port=[],onSave,onClose,darkMode=true}){
                 )}
               </div>
               {f.operacion==="venta"&&f.ticker&&<div style={{fontSize:10,color:overSelling?"var(--red)":"var(--text-muted)",marginTop:3}}>
-                {overSelling?` Solo tenes ${availableQty.toLocaleString("es-AR")} nominales`:`Disponible: ${availableQty.toLocaleString("es-AR")} nominales`}
+                {overSelling?`â  Solo tenÃ©s ${availableQty.toLocaleString("es-AR")} nominales`:`Disponible: ${availableQty.toLocaleString("es-AR")} nominales`}
               </div>}
             </label>
             <div style={{display:"flex",flexDirection:"column",gap:4}}>
@@ -2487,8 +2354,8 @@ function Modal({h,port=[],onSave,onClose,darkMode=true}){
                   }
                 }} style={{...inp,flex:1}}/>
                 <select value={f.buyCurrency} onChange={e=>set("buyCurrency",e.target.value)} style={{...inp,width:90}}>
-                  <option value="ARS">- ARS</option>
-                  <option value="USD"> USD</option>
+                  <option value="ARS">ð¦ð· ARS</option>
+                  <option value="USD">ðºð¸ USD</option>
                 </select>
               </div>
             </div>
@@ -2514,9 +2381,9 @@ function Modal({h,port=[],onSave,onClose,darkMode=true}){
                 const netoCalc=f.operacion==="venta"?brutoComision-comVal:brutoComision+comVal;
                 return (<>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,gap:8}}>
-                    <span style={{fontSize:11,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,flexShrink:0}}>Comision</span>
+                    <span style={{fontSize:11,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,flexShrink:0}}>ComisiÃ³n</span>
                     <div style={{display:"flex",gap:8,alignItems:"center",flex:1}}>
-                      {/* Monto comision */}
+                      {/* Monto comisiÃ³n */}
                       <div style={{display:"flex",alignItems:"center",gap:4,flex:1}}>
                         <span style={{fontSize:11,color:"var(--text-muted)"}}>{f.buyCurrency}</span>
                         <div style={{flex:1,position:"relative"}}>
@@ -2535,7 +2402,7 @@ function Modal({h,port=[],onSave,onClose,darkMode=true}){
                           </div>
                         </div>
                       </div>
-                      <span style={{color:"var(--text-muted)",fontSize:12}}></span>
+                      <span style={{color:"var(--text-muted)",fontSize:12}}>â</span>
                       {/* Porcentaje */}
                       <div style={{display:"flex",alignItems:"center",gap:4,flex:1}}>
                         <input type="number" min="0" step="0.001" value={f.comisionPct===0?"0":f.comisionPct||""}
@@ -2590,7 +2457,7 @@ function Modal({h,port=[],onSave,onClose,darkMode=true}){
         </div>
 
         <div style={{display:"flex",gap:10,marginTop:22,justifyContent:"space-between",alignItems:"center"}}>
-          {h&&<button onClick={()=>{if(window.confirm("Eliminar esta posicion?"))onSave(null);}} style={{padding:"8px 14px",background:"rgba(248,113,113,0.1)",border:"1px solid rgba(248,113,113,0.3)",borderRadius:8,color:"var(--red)",cursor:"pointer",fontSize:12}}> Eliminar</button>}
+          {h&&<button onClick={()=>{if(window.confirm("Â¿Eliminar esta posiciÃ³n?"))onSave(null);}} style={{padding:"8px 14px",background:"rgba(248,113,113,0.1)",border:"1px solid rgba(248,113,113,0.3)",borderRadius:8,color:"var(--red)",cursor:"pointer",fontSize:12}}>ð Eliminar</button>}
           {!h&&<div/>}
           <div style={{display:"flex",gap:10}}>
             <button onClick={onClose} style={{padding:"8px 18px",background:"transparent",border:"1px solid var(--border)",borderRadius:8,color:"var(--text-muted)",cursor:"pointer"}}>Cancelar</button>
@@ -2619,8 +2486,8 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
     {key:"30d", label:"30d",  days:30},
     {key:"90d", label:"90d",  days:90},
     {key:"ytd", label:"YTD",  days:null},
-    {key:"1y",  label:"1 ano",days:365},
-    {key:"3y",  label:"3 anos",days:1095},
+    {key:"1y",  label:"1 aÃ±o",days:365},
+    {key:"3y",  label:"3 aÃ±os",days:1095},
   ];
   const [period,setPeriod]=useState("90d");
   const [currency,setCurrency]=useState("USD_CCL"); // "ARS" | "USD_CCL" | "USD_MEP"
@@ -2634,7 +2501,7 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
   const pc=n=>n>=0?"var(--green)":"var(--red)";
   const fmtU=(n,d=0)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"USD",maximumFractionDigits:d}).format(n);
 
-  //  Portfolio series desde trades 
+  // ââ Portfolio series desde trades ââââââââââââââââââââââââââââââââââââââââââ
   const buildPortSeries = (dates) => {
     const dEnd = new Date(dates[dates.length-1]).getTime();
     return dates.map(dateStr => {
@@ -2654,7 +2521,7 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
     });
   };
 
-  //  Generar fechas del periodo 
+  // ââ Generar fechas del perÃ­odo âââââââââââââââââââââââââââââââââââââââââââââ
   const getDates = (p, n=30) => {
     const end = new Date();
     let periodStart;
@@ -2662,7 +2529,7 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
     else if(p.key==="mtd"||p.mtd) periodStart = new Date(end.getFullYear()+"-"+(String(end.getMonth()+1).padStart(2,"0"))+"-01");
     else { periodStart = new Date(); periodStart.setDate(periodStart.getDate()-p.days); }
 
-    // La fecha de inicio es el maximo entre el periodo y la primera compra
+    // La fecha de inicio es el mÃ¡ximo entre el perÃ­odo y la primera compra
     const firstBuy = trades.filter(t=>t.tipo==="compra").sort((a,b)=>a.date.localeCompare(b.date))[0]?.date;
     const firstBuyDate = firstBuy ? new Date(firstBuy) : end;
     const start = firstBuyDate > periodStart ? firstBuyDate : periodStart;
@@ -2675,11 +2542,11 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
     return [...new Set(dates)];
   };
 
-  //  Fetch SPY historico USD  spark endpoint Yahoo (CORS ok en browser) 
-  //  Fetch SPY historico via proxy Vercel (sin CORS) 
+  // ââ Fetch SPY histÃ³rico USD â spark endpoint Yahoo (CORS ok en browser) ââ
+  // ââ Fetch SPY histÃ³rico via proxy Vercel (sin CORS) âââââââââââââââââââââ
 
 
-  //  Encontrar el CCL mas cercano a una fecha 
+  // ââ Encontrar el CCL mÃ¡s cercano a una fecha ââââââââââââââââââââââââââââ
   const findCCL = (cclArr, dateStr) => {
     const t = new Date(dateStr).getTime();
     let best = cclArr[0], bestDiff = Infinity;
@@ -2690,7 +2557,7 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
     return best?.ccl || fxRate;
   };
 
-  //  Interpolador: precio mas cercano a una fecha 
+  // ââ Interpolador: precio mÃ¡s cercano a una fecha ââââââââââââââââââââââââââ
   const findPrice = (bars, dateStr) => {
     if(!bars||!bars.length) return null;
     const t = new Date(dateStr).getTime();
@@ -2706,7 +2573,7 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
 
   const load = async (p, hist) => {
     setLoading(true); setErr(""); setChartData(null);
-    // Usar hist pasado explicitamente para evitar closures obsoletos
+    // Usar hist pasado explÃ­citamente para evitar closures obsoletos
     const _hist = hist || historicos || {};
     const _getCCL  = () => _hist.CCL  || [];
     const _getMEP  = () => _hist.MEP  || [];
@@ -2721,9 +2588,9 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
 
       const mepBars2 = _getMEP();
 
-      // SPY benchmark base-100  convertido segun moneda seleccionada
+      // SPY benchmark base-100 â convertido segÃºn moneda seleccionada
       let spy100 = null, spySource = "sin datos";
-      // S&P500: usar historicos.sp500 (yfinance USD) si esta disponible,
+      // S&P500: usar historicos.sp500 (yfinance USD) si estÃ¡ disponible,
       // sino usar SPY.BA de BYMA dividido por TC
       const sp500Bars = _getSPY();
       const spyByma   = _getTicker("SPY") || [];
@@ -2737,7 +2604,7 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
           spySource = "S&P500 USD (yfinance)";
         }
       } else if(spyByma.length >= 2){
-        // SPY.BA en ARS desde BYMA, convertido segun moneda
+        // SPY.BA en ARS desde BYMA, convertido segÃºn moneda
         const tcBars = currency==="USD_MEP" ? mepBars2 : cclBars;
         const pts = dates.map(d=>{
           const pARS = findPrice(spyByma,d);
@@ -2749,11 +2616,11 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
         if(pts.length>=2){
           const base = pts[0].val;
           spy100 = pts.map(x=>({date:x.date, val:base>0?100*x.val/base:100}));
-          spySource = "SPY.BA BYMA"+(currency!=="ARS"?" - "+currency.replace("USD_",""):"");
+          spySource = "SPY.BA BYMA"+(currency!=="ARS"?" Ã· "+currency.replace("USD_",""):"");
         }
       }
 
-      // CCL base-100  solo en modo ARS
+      // CCL base-100 â solo en modo ARS
       let ccl100 = null, cclSource = "sin datos";
       if(currency==="ARS" && cclBars.length >= 2){
         const pts = dates.map(d=>({date:d, val:findPrice(cclBars,d)||cclBars[0].close}));
@@ -2762,7 +2629,7 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
         cclSource = "ArgentinaDatos ("+cclBars.length+" pts)";
       }
 
-      // MEP base-100  solo en modo ARS
+      // MEP base-100 â solo en modo ARS
       let mep100 = null;
       if(currency==="ARS" && mepBars2.length >= 2){
         const pts = dates.map(d=>({date:d, val:findPrice(mepBars2,d)||mepBars2[0].close}));
@@ -2770,7 +2637,7 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
         mep100 = pts.map(x=>({date:x.date, val:base>0?100*x.val/base:100}));
       }
 
-      // T10Y base-100  usar datos reales del historico si existen
+      // T10Y base-100 â usar datos reales del histÃ³rico si existen
       const t10yBarsEvo=_getTicker("t10y")||[];
       let t10y100;
       if(currency==="ARS"&&t10yBarsEvo.length>=2){
@@ -2787,7 +2654,7 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
         });
       }
 
-      // Historico por ticker desde JSON pre-generado
+      // HistÃ³rico por ticker desde JSON pre-generado
       const allTickers = [...new Set(en.map(h=>h.ticker))];
       const tickerBars = {};
       for(const ticker of allTickers){
@@ -2796,10 +2663,10 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
       }
 
 
-      // MEP bars para conversion
+      // MEP bars para conversiÃ³n
       const mepBars = _getMEP();
 
-      // TWR  Time Weighted Return
+      // TWR â Time Weighted Return
       const today = todayAR();
       const datesWithToday=[...dates];
       if(datesWithToday[datesWithToday.length-1]!==today)datesWithToday.push(today);
@@ -2824,13 +2691,13 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
   };
 
   useEffect(()=>{
-    // Solo cargar cuando historicos esta disponible (no null ni vacio)
+    // Solo cargar cuando historicos estÃ¡ disponible (no null ni vacÃ­o)
     if(!historicos || Object.keys(historicos).length === 0) return;
     const p=PERIODS.find(x=>x.key===period);
     if(p) load(p, historicos);
   },[period, currency, historicos, trades]);
 
-  //  SVG line chart 
+  // ââ SVG line chart âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
   const cd = chartData;
   const series = cd ? [
@@ -2847,7 +2714,7 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
       {/* KPIs */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
         {[
-          {lbl:"Retorno Portfolio",val:fmtP(totPct),sub:"vs PPC - todos los activos",col:pc(totPct)},
+          {lbl:"Retorno Portfolio",val:fmtP(totPct),sub:"vs PPC Â· todos los activos",col:pc(totPct)},
           {lbl:"Benchmark T10Y",val:fmtP(benchPct),sub:`Treasury USA @ ${liveT10Y}% anual`,col:"var(--yellow)"},
           {lbl:"Alpha",val:fmtP(alpha),sub:"outperformance vs T10Y",col:pc(alpha)},
         ].map(c=>(
@@ -2859,12 +2726,12 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
         ))}
       </div>
 
-      {/* Grafico base 100 */}
+      {/* GrÃ¡fico base 100 */}
       <div style={{...card,padding:20}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14,flexWrap:"wrap",gap:10}}>
           <div>
             <div style={{fontWeight:600,fontSize:14,marginBottom:6}}>
-              Rendimiento base 100 - {currency==="ARS"?"en ARS":currency==="USD_CCL"?"en USD (CCL)":"en USD (MEP)"}
+              Rendimiento base 100 Â· {currency==="ARS"?"en ARS":currency==="USD_CCL"?"en USD (CCL)":"en USD (MEP)"}
             </div>
             <div style={{display:"flex",gap:12,fontSize:11,flexWrap:"wrap",alignItems:"center"}}>
               {/* Currency toggle */}
@@ -2877,11 +2744,11 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
                 </button>
               ))}
               <span style={{color:"var(--text-muted)",fontSize:10}}>|</span>
-              <span style={{color:"var(--green)"}}> Portfolio</span>
-              {cd?.spy100&&<span style={{color:"#60A5FA"}}> S&amp;P 500</span>}
-              {cd?.currency!=="ARS"&&<span style={{color:"var(--yellow)"}}> T10Y</span>}
-              {cd?.ccl100&&<span style={{color:"#A78BFA"}}> CCL</span>}
-              {cd?.mep100&&<span style={{color:"#F472B6"}}> MEP</span>}
+              <span style={{color:"var(--green)"}}>â Portfolio</span>
+              {cd?.spy100&&<span style={{color:"#60A5FA"}}>â S&amp;P 500</span>}
+              {cd?.currency!=="ARS"&&<span style={{color:"var(--yellow)"}}>â T10Y</span>}
+              {cd?.ccl100&&<span style={{color:"#A78BFA"}}>â CCL</span>}
+              {cd?.mep100&&<span style={{color:"#F472B6"}}>â MEP</span>}
             </div>
           </div>
           <div style={{display:"flex",gap:4}}>
@@ -2900,8 +2767,8 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
         <div style={{height:200,position:"relative"}}>
           {loading&&(
             <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--text-muted)",fontSize:13}}>
-              <span style={{animation:"spin 0.8s linear infinite",display:"inline-block",marginRight:8,fontSize:18}}></span>
-              Cargando datos historicos...
+              <span style={{animation:"spin 0.8s linear infinite",display:"inline-block",marginRight:8,fontSize:18}}>â³</span>
+              Cargando datos histÃ³ricos...
             </div>
           )}
           {err&&<div style={{color:"var(--red)",fontSize:12,padding:20}}>{err}</div>}
@@ -2912,28 +2779,25 @@ function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,byType,card,fxR
         {cd&&!loading&&(
           <div style={{display:"flex",gap:20,marginTop:10,paddingTop:10,borderTop:"1px solid var(--border)",fontSize:12,flexWrap:"wrap"}}>
             <span style={{color:"var(--text-muted)"}}>Portfolio: <b style={{color:pc(+cd.portRet)}}>{cd.portRet>=0?"+":""}{cd.portRet}%</b></span>
-            <span style={{color:"var(--text-muted)"}}>XIRR: <b style={{color:pc(+xirrData.portXIRR)}}>{xirrData.portXIRR>=0?"+":""}{xirrData.portXIRR.toFixed(1)}%</b></span>
-            {cd.spy100&&<span style={{color:"var(--text-muted)"}}>XIRR S&P 500: <b style={{color:pc(+xirrData.spyXIRR)}}>{xirrData.spyXIRR>=0?"+":""}{xirrData.spyXIRR.toFixed(1)}%</b></span>}
-            {cd.spy100&&<span style={{color:"var(--text-muted)"}}>Alpha XIRR: <b style={{color:pc(+xirrData.alpha)}}>{xirrData.alpha>=0?"+":""}{xirrData.alpha.toFixed(1)}%</b></span>}
             {cd.spy100&&<span style={{color:"var(--text-muted)"}}>S&amp;P 500: <b style={{color:pc(+cd.spyRet)}}>{cd.spyRet>=0?"+":""}{cd.spyRet}%</b></span>}
             {cd.currency==="ARS"&&<span style={{color:"var(--text-muted)"}}>T10Y: <b style={{color:"var(--yellow)"}}>{cd.t10yRet>=0?"+":""}{cd.t10yRet}%</b></span>}
             {cd.ccl100&&<span style={{color:"var(--text-muted)"}}>CCL: <b style={{color:pc(+cd.cclRet)}}>{cd.cclRet>=0?"+":""}{cd.cclRet}%</b></span>}
             {cd.mep100&&<span style={{color:"var(--text-muted)"}}>MEP: <b style={{color:"#F472B6"}}>{cd.mepRet>=0?"+":""}{cd.mepRet}%</b></span>}
-            <span style={{color:"var(--text-muted)",marginLeft:"auto",fontSize:10}}>{cd.startDate}  {cd.endDate}</span>
+            <span style={{color:"var(--text-muted)",marginLeft:"auto",fontSize:10}}>{cd.startDate} â {cd.endDate}</span>
           </div>
         )}
 
         {/* Nota T10Y */}
         <div style={{fontSize:10,color:"var(--text-muted)",marginTop:8}}>
-          {"T10Y: tasa "+liveT10Y+"% compuesta - "}
+          {"T10Y: tasa "+liveT10Y+"% compuesta Â· "}
           {cd?.spy100 ? "S&P: "+cd.spySource : "S&P: sin datos"}
-          {" - CCL: "+(cd?.cclPoints>0 ? "ArgentinaDatos ("+cd.cclPoints+" pts)" : "sin datos")}
+          {" Â· CCL: "+(cd?.cclPoints>0 ? "ArgentinaDatos ("+cd.cclPoints+" pts)" : "sin datos")}
         </div>
       </div>
 
-      {/* Contribucion por tipo */}
+      {/* ContribuciÃ³n por tipo */}
       <div style={{...card,padding:20}}>
-        <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:14}}>Contribucion por tipo de activo</div>
+        <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:14}}>ContribuciÃ³n por tipo de activo</div>
         <div style={{display:"grid",gap:10}}>
           {byType.map(t=>(
             <div key={t.key} style={{display:"flex",alignItems:"center",gap:12}}>
@@ -2966,7 +2830,7 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
   const tdL={padding:"10px 12px",color:"var(--text-secondary)",fontSize:13};
   const tdR={...tdL,textAlign:"center",fontFamily:"'DM Mono',monospace",fontSize:12};
 
-  // Helper: encontrar TC historico mas cercano a una fecha
+  // Helper: encontrar TC histÃ³rico mÃ¡s cercano a una fecha
   const cclBarsP = useMemo(()=>(historicos?.CCL||[]).slice().sort((a,b)=>a.date.localeCompare(b.date)),[historicos]);
   const findHistCCL=(dateStr)=>{
     if(!cclBarsP.length) return fxRate;
@@ -2983,14 +2847,14 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
     // Valor actual en moneda propia
     const origVal=h.currentPrice*qtyFactor;
 
-    // Costo en moneda propia (PPC  qty)
+    // Costo en moneda propia (PPC Ã qty)
     const origCost=(h.ppc||h.buyPrice)*qtyFactor;
     const origPnl=origVal-origCost;
     const origPct=origCost>0?(origPnl/origCost)*100:0;
 
-    // Costo en ARS usando TC historico de cada lote de compra
-    // Para activos USD: suma cada lote  precio_compra  TC_del_dia_de_compra
-    // Para activos ARS: el costo ya esta en ARS
+    // Costo en ARS usando TC histÃ³rico de cada lote de compra
+    // Para activos USD: suma cada lote Ã precio_compra Ã TC_del_dia_de_compra
+    // Para activos ARS: el costo ya estÃ¡ en ARS
     const buyLots=trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra");
     let costARSHist=0;
     if(isUSD){
@@ -3000,17 +2864,17 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
         costARSHist+=lot.price*lotFactor*tcLot;
       }
     } else {
-      costARSHist=origCost; // ya esta en ARS
+      costARSHist=origCost; // ya estÃ¡ en ARS
     }
 
-    // Valor actual en ARS (precio actual  qty  TC actual)
+    // Valor actual en ARS (precio actual Ã qty Ã TC actual)
     const valARS=isUSD?origVal*fxRate:origVal;
     const pnlARS=valARS-costARSHist;
     const pctARS=costARSHist>0?(pnlARS/costARSHist)*100:0;
 
-    // Costo en USD usando TC historico de cada lote
-    // Para activos ARS: suma cada lote - TC_del_dia_de_compra
-    // Para activos USD: el costo ya esta en USD
+    // Costo en USD usando TC histÃ³rico de cada lote
+    // Para activos ARS: suma cada lote Ã· TC_del_dia_de_compra
+    // Para activos USD: el costo ya estÃ¡ en USD
     let costUSDHist=0;
     if(!isUSD){
       for(const lot of buyLots){
@@ -3019,15 +2883,15 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
         costUSDHist+=lot.price*lotFactor/tcLot;
       }
     } else {
-      costUSDHist=origCost; // ya esta en USD
+      costUSDHist=origCost; // ya estÃ¡ en USD
     }
 
-    // Valor actual en USD (precio actual  qty - TC actual)
+    // Valor actual en USD (precio actual Ã qty Ã· TC actual)
     const valUSD=isUSD?origVal:origVal/fxRate;
     const pnlUSD=valUSD-costUSDHist;
     const pctUSD=costUSDHist>0?(pnlUSD/costUSDHist)*100:0;
 
-    // Que % mostrar segun vista
+    // QuÃ© % mostrar segÃºn vista
     const dispPct=view==="native"?origPct:view==="usd"?pctUSD:pctARS;
     // En mobile: fila simplificada (ticker, precio actual, val USD, rend%)
     if(isMobile){
@@ -3035,15 +2899,15 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
         <tr key={`${h.ticker}-${h.type}-${h.id||""}`} style={{borderTop:"1px solid var(--border)"}}>
           <td style={{...tdL,fontWeight:700,fontFamily:"monospace",color:"var(--accent)",padding:"8px 6px"}}>
             {h.ticker}
-            {h.isLive&&<span style={{display:"block",fontSize:8,color:"var(--green)"}}></span>}
+            {h.isLive&&<span style={{display:"block",fontSize:8,color:"var(--green)"}}>â</span>}
           </td>
           <td style={{...tdR,fontSize:11,padding:"8px 6px"}}>
             {(()=>{const cp=h.currentPrice;return isUSD?fmtU(cp,2):fmtA(cp);})()}
             {h.liveChangePct!=null&&h.isLive&&<span style={{display:"block",fontSize:9,color:pc(h.liveChangePct)}}>{fmtP(h.liveChangePct)}</span>}
           </td>
           <td style={{...tdR,fontWeight:600,fontSize:11,padding:"8px 6px",background:"rgba(52,211,153,0.06)"}}>
-            {hideAmounts?"":fmtU(valUSD)}
-            <span style={{display:"block",fontSize:9,color:pc(pnlUSD)}}>{hideAmounts?"":(pnlUSD>=0?"+":"")+fmtU(pnlUSD)}</span>
+            {hideAmounts?"â¢â¢â¢â¢":fmtU(valUSD)}
+            <span style={{display:"block",fontSize:9,color:pc(pnlUSD)}}>{hideAmounts?"â¢â¢â¢â¢":(pnlUSD>=0?"+":"")+fmtU(pnlUSD)}</span>
           </td>
           <td style={{...tdR,fontWeight:700,color:pc(pctUSD),fontSize:12,padding:"8px 6px"}}>{fmtP(pctUSD)}</td>
         </tr>
@@ -3053,7 +2917,7 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
       <tr key={`${h.ticker}-${h.type}-${h.id||""}`} style={{borderTop:"1px solid var(--border)"}}>
         <td style={{...tdL,fontWeight:700,fontFamily:"monospace",color:"var(--accent)"}}>
           {h.ticker}
-          {h.isLive&&<span style={{display:"block",fontSize:9,color:"var(--green)",fontFamily:"sans-serif",fontWeight:400}}> live</span>}
+          {h.isLive&&<span style={{display:"block",fontSize:9,color:"var(--green)",fontFamily:"sans-serif",fontWeight:400}}>â live</span>}
         </td>
         <td style={{...tdL,color:"var(--text-secondary)",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.name}</td>
         <td style={tdR}>{Number(h.qty).toLocaleString("es-AR",{maximumFractionDigits:4})}</td>
@@ -3062,7 +2926,7 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
             const ppcVal=h.ppc||h.buyPrice;
             return isUSD?fmtU(ppcVal,2):fmtA(ppcVal);
           })()}
-          <span style={{display:"block",fontSize:9,color:"var(--text-muted)"}}>{h.buyCurrency} - PPC</span>
+          <span style={{display:"block",fontSize:9,color:"var(--text-muted)"}}>{h.buyCurrency} Â· PPC</span>
         </td>
         <td style={{...tdR,fontSize:11}}>
           {(()=>{
@@ -3075,42 +2939,42 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
         {/* Columna ARS */}
         {(view==="dual"||view==="ars")&&(
           <td style={{...tdR,fontWeight:600,background:"rgba(96,165,250,0.08)"}}>
-            {hideAmounts?"":fmtA(valARS)}
-            {isUSD&&<span style={{display:"block",fontSize:9,color:"var(--text-muted)"}}>pesif.  {Math.round(fxRate).toLocaleString("es-AR")}</span>}
+            {hideAmounts?"â¢â¢â¢â¢":fmtA(valARS)}
+            {isUSD&&<span style={{display:"block",fontSize:9,color:"var(--text-muted)"}}>pesif. Ã {Math.round(fxRate).toLocaleString("es-AR")}</span>}
           </td>
         )}
         {(view==="dual"||view==="ars")&&(
           <td style={{...tdR,fontSize:11,background:"rgba(96,165,250,0.08)"}}>
-            <span style={{color:pc(pnlARS),fontWeight:600}}>{hideAmounts?"":fmtA(pnlARS)}</span>
+            <span style={{color:pc(pnlARS),fontWeight:600}}>{hideAmounts?"â¢â¢â¢â¢":fmtA(pnlARS)}</span>
             <span style={{display:"block",fontSize:10,color:pc(pctARS),fontWeight:700}}>{fmtP(pctARS)}</span>
           </td>
         )}
         {/* Columna USD */}
         {(view==="dual"||view==="usd")&&(
           <td style={{...tdR,fontWeight:700,background:"rgba(52,211,153,0.08)"}}>
-            {hideAmounts?"":fmtU(valUSD)}
-            {!isUSD&&<span style={{display:"block",fontSize:9,color:"var(--text-muted)"}}>dolar. - {Math.round(fxRate).toLocaleString("es-AR")}</span>}
+            {hideAmounts?"â¢â¢â¢â¢":fmtU(valUSD)}
+            {!isUSD&&<span style={{display:"block",fontSize:9,color:"var(--text-muted)"}}>dolar. Ã· {Math.round(fxRate).toLocaleString("es-AR")}</span>}
           </td>
         )}
         {(view==="dual"||view==="usd")&&(
           <td style={{...tdR,fontSize:11,background:"rgba(52,211,153,0.08)"}}>
-            <span style={{color:pc(pnlUSD),fontWeight:600}}>{hideAmounts?"":fmtU(pnlUSD)}</span>
+            <span style={{color:pc(pnlUSD),fontWeight:600}}>{hideAmounts?"â¢â¢â¢â¢":fmtU(pnlUSD)}</span>
             <span style={{display:"block",fontSize:10,color:pc(pctUSD),fontWeight:700}}>{fmtP(pctUSD)}</span>
           </td>
         )}
         {/* Columna moneda propia */}
         {view==="native"&&(
           <td style={{...tdR,fontWeight:600,background:"rgba(139,92,246,0.05)"}}>
-            {hideAmounts?"":(isUSD?fmtU(origVal):fmtA(origVal))}
+            {hideAmounts?"â¢â¢â¢â¢":(isUSD?fmtU(origVal):fmtA(origVal))}
           </td>
         )}
         {view==="native"&&(
           <td style={{...tdR,fontSize:11,background:"rgba(139,92,246,0.05)"}}>
-            <span style={{color:pc(origPnl),fontWeight:600}}>{hideAmounts?"":(isUSD?fmtU(origPnl):fmtA(origPnl))}</span>
+            <span style={{color:pc(origPnl),fontWeight:600}}>{hideAmounts?"â¢â¢â¢â¢":(isUSD?fmtU(origPnl):fmtA(origPnl))}</span>
             <span style={{display:"block",fontSize:10,color:pc(origPct),fontWeight:700}}>{fmtP(origPct)}</span>
           </td>
         )}
-        {/* % resumen al final segun vista */}
+        {/* % resumen al final segÃºn vista */}
         {view==="dual"&&(
           <td style={{...tdR,fontSize:11}}>
             <span style={{display:"block",color:pc(pctARS),fontWeight:700}}>{fmtP(pctARS)} <span style={{fontSize:9,fontWeight:400}}>ARS</span></span>
@@ -3128,7 +2992,7 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
     <div className="fi" style={{display:"grid",gap:14}}>
       {/* Header view toggle */}
       <div style={{display:"flex",justifyContent:"flex-end",gap:4}}>
-        {[["dual"," ARS + USD"],["ars","Solo ARS"],["usd","Solo USD"],["native","Moneda propia"]].map(([k,l])=>(
+        {[["dual","â ARS + USD"],["ars","Solo ARS"],["usd","Solo USD"],["native","Moneda propia"]].map(([k,l])=>(
           <button key={k} onClick={()=>setView(k)}
             style={{padding:"4px 12px",borderRadius:6,border:"1px solid var(--border)",cursor:"pointer",fontSize:11,
               background:view===k?"var(--accent)":"var(--bg-input)",color:view===k?"#fff":"var(--text-secondary)"}}>
@@ -3137,7 +3001,7 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
         ))}
       </div>
 
-      {/* Seccion por tipo de activo */}
+      {/* SecciÃ³n por tipo de activo */}
       {byType.map(t=>{
         const items=[...t.items].sort((a,b)=>b.valUSD-a.valUSD);
         const secVal=items.reduce((a,h)=>a+h.valUSD,0);
@@ -3146,15 +3010,15 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
         const secPct=secCost>0?(secPnl/secCost)*100:0;
         return(
           <div key={`section-${t.key}`} style={{...card,overflow:"hidden"}}>
-            {/* Encabezado de seccion */}
+            {/* Encabezado de secciÃ³n */}
             <div style={{padding:"12px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center",background:'transparent',flexWrap:isMobile?"wrap":"nowrap",gap:8}}>
               <div style={{display:"flex",alignItems:"center",gap:10}}>
                 <span style={{fontWeight:700,fontSize:13,color:"var(--text-primary)"}}>{t.icon} {t.label}</span>
-                <span style={{fontSize:11,color:"var(--text-muted)"}}>- {items.length} posicion{items.length!==1?"es":""}</span>
+                <span style={{fontSize:11,color:"var(--text-muted)"}}>Â· {items.length} posiciÃ³n{items.length!==1?"es":""}</span>
               </div>
               <div style={{display:"flex",gap:isMobile?12:20,alignItems:"center",fontSize:12}}>
-                <span style={{color:"var(--text-muted)"}}>Saldo: <b style={{color:"var(--text-primary)"}}>{hideAmounts?"":fmtU(secVal)}</b></span>
-                <span style={{color:"var(--text-muted)"}}>PnL: <b style={{color:pc(secPnl)}}>{hideAmounts?"":fmtU(secPnl,0)}</b></span>
+                <span style={{color:"var(--text-muted)"}}>Saldo: <b style={{color:"var(--text-primary)"}}>{hideAmounts?"â¢â¢â¢â¢â¢â¢":fmtU(secVal)}</b></span>
+                <span style={{color:"var(--text-muted)"}}>PnL: <b style={{color:pc(secPnl)}}>{hideAmounts?"â¢â¢â¢â¢â¢â¢":fmtU(secPnl,0)}</b></span>
                 <span style={{fontWeight:700,color:pc(secPct),fontSize:13}}>{fmtP(secPct)}</span>
               </div>
             </div>
@@ -3177,7 +3041,7 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
                       borderLeft:`3px solid ${pc(pctUSD)==="var(--green)"?"var(--green)":pc(pctUSD)==="var(--red)"?"var(--red)":"var(--border)"}`,}}>
                       <div style={{fontWeight:700,fontFamily:"monospace",color:"var(--accent)",fontSize:13,marginBottom:2}}>
                         {h.ticker}
-                        {h.isLive&&<span style={{fontSize:8,color:"var(--green)",marginLeft:4}}></span>}
+                        {h.isLive&&<span style={{fontSize:8,color:"var(--green)",marginLeft:4}}>â</span>}
                       </div>
                       <div style={{fontSize:10,color:"var(--text-muted)",marginBottom:8,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{h.name}</div>
                       <div style={{fontSize:11,color:"var(--text-secondary)",marginBottom:4}}>
@@ -3188,15 +3052,15 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
                         <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
                           <span style={{fontSize:10,color:"var(--text-muted)"}}>Hoy</span>
                           <span style={{fontSize:11,fontWeight:600,color:h.liveChangePct!=null?pc(h.liveChangePct):"var(--text-muted)"}}>
-                            {h.liveChangePct!=null?fmtP(h.liveChangePct):""}
+                            {h.liveChangePct!=null?fmtP(h.liveChangePct):"â"}
                           </span>
                         </div>
                         <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
                           <span style={{fontSize:10,color:"var(--text-muted)"}}>Total</span>
                           <span style={{fontSize:11,fontWeight:700,color:pc(pctUSD)}}>{fmtP(pctUSD)}</span>
                         </div>
-                        <div style={{fontSize:12,fontWeight:700,color:"var(--text-primary)",marginTop:4}}>{hideAmounts?"":fmtU(valUSD)}</div>
-                        <div style={{fontSize:10,color:pc(pnlUSD)}}>{hideAmounts?"":(pnlUSD>=0?"+":"")+fmtU(pnlUSD)} PnL</div>
+                        <div style={{fontSize:12,fontWeight:700,color:"var(--text-primary)",marginTop:4}}>{hideAmounts?"â¢â¢â¢â¢":fmtU(valUSD)}</div>
+                        <div style={{fontSize:10,color:pc(pnlUSD)}}>{hideAmounts?"â¢â¢â¢â¢":(pnlUSD>=0?"+":"")+fmtU(pnlUSD)} PnL</div>
                       </div>
                     </div>
                   );
@@ -3212,9 +3076,9 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
                     {!isMobile&&<th style={{...thR,width:100}}>Nominales</th>}
                     {!isMobile&&<th style={{...thR,width:130}}>PPC</th>}
                     <th style={{...thR,width:isMobile?90:150}}>Precio actual</th>
-                    {!isMobile&&(view==="dual"||view==="ars")&&<><th style={{...thR,width:140,background:"rgba(96,165,250,0.08)"}}>Val. ARS</th><th style={{...thR,width:130,background:"rgba(96,165,250,0.08)"}}>PnL - % ARS</th></>}
-                    {(view==="dual"||view==="usd")&&<><th style={{...thR,width:isMobile?80:120,background:"rgba(52,211,153,0.1)"}}>Val. USD</th>{!isMobile&&<th style={{...thR,width:130,background:"rgba(52,211,153,0.1)"}}>PnL - % USD</th>}</>}
-                    {!isMobile&&view==="native"&&<><th style={{...thR,width:140,background:"rgba(139,92,246,0.08)"}}>Val. moneda</th><th style={{...thR,width:130,background:"rgba(139,92,246,0.08)"}}>PnL - % moneda</th></>}
+                    {!isMobile&&(view==="dual"||view==="ars")&&<><th style={{...thR,width:140,background:"rgba(96,165,250,0.08)"}}>Val. ARS</th><th style={{...thR,width:130,background:"rgba(96,165,250,0.08)"}}>PnL Â· % ARS</th></>}
+                    {(view==="dual"||view==="usd")&&<><th style={{...thR,width:isMobile?80:120,background:"rgba(52,211,153,0.1)"}}>Val. USD</th>{!isMobile&&<th style={{...thR,width:130,background:"rgba(52,211,153,0.1)"}}>PnL Â· % USD</th>}</>}
+                    {!isMobile&&view==="native"&&<><th style={{...thR,width:140,background:"rgba(139,92,246,0.08)"}}>Val. moneda</th><th style={{...thR,width:130,background:"rgba(139,92,246,0.08)"}}>PnL Â· % moneda</th></>}
                     <th style={{...thR,width:isMobile?70:110}}>Rend %</th>
                   </tr>
                 </thead>
@@ -3228,9 +3092,9 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
 
       {/* Totales globales */}
       <div style={{...card,padding:"12px 16px",display:"flex",gap:24,flexWrap:"wrap",fontSize:12}}>
-        <span style={{color:"var(--text-muted)"}}>Total: <b style={{color:"var(--text-primary)"}}>{hideAmounts?"":fmtU(totUSD)}</b></span>
-        <span style={{color:"var(--text-muted)"}}>Costo: <b>{hideAmounts?"":fmtU(totCost)}</b></span>
-        <span style={{color:"var(--text-muted)"}}>PnL: <b style={{color:pc(totPnl)}}>{hideAmounts?"":fmtU(totPnl)}</b></span>
+        <span style={{color:"var(--text-muted)"}}>Total: <b style={{color:"var(--text-primary)"}}>{hideAmounts?"â¢â¢â¢â¢â¢â¢":fmtU(totUSD)}</b></span>
+        <span style={{color:"var(--text-muted)"}}>Costo: <b>{hideAmounts?"â¢â¢â¢â¢â¢â¢":fmtU(totCost)}</b></span>
+        <span style={{color:"var(--text-muted)"}}>PnL: <b style={{color:pc(totPnl)}}>{hideAmounts?"â¢â¢â¢â¢â¢â¢":fmtU(totPnl)}</b></span>
         <span style={{color:"var(--text-muted)"}}>Rend: <b style={{color:pc(totPct)}}>{fmtP(totPct)}</b></span>
         <span style={{color:"var(--text-muted)",fontSize:10,marginLeft:"auto"}}>TC {fxMode}: {new Intl.NumberFormat("es-AR").format(Math.round(fxRate))}</span>
       </div>
@@ -3268,7 +3132,7 @@ function OperacionesTab({trades,port,setTrades,setPort,card,livePrices,darkMode}
   const saveEdit=()=>{if(!window.confirm("Confirmar modificacion?"))return;
     if(!editData)return;
     setTrades(prev=>prev.map(t=>t.id===editId?{...editData,qty:+editData.qty,price:+editData.price,tcCompra:editData.tcCompra?+editData.tcCompra:undefined}:t));
-    // Recalcular buyPrice del port si cambio
+    // Recalcular buyPrice del port si cambiÃ³
     setPort(prev=>prev.map(p=>{
       if(p.ticker!==editData.ticker)return p;
       return{...p,buyPrice:+editData.price};
@@ -3287,7 +3151,7 @@ function OperacionesTab({trades,port,setTrades,setPort,card,livePrices,darkMode}
     const newPpc=totalQty>0?totalCost/totalQty:0;
 
     if(netQty<=0){
-      // Sin posicion neta  eliminar del portfolio
+      // Sin posiciÃ³n neta â eliminar del portfolio
       setPort(prev=>prev.filter(p=>p.ticker!==trade.ticker));
     } else {
       setPort(prev=>{
@@ -3296,9 +3160,9 @@ function OperacionesTab({trades,port,setTrades,setPort,card,livePrices,darkMode}
           // Actualizar qty y PPC
           return prev.map(p=>p.ticker===trade.ticker?{...p,qty:netQty,buyPrice:newPpc}:p);
         } else {
-          // La posicion no estaba en el portfolio  restaurar
+          // La posiciÃ³n no estaba en el portfolio â restaurar
           const firstBuy=[...remaining].sort((a,b)=>a.date.localeCompare(b.date))[0];
-          // Inferir type desde el ticker si no esta disponible
+          // Inferir type desde el ticker si no estÃ¡ disponible
           const inferredType = trade.ticker?.match(/\d/)
             ? (firstBuy?.currency==="USD"||trade.currency==="USD" ? "bono_usd" : "bono_ars")
             : trade.type||firstBuy?.type||"accion_ar";
@@ -3348,11 +3212,11 @@ function OperacionesTab({trades,port,setTrades,setPort,card,livePrices,darkMode}
         {(filterTicker||filterDesde||filterHasta)&&(
           <button onClick={()=>{setFilterTicker("");setFilterDesde("");setFilterHasta("");}}
             style={{padding:"6px 14px",background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:6,color:"var(--text-muted)",cursor:"pointer",fontSize:12,alignSelf:"flex-end"}}>
-             Limpiar
+            â Limpiar
           </button>
         )}
         <span style={{fontSize:11,color:"var(--text-muted)",marginLeft:"auto",alignSelf:"flex-end"}}>
-          {sorted.length} de {trades.length} operacion{trades.length!==1?"es":""}
+          {sorted.length} de {trades.length} operaciÃ³n{trades.length!==1?"es":""}
         </span>
       </div>
 
@@ -3373,7 +3237,7 @@ function OperacionesTab({trades,port,setTrades,setPort,card,livePrices,darkMode}
                 <th style={thR}>Precio</th>
                 <th style={thR}>TC</th>
                 <th style={thR}>Bruto</th>
-                <th style={thR}>Comision</th>
+                <th style={thR}>ComisiÃ³n</th>
                 <th style={thR}>Neto</th>
                 <th style={{...thS,width:80}}></th>
               </tr>
@@ -3416,13 +3280,13 @@ function OperacionesTab({trades,port,setTrades,setPort,card,livePrices,darkMode}
                     <td style={tdR}>
                       {isEditing&&(t.currency==="ARS")
                         ?<input type="number" value={editData.tcCompra||""} onChange={e=>setEditData(p=>({...p,tcCompra:e.target.value}))} placeholder="TC" style={{...inp,width:90,textAlign:"right"}}/>
-                        :<span style={{color:"var(--text-muted)",fontSize:11}}>{t.tcCompra?fmtA(t.tcCompra):""}</span>}
+                        :<span style={{color:"var(--text-muted)",fontSize:11}}>{t.tcCompra?fmtA(t.tcCompra):"â"}</span>}
                     </td>
                     <td style={tdR}>{t.currency==="USD"?fmtU(bruto,2):fmtA(bruto)}</td>
                     <td style={tdR}>
                       {isEditing
                         ?<input type="number" value={editData.comision||""} onChange={e=>setEditData(p=>({...p,comision:e.target.value}))} placeholder="0" style={{...inp,width:90,textAlign:"right"}}/>
-                        :<span style={{color:com>0?"var(--yellow)":"var(--text-muted)",fontSize:11}}>{com>0?(t.currency==="USD"?fmtU(com,2):fmtA(com)):""}</span>}
+                        :<span style={{color:com>0?"var(--yellow)":"var(--text-muted)",fontSize:11}}>{com>0?(t.currency==="USD"?fmtU(com,2):fmtA(com)):"â"}</span>}
                     </td>
                     <td style={{...tdR,fontWeight:600}}>
                       {t.currency==="USD"?fmtU(neto,2):fmtA(neto)}
@@ -3430,13 +3294,13 @@ function OperacionesTab({trades,port,setTrades,setPort,card,livePrices,darkMode}
                     <td style={{padding:"8px",textAlign:"right"}}>
                       {isEditing?(
                         <div style={{display:"flex",gap:4,justifyContent:"flex-end"}}>
-                          <button onClick={saveEdit} style={{padding:"4px 10px",background:"var(--green)",border:"none",borderRadius:5,color:"#fff",cursor:"pointer",fontSize:11,fontWeight:600}}></button>
-                          <button onClick={()=>{setEditId(null);setEditData(null);}} style={{padding:"4px 8px",background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:5,color:"var(--text-muted)",cursor:"pointer",fontSize:11}}></button>
+                          <button onClick={saveEdit} style={{padding:"4px 10px",background:"var(--green)",border:"none",borderRadius:5,color:"#fff",cursor:"pointer",fontSize:11,fontWeight:600}}>â</button>
+                          <button onClick={()=>{setEditId(null);setEditData(null);}} style={{padding:"4px 8px",background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:5,color:"var(--text-muted)",cursor:"pointer",fontSize:11}}>â</button>
                         </div>
                       ):(
                         <div style={{display:"flex",gap:4,justifyContent:"flex-end"}}>
-                          <button onClick={()=>startEdit(t)} style={{padding:"4px 8px",background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:5,color:"var(--text-muted)",cursor:"pointer",fontSize:11}}></button>
-                          <button onClick={()=>setConfirmDelete(t)} style={{padding:"4px 8px",background:"rgba(248,113,113,0.1)",border:"1px solid rgba(248,113,113,0.3)",borderRadius:5,color:"var(--red)",cursor:"pointer",fontSize:11}}></button>
+                          <button onClick={()=>startEdit(t)} style={{padding:"4px 8px",background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:5,color:"var(--text-muted)",cursor:"pointer",fontSize:11}}>âï¸</button>
+                          <button onClick={()=>setConfirmDelete(t)} style={{padding:"4px 8px",background:"rgba(248,113,113,0.1)",border:"1px solid rgba(248,113,113,0.3)",borderRadius:5,color:"var(--red)",cursor:"pointer",fontSize:11}}>ð</button>
                         </div>
                       )}
                     </td>
@@ -3448,11 +3312,11 @@ function OperacionesTab({trades,port,setTrades,setPort,card,livePrices,darkMode}
         </div>
       </div>
 
-      {/* Modal confirmacion eliminar */}
+      {/* Modal confirmaciÃ³n eliminar */}
       {confirmDelete&&(
         <div className={darkMode?"theme-dark":"theme-light"} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300}}>
           <div style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:16,padding:28,width:420,maxWidth:"95vw"}}>
-            <div style={{fontFamily:"Georgia,serif",fontSize:16,fontWeight:700,marginBottom:12}}>Eliminar operacion?</div>
+            <div style={{fontFamily:"Georgia,serif",fontSize:16,fontWeight:700,marginBottom:12}}>Â¿Eliminar operaciÃ³n?</div>
             <div style={{background:"var(--bg-input)",borderRadius:8,padding:"12px 14px",marginBottom:16,fontSize:13}}>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
                 <span style={{fontWeight:700,fontFamily:"monospace",color:"var(--accent)"}}>{confirmDelete.ticker}</span>
@@ -3462,9 +3326,9 @@ function OperacionesTab({trades,port,setTrades,setPort,card,livePrices,darkMode}
                   {confirmDelete.tipo==="compra"?"Compra":"Venta"}
                 </span>
               </div>
-              <div style={{fontSize:12,color:"var(--text-muted)"}}>{confirmDelete.date} - {Number(confirmDelete.qty).toLocaleString("es-AR")} nominales - {confirmDelete.currency==="USD"?fmtU(confirmDelete.price,4):fmtA(confirmDelete.price)}</div>
+              <div style={{fontSize:12,color:"var(--text-muted)"}}>{confirmDelete.date} Â· {Number(confirmDelete.qty).toLocaleString("es-AR")} nominales Â· {confirmDelete.currency==="USD"?fmtU(confirmDelete.price,4):fmtA(confirmDelete.price)}</div>
             </div>
-            <div style={{fontSize:12,color:"var(--yellow)",marginBottom:20}}> Esta accion elimina la operacion del historial. Si era la unica compra del activo, se elimina del portfolio.</div>
+            <div style={{fontSize:12,color:"var(--yellow)",marginBottom:20}}>â  Esta acciÃ³n elimina la operaciÃ³n del historial. Si era la Ãºnica compra del activo, se elimina del portfolio.</div>
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
               <button onClick={()=>setConfirmDelete(null)} style={{padding:"8px 18px",background:"transparent",border:"1px solid var(--border)",borderRadius:8,color:"var(--text-muted)",cursor:"pointer"}}>Cancelar</button>
               <button onClick={()=>deleteTrade(confirmDelete)} style={{padding:"8px 18px",background:"var(--red)",border:"none",borderRadius:8,color:"#fff",cursor:"pointer",fontWeight:600}}>Eliminar definitivo</button>
@@ -3481,7 +3345,7 @@ function RankingWidget({en, historicos, fxRate, currency}){
     {key:"30d", label:"30d"},
     {key:"90d", label:"90d"},
     {key:"ytd", label:"YTD"},
-    {key:"1y",  label:"1 ano"},
+    {key:"1y",  label:"1 aÃ±o"},
   ];
   const [period, setPeriod] = useState("30d");
 
@@ -3530,7 +3394,7 @@ function RankingWidget({en, historicos, fxRate, currency}){
   return(
     <div>
       <div style={{padding:"10px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Ranking - rendimiento del instrumento</span>
+        <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Ranking Â· rendimiento del instrumento</span>
         <div style={{display:"flex",gap:3}}>
           {PERIODS.map(p=>(
             <button key={p.key} onClick={()=>setPeriod(p.key)}
@@ -3568,12 +3432,12 @@ function RankingWidget({en, historicos, fxRate, currency}){
             background:"var(--bg-input)",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}
           onMouseEnter={e=>e.currentTarget.style.color="var(--text-primary)"}
           onMouseLeave={e=>e.currentTarget.style.color="var(--text-muted)"}>
-          {showAll?` Ver menos`:` Ver todos (${ranked.length})`}
+          {showAll?`â² Ver menos`:`â¼ Ver todos (${ranked.length})`}
         </div>
       )}
 
       <div style={{padding:"5px 16px",fontSize:9,color:"var(--text-muted)",borderTop:"1px solid var(--border)"}}>
-        Rendimiento del instrumento en el periodo - dolarizado a {dolarLabel}
+        Rendimiento del instrumento en el perÃ­odo Â· dolarizado a {dolarLabel}
       </div>
     </div>
   );
@@ -3613,13 +3477,13 @@ function DayMoversWidget({en, historicos, fxRate, livePrices, card, hideAmounts=
       <div style={{width:36,flexShrink:0}}>
         <div style={{fontWeight:700,fontFamily:"monospace",fontSize:12,color:"var(--accent)"}}>{h.ticker}</div>
         {h.hasLive
-          ?<div style={{fontSize:9,color:"var(--green)"}}> live</div>
+          ?<div style={{fontSize:9,color:"var(--green)"}}>â live</div>
           :<div style={{fontSize:9,color:"var(--text-muted)"}}>hist.</div>}
       </div>
       <div style={{flex:1,fontSize:11,color:"var(--text-secondary)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.name}</div>
       <div style={{textAlign:"right",flexShrink:0}}>
         <div style={{fontWeight:700,fontSize:13,color:pc(h.dayPct)}}>{fmtP(h.dayPct)}</div>
-        <div style={{fontSize:10,color:pc(h.dayPnl)}}>{hideAmounts?"":(h.dayPnl>=0?"+":"")+fmtU(h.dayPnl,0)}</div>
+        <div style={{fontSize:10,color:pc(h.dayPnl)}}>{hideAmounts?"â¢â¢â¢â¢":(h.dayPnl>=0?"+":"")+fmtU(h.dayPnl,0)}</div>
       </div>
     </div>
   );
@@ -3628,15 +3492,15 @@ function DayMoversWidget({en, historicos, fxRate, livePrices, card, hideAmounts=
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
       <div style={{...card,overflow:"hidden"}}>
         <div style={{padding:"10px 14px",borderBottom:"1px solid var(--border)",display:"flex",alignItems:"center",gap:8,background:"rgba(52,211,153,0.08)"}}>
-          <span></span>
-          <span style={{fontWeight:700,fontSize:12,color:"var(--green)"}}>Top 5 - Mejores del dia</span>
+          <span>ð</span>
+          <span style={{fontWeight:700,fontSize:12,color:"var(--green)"}}>Top 5 Â· Mejores del dÃ­a</span>
         </div>
         {top5.map(h=>row(h,true))}
       </div>
       <div style={{...card,overflow:"hidden"}}>
         <div style={{padding:"10px 14px",borderBottom:"1px solid var(--border)",display:"flex",alignItems:"center",gap:8,background:"rgba(248,113,113,0.05)"}}>
-          <span></span>
-          <span style={{fontWeight:700,fontSize:12,color:"var(--red)"}}>Bottom 5 - Peores del dia</span>
+          <span>ð</span>
+          <span style={{fontWeight:700,fontSize:12,color:"var(--red)"}}>Bottom 5 Â· Peores del dÃ­a</span>
         </div>
         {bot5.map(h=>row(h,false))}
       </div>
@@ -3647,17 +3511,17 @@ function DayMoversWidget({en, historicos, fxRate, livePrices, card, hideAmounts=
 
 function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAmounts=false, trades=[], isMobile=false}) {
   const PERIODS_AN = [
-    {key:"todo",  label:"Todo el periodo", days:null, start:"2026-01-01"},
+    {key:"todo",  label:"Todo el perÃ­odo", days:null, start:"2026-01-01"},
     {key:"ytd",   label:"YTD",             days:null, ytd:true},
-    {key:"90d",   label:"90 dias",          days:90},
-    {key:"30d",   label:"30 dias",          days:30},
+    {key:"90d",   label:"90 dÃ­as",          days:90},
+    {key:"30d",   label:"30 dÃ­as",          days:30},
   ];
   const [period, setPeriod] = useState("todo");
   const fmtU=(n,d=0)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"USD",maximumFractionDigits:d}).format(n);
   const fmtP=(n,d=2)=>`${n>=0?"+":""}${parseFloat(n).toFixed(d)}%`;
   const pc=(n)=>n>=0?"var(--green)":"var(--red)";
 
-  // Calcular fecha de inicio del periodo
+  // Calcular fecha de inicio del perÃ­odo
   const getPeriodStart = (p) => {
     const today = todayAR();
     if(p.start) return p.start;
@@ -3669,7 +3533,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
   const startDate = getPeriodStart(selP);
   const endDate = todayAR();
 
-  // Calcular retorno de un activo en el periodo
+  // Calcular retorno de un activo en el perÃ­odo
   const calcReturn = (ticker, buyCurrency) => {
     const bars = historicos?.[ticker]||[];
     if(!bars.length) return null;
@@ -3684,7 +3548,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
     const f = bars.filter(b=>b.date>=start&&b.date<=end);
     if(f.length < 2) return null;
 
-    // Max Drawdown: caida desde un pico hasta el valle subsiguiente
+    // Max Drawdown: caÃ­da desde un pico hasta el valle subsiguiente
     let maxDD=0, ddStart="", ddTrough="", ddRecovery="";
     let peak=f[0].close, peakDate=f[0].date;
     for(const b of f){
@@ -3692,7 +3556,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
       const dd=(b.close-peak)/peak*100;
       if(dd<maxDD){ maxDD=dd; ddStart=peakDate; ddTrough=b.date; }
     }
-    // Dias de recuperacion: desde el trough hasta que vuelve al nivel del pico
+    // DÃ­as de recuperaciÃ³n: desde el trough hasta que vuelve al nivel del pico
     if(ddTrough){
       const troughBar=f.find(b=>b.date===ddTrough);
       const peakVal=f.find(b=>b.date===ddStart)?.close||peak;
@@ -3715,9 +3579,9 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
     return {maxDD, ddStart, ddTrough, ddRecovery, ddDays, recDays, maxRally, rallyStart, rallyEnd, rallyDays};
   };
 
-  // Portfolio TWR  misma logica que el grafico principal
+  // Portfolio TWR â misma lÃ³gica que el grÃ¡fico principal
   // portSeries: calcular sin precios live para no recalcular al llegar precios
-  // Los precios live solo afectan el ultimo punto, no todo el historico
+  // Los precios live solo afectan el Ãºltimo punto, no todo el histÃ³rico
   const portSeriesBase = useMemo(()=>{
     if(!historicos||!Object.keys(historicos).length) return [];
     const cclBars = historicos?.CCL||[];
@@ -3739,7 +3603,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
   const [mobileSection, setMobileSection] = useState("contribucion"); // mobile: acordeon
   const toggleSort = (col) => setSortContrib(prev => prev.col===col ? {...prev,asc:!prev.asc} : {col, asc:false});
 
-  // Contribucion al rendimiento  considera tenencia real en el periodo
+  // ContribuciÃ³n al rendimiento â considera tenencia real en el perÃ­odo
   const contributions = useMemo(()=>{
     const cclBars = historicos?.CCL||[];
     // Cache de CCL por fecha para no re-buscar en cada activo
@@ -3756,10 +3620,10 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
       return price*qtyF/getCCL(date);
     };
 
-    // Helper: precio mas cercano a una fecha  biseccion O(log n)
+    // Helper: precio mÃ¡s cercano a una fecha â bisecciÃ³n O(log n)
     const closestPrice = (bars, dateStr) => {
       if(!bars||!bars.length) return null;
-      // Biseccion para encontrar el ultimo bar <= dateStr
+      // BisecciÃ³n para encontrar el Ãºltimo bar <= dateStr
       let lo=0, hi=bars.length-1, res=-1;
       while(lo<=hi){
         const mid=(lo+hi)>>1;
@@ -3770,22 +3634,22 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
       return bars[0].close;
     };
 
-    // Todos los tickers activos en el periodo: los que tengo hoy + los que tuve y vendi
+    // Todos los tickers activos en el perÃ­odo: los que tengo hoy + los que tuve y vendÃ­
     const tickersHoy = new Set(en.map(h=>h.ticker));
 
-    // Detectar todos los tickers que tuve en algun momento pero ya no tengo
+    // Detectar todos los tickers que tuve en algÃºn momento pero ya no tengo
     // Un activo debe aparecer si:
-    //   a) tuvo trades dentro del periodo, O
-    //   b) tenia posicion al inicio del periodo (lo compre antes y vendi antes o durante)
+    //   a) tuvo trades dentro del perÃ­odo, O
+    //   b) tenÃ­a posiciÃ³n al inicio del perÃ­odo (lo comprÃ© antes y vendÃ­ antes o durante)
     const allTradeTickers = [...new Set(trades.map(t=>t.ticker))].filter(t=>!tickersHoy.has(t));
 
     const tickersCerrados = allTradeTickers.filter(ticker=>{
-      // Tuvo posicion en algun momento del periodo [startDate, endDate]?
+      // Â¿Tuvo posiciÃ³n en algÃºn momento del perÃ­odo [startDate, endDate]?
       const buysAll  = trades.filter(t=>t.ticker===ticker&&t.tipo==="compra");
       const sellsAll = trades.filter(t=>t.ticker===ticker&&t.tipo==="venta");
       if(!buysAll.length) return false;
 
-      // Fecha de primera compra y ultima venta
+      // Fecha de primera compra y Ãºltima venta
       const firstBuy  = buysAll.map(t=>t.date).sort()[0];
       const lastSell  = sellsAll.map(t=>t.date).sort().pop()||endDate;
 
@@ -3793,14 +3657,14 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
       return firstBuy <= endDate && lastSell >= startDate;
     });
 
-    // Construir lista completa: posiciones actuales + cerradas en el periodo
+    // Construir lista completa: posiciones actuales + cerradas en el perÃ­odo
     const posicionesCerradas = tickersCerrados.map(ticker=>{
       const allT = trades.filter(t=>t.ticker===ticker).sort((a,b)=>a.date.localeCompare(b.date));
       const firstTrade = allT[0];
       const currency = firstTrade?.currency||"ARS";
       // Inferir si es bono: ticker termina en D (USD) o tiene historial de bono
-      // Convencion BYMA: bonos USD terminan en D, bonos ARS sin D pero con suffix numerico
-      const isBondTicker = /\d/.test(ticker); // tiene numero  probablemente bono
+      // ConvenciÃ³n BYMA: bonos USD terminan en D, bonos ARS sin D pero con suffix numÃ©rico
+      const isBondTicker = /\d/.test(ticker); // tiene nÃºmero â probablemente bono
       const inferredType = currency==="USD"
         ? (isBondTicker?"bono_usd":"accion_usd")
         : (isBondTicker?"bono_ars":"accion_ar");
@@ -3817,9 +3681,9 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
     });
     const todasPosiciones = [...en.map(h=>({...h,cerrado:false})), ...posicionesCerradas];
 
-    // Reconstruir qty de cada ticker al inicio del periodo desde trades
-    // Usar <= startDate para incluir los comprados el mismo dia de inicio
-    // cashCompras/cashVentas excluiran esos trades usando > startDate
+    // Reconstruir qty de cada ticker al inicio del perÃ­odo desde trades
+    // Usar <= startDate para incluir los comprados el mismo dÃ­a de inicio
+    // cashCompras/cashVentas excluirÃ¡n esos trades usando > startDate
     const qtyAtStart = {};
     const allTickers = [...new Set(todasPosiciones.map(h=>h.ticker))];
     allTickers.forEach(ticker=>{
@@ -3835,20 +3699,20 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
       if(!endBar) return null;
       const isBond = h.type==="bono_usd"||h.type==="bono_ars";
 
-      // Qty al inicio del periodo (puede ser 0 si fue comprado despues)
+      // Qty al inicio del perÃ­odo (puede ser 0 si fue comprado despuÃ©s)
       const qtyStart = qtyAtStart[h.ticker]||0;
       // Qty actual (la de en[])
       const qtyEnd = h.qty;
 
-      // Si no tenia nada al inicio Y no compro durante el periodo  saltar
+      // Si no tenÃ­a nada al inicio Y no comprÃ³ durante el perÃ­odo â saltar
       if(qtyStart===0 && qtyEnd===0) return null;
 
-      // Precio base: si tenia posicion al inicio  usar precio historico del startDate
-      //              si compro durante el periodo  usar precio promedio de compras del periodo
+      // Precio base: si tenÃ­a posiciÃ³n al inicio â usar precio histÃ³rico del startDate
+      //              si comprÃ³ durante el perÃ­odo â usar precio promedio de compras del perÃ­odo
       let basePrice, baseDate, usedBuyPrice=false, qtyBase;
 
       if(qtyStart > 0){
-        // Tenia posicion al inicio  base = precio al startDate
+        // TenÃ­a posiciÃ³n al inicio â base = precio al startDate
         const startPrice = closestPrice(bars, startDate);
         if(startPrice){
           basePrice = startPrice;
@@ -3857,15 +3721,15 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
           baseDate  = before.length ? before[before.length-1].date : startDate;
           qtyBase   = qtyStart;
         } else {
-          // Sin historial  usar precio de compra
+          // Sin historial â usar precio de compra
           basePrice = h.buyPrice||0;
           baseDate  = startDate;
           qtyBase   = qtyStart;
           usedBuyPrice = true;
         }
       } else {
-        // Comprado durante el periodo  base para retPct = precio historico al inicio si existe
-        // (para mostrar como se movio el activo en el periodo aunque no lo tuvieras)
+        // Comprado durante el perÃ­odo â base para retPct = precio histÃ³rico al inicio si existe
+        // (para mostrar cÃ³mo se moviÃ³ el activo en el perÃ­odo aunque no lo tuvieras)
         const startPrice2 = closestPrice(bars, startDate);
         if(startPrice2){
           basePrice = startPrice2;
@@ -3873,7 +3737,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
           baseDate  = before2.length ? before2[before2.length-1].date : startDate;
           usedBuyPrice = false; // hay precio real
         } else {
-          // Sin historial  usar primer precio de compra del periodo
+          // Sin historial â usar primer precio de compra del perÃ­odo
           const periodBuys = trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra"&&t.date>=startDate&&t.date<=endDate);
           const totalQty = periodBuys.reduce((a,t)=>a+t.qty,0);
           const totalCost= periodBuys.reduce((a,t)=>a+t.qty*t.price,0);
@@ -3881,7 +3745,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
           baseDate  = periodBuys[0]?.date||startDate;
           usedBuyPrice = true;
         }
-        qtyBase = 0; // no tenia posicion al inicio  valInicio = 0
+        qtyBase = 0; // no tenÃ­a posiciÃ³n al inicio â valInicio = 0
         // Recalcular periodBuysCF incluyendo el startDate para el caso de compra en startDate
         const allPeriodBuys = trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra"&&t.date>=startDate&&t.date<=endDate);
         if(allPeriodBuys.length && !basePrice){
@@ -3904,11 +3768,11 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
         if(ratio < 0.02) adjBase  = adjBase/100;
       }
 
-      // Rend. %: rendimiento del precio en el periodo (siempre precio base  precio actual)
+      // Rend. %: rendimiento del precio en el perÃ­odo (siempre precio base â precio actual)
       const retPct = ((adjClose - adjBase)/adjBase)*100;
 
-      // P&L real del periodo usando flujos de caja:
-      // P&L = valor_final - valor_inicial - compras_del_periodo + ventas_del_periodo
+      // P&L real del perÃ­odo usando flujos de caja:
+      // P&L = valor_final - valor_inicial - compras_del_perÃ­odo + ventas_del_perÃ­odo
       const qtyFactor = (qty) => isBond ? qty/100 : qty;
       const toCCL     = (price, date) => {
         if(h.buyCurrency==="USD") return price;
@@ -3916,22 +3780,22 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
         return price / (cclBar?.close||fxRate);
       };
 
-      // Valor al inicio del periodo (qtyStart  precio al inicio)
+      // Valor al inicio del perÃ­odo (qtyStart Ã precio al inicio)
       const valInicio = qtyStart>0 ? toCCL(adjBase, baseDate) * qtyFactor(qtyStart) : 0;
 
-      // Valor al final del periodo (qtyEnd  precio actual)
+      // Valor al final del perÃ­odo (qtyEnd Ã precio actual)
       const valFinal = toCCL(adjClose, endDate) * qtyFactor(qtyEnd);
 
-      // Compras durante el periodo (cash saliente  resta)
-      // Usar > startDate para no doble-contar compras del dia inicial (ya en qtyAtStart)
+      // Compras durante el perÃ­odo (cash saliente â resta)
+      // Usar > startDate para no doble-contar compras del dÃ­a inicial (ya en qtyAtStart)
       const periodBuysCF  = trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra"&&t.date>startDate&&t.date<=endDate);
       const cashCompras = periodBuysCF.reduce((a,t)=>{
         const f = isBond ? t.qty/100 : t.qty;
         return a + toCCL(t.price, t.date) * f;
       }, 0);
 
-      // Ventas durante el periodo (cash entrante  suma)
-      // Usar > startDate para no doble-contar ventas del dia inicial
+      // Ventas durante el perÃ­odo (cash entrante â suma)
+      // Usar > startDate para no doble-contar ventas del dÃ­a inicial
       const periodSellsCF = trades.filter(t=>t.ticker===h.ticker&&t.tipo==="venta"&&t.date>startDate&&t.date<=endDate);
       const cashVentas = periodSellsCF.reduce((a,t)=>{
         const f = isBond ? t.qty/100 : t.qty;
@@ -3946,16 +3810,16 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
       // Rend % para cerrados: usar precio de venta vs precio base
       let retPctFinal = retPct;
       if(h.cerrado){
-        // Calcular qty total operada en el periodo para el rend %
+        // Calcular qty total operada en el perÃ­odo para el rend %
         const qtyCerrada = periodSellsCF.reduce((a,t)=>a+t.qty,0)||periodBuysCF.reduce((a,t)=>a+t.qty,0)||1;
         const qtyF = isBond ? qtyCerrada/100 : qtyCerrada;
         if(valInicio===0 && cashCompras>0 && cashVentas>0){
-          // Comprado y vendido dentro del periodo
+          // Comprado y vendido dentro del perÃ­odo
           const avgBuy  = cashCompras / qtyF;
           const avgSell = cashVentas  / qtyF;
           if(avgBuy>0) retPctFinal = ((avgSell-avgBuy)/avgBuy)*100;
         } else if(valInicio>0 && cashVentas>0){
-          // Tenia al inicio y vendio: rend del precio desde inicio
+          // TenÃ­a al inicio y vendiÃ³: rend del precio desde inicio
           retPctFinal = retPct; // ya calculado arriba
         }
       }
@@ -3983,7 +3847,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
   const spExtremes = useMemo(()=>calcExtremes(spBars,startDate,endDate),[spBars,startDate,endDate]);
   const spReturn = calcReturn("sp500","USD");
 
-  // Distribucion de retornos diarios del portfolio
+  // DistribuciÃ³n de retornos diarios del portfolio
   const dailyReturns = useMemo(()=>{
     const rets=[];
     for(let i=1;i<portSeries.length;i++){
@@ -3992,7 +3856,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
     return rets;
   },[portSeries]);
 
-  const fmtDate = d=>d?d.slice(8)+"/"+d.slice(5,7)+"/"+d.slice(0,4):"";
+  const fmtDate = d=>d?d.slice(8)+"/"+d.slice(5,7)+"/"+d.slice(0,4):"â";
   const btnStyle = (active)=>({
     padding:"4px 12px",borderRadius:6,border:"1px solid var(--border)",cursor:"pointer",fontSize:11,fontWeight:active?700:400,
     background:active?"var(--accent)":"var(--bg-input)",color:active?"#fff":"var(--text-secondary)"
@@ -4001,26 +3865,26 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
     <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1.2,fontWeight:600,marginBottom:12}}>{t}</div>
   );
 
-  // Mobile: tabs de seccion
+  // Mobile: tabs de secciÃ³n
   const MOBILE_SECTIONS = [
-    {k:"contribucion", l:"Contribucion"},
+    {k:"contribucion", l:"ContribuciÃ³n"},
     {k:"extremos", l:"Extremos"},
     {k:"retornos", l:"Retornos"},
-    {k:"correlacion", l:"Correlacion"},
+    {k:"correlacion", l:"CorrelaciÃ³n"},
   ];
 
   return(
     <div className="fi" style={{display:"grid",gap:isMobile?10:16}}>
 
-      {/* Selector de periodo */}
+      {/* Selector de perÃ­odo */}
       <div style={{display:"flex",gap:isMobile?4:8,alignItems:"center",flexWrap:"wrap"}}>
         {PERIODS_AN.map(p=>(
           <button key={p.key} onClick={()=>setPeriod(p.key)} style={{...btnStyle(period===p.key),padding:isMobile?"4px 10px":"4px 12px",fontSize:isMobile?11:11}}>{p.label}</button>
         ))}
-        <span style={{fontSize:10,color:"var(--text-muted)",marginLeft:4}}>{fmtDate(startDate)}  {fmtDate(endDate)}</span>
+        <span style={{fontSize:10,color:"var(--text-muted)",marginLeft:4}}>{fmtDate(startDate)} â {fmtDate(endDate)}</span>
       </div>
 
-      {/* Mobile: tabs de seccion */}
+      {/* Mobile: tabs de secciÃ³n */}
       {isMobile&&(
         <div style={{display:"flex",gap:0,background:"var(--bg-input)",borderRadius:8,padding:2,overflowX:"auto"}}>
           {MOBILE_SECTIONS.map(s=>(
@@ -4035,35 +3899,35 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
         </div>
       )}
 
-      {/*  Seccion filtrada por periodo  */}
+      {/* ââ SecciÃ³n filtrada por perÃ­odo âââââââââââââââââââââââââââââââââââââ */}
       <div style={{border:"1px solid rgba(59,130,246,0.15)",borderRadius:12,padding:isMobile?"10px":"16px",display:"grid",gap:isMobile?10:16,background:"rgba(59,130,246,0.02)"}}>
-      {!isMobile&&<div style={{fontSize:10,color:"rgba(96,165,250,0.6)",textTransform:"uppercase",letterSpacing:1,marginBottom:-8}}> Aplica filtro de periodo</div>}
+      {!isMobile&&<div style={{fontSize:10,color:"rgba(96,165,250,0.6)",textTransform:"uppercase",letterSpacing:1,marginBottom:-8}}>â Aplica filtro de perÃ­odo</div>}
 
       {/* Fila superior: Extremos Portfolio + S&P */}
       {(!isMobile||mobileSection==="extremos")&&<div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12}}>
         {[
-          {label:"[CHART] Mi Portfolio", ex:portExtremes},
-          {label:" S&P 500",      ex:spExtremes},
+          {label:"Mi Portfolio", ex:portExtremes},
+          {label:"ðºð¸ S&P 500",      ex:spExtremes},
         ].map(({label,ex})=>(
           <div key={label} style={{...card,padding:"16px 20px"}}>
             <div style={{fontSize:12,fontWeight:700,color:"var(--text-primary)",marginBottom:12}}>{label}</div>
             {ex ? (
               <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:10}}>
-                {/* Mayor caida */}
+                {/* Mayor caÃ­da */}
                 <div style={{background:"rgba(248,113,113,0.07)",border:"1px solid rgba(248,113,113,0.2)",borderRadius:8,padding:"12px 14px"}}>
-                  <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Mayor caida</div>
+                  <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Mayor caÃ­da</div>
                   <div style={{fontSize:isMobile?18:22,fontWeight:700,color:"var(--red)",fontFamily:"'DM Mono',monospace"}}>{fmtP(ex.maxDD)}</div>
                   <div style={{fontSize:10,color:"var(--text-muted)",marginTop:6}}>
                     <span>{fmtDate(ex.ddStart)}</span>
-                    <span style={{margin:"0 4px"}}></span>
+                    <span style={{margin:"0 4px"}}>â</span>
                     <span>{fmtDate(ex.ddTrough)}</span>
                   </div>
                   <div style={{fontSize:10,color:"var(--text-muted)",marginTop:3}}>
-                    {ex.ddDays} dias de caida
+                    {ex.ddDays} dÃ­as de caÃ­da
                   </div>
                   {ex.recDays!=null
-                    ? <div style={{fontSize:10,color:"var(--green)",marginTop:3}}> Recupero en {ex.recDays} dias</div>
-                    : ex.ddTrough ? <div style={{fontSize:10,color:"var(--yellow)",marginTop:3}}> Sin recuperar aun</div> : null
+                    ? <div style={{fontSize:10,color:"var(--green)",marginTop:3}}>â RecuperÃ³ en {ex.recDays} dÃ­as</div>
+                    : ex.ddTrough ? <div style={{fontSize:10,color:"var(--yellow)",marginTop:3}}>â³ Sin recuperar aÃºn</div> : null
                   }
                 </div>
                 {/* Mayor rally */}
@@ -4072,11 +3936,11 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
                   <div style={{fontSize:isMobile?18:22,fontWeight:700,color:"var(--green)",fontFamily:"'DM Mono',monospace"}}>{fmtP(ex.maxRally)}</div>
                   <div style={{fontSize:10,color:"var(--text-muted)",marginTop:6}}>
                     <span>{fmtDate(ex.rallyStart)}</span>
-                    <span style={{margin:"0 4px"}}></span>
+                    <span style={{margin:"0 4px"}}>â</span>
                     <span>{fmtDate(ex.rallyEnd)}</span>
                   </div>
                   <div style={{fontSize:10,color:"var(--text-muted)",marginTop:3}}>
-                    {ex.rallyDays} dias de suba
+                    {ex.rallyDays} dÃ­as de suba
                   </div>
                 </div>
               </div>
@@ -4085,14 +3949,14 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
         ))}
       </div>}
 
-      {/* Contribucion al rendimiento */}
+      {/* ContribuciÃ³n al rendimiento */}
       {(!isMobile||mobileSection==="contribucion")&&<div style={{...card,padding:isMobile?"10px 12px":"16px 20px"}}>
-        {sectionTitle("Contribucion al rendimiento - " + (selP.key==="todo"?"desde precio de compra":"rendimiento del periodo"))}
+        {sectionTitle("ContribuciÃ³n al rendimiento Â· " + (selP.key==="todo"?"desde precio de compra":"rendimiento del perÃ­odo"))}
 
         {isMobile ? (
           /* Mobile: filas compactas con barra */
           <div style={{display:"flex",flexDirection:"column",gap:1,marginTop:8}}>
-            {/* Sort rapido mobile */}
+            {/* Sort rÃ¡pido mobile */}
             <div style={{display:"flex",gap:4,marginBottom:8}}>
               {[["contrib","Contrib."],["pnl","P&L"],["rend","Rend."]].map(([k,l])=>(
                 <button key={k} onClick={()=>toggleSort(k)}
@@ -4100,7 +3964,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
                     fontSize:10,fontWeight:sortContrib.col===k?700:400,cursor:"pointer",
                     background:sortContrib.col===k?"var(--accent)":"var(--bg-input)",
                     color:sortContrib.col===k?"#fff":"var(--text-secondary)"}}>
-                  {l}{sortContrib.col===k?(sortContrib.asc?" ":" "):""}
+                  {l}{sortContrib.col===k?(sortContrib.asc?" â":" â"):""}
                 </button>
               ))}
             </div>
@@ -4117,7 +3981,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
                     </div>
                     <div style={{display:"flex",gap:12,alignItems:"center"}}>
                       <span style={{fontSize:11,fontWeight:600,color:pc(h.retPct)}}>{fmtP(h.retPct)}</span>
-                      <span style={{fontSize:11,color:pc(h.pnlUSD)}}>{hideAmounts?"":(h.pnlUSD>=0?"+":"")+fmtU(h.pnlUSD,0)}</span>
+                      <span style={{fontSize:11,color:pc(h.pnlUSD)}}>{hideAmounts?"â¢â¢â¢â¢":(h.pnlUSD>=0?"+":"")+fmtU(h.pnlUSD,0)}</span>
                       <span style={{fontSize:11,fontWeight:700,color:pc(contrib),minWidth:44,textAlign:"right"}}>{fmtP(contrib)}</span>
                     </div>
                   </div>
@@ -4129,7 +3993,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
             })}
             <div style={{display:"flex",justifyContent:"space-between",padding:"8px 4px",borderTop:"1px solid var(--border)",fontWeight:700,fontSize:12}}>
               <span>Total</span>
-              <span style={{color:pc(totalPnlUSD)}}>{hideAmounts?"":(totalPnlUSD>=0?"+":"")+fmtU(totalPnlUSD,0)}</span>
+              <span style={{color:pc(totalPnlUSD)}}>{hideAmounts?"â¢â¢â¢â¢":(totalPnlUSD>=0?"+":"")+fmtU(totalPnlUSD,0)}</span>
             </div>
           </div>
         ) : (
@@ -4137,7 +4001,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
           {(()=>{
             const SortTh = ({col, label, align="right"}) => {
               const active = sortContrib.col===col;
-              const arrow  = active ? (sortContrib.asc ? " " : " ") : "";
+              const arrow  = active ? (sortContrib.asc ? " â" : " â") : "";
               return (
                 <th onClick={()=>toggleSort(col)}
                   style={{padding:"6px 12px",textAlign:align,fontSize:10,fontWeight:active?700:600,
@@ -4156,7 +4020,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
                 {selP.key!=="todo"&&<th style={{padding:"6px 12px",textAlign:"right",fontSize:10,color:"var(--text-muted)",fontWeight:600,textTransform:"uppercase",letterSpacing:0.8}}>Precio base</th>}
                 <SortTh col="rend"   label="Rend. total"/>
                 <SortTh col="pnl"    label="P&L USD"/>
-                <SortTh col="contrib" label="Contribucion"/>
+                <SortTh col="contrib" label="ContribuciÃ³n"/>
                 <th style={{padding:"6px 12px",fontSize:10,color:"var(--text-muted)",fontWeight:600,textTransform:"uppercase",letterSpacing:0.8}}>Barra</th>
               </tr>
             </thead>
@@ -4176,11 +4040,11 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
                         <span style={{color:h.usedBuyPrice?"var(--yellow)":"var(--text-muted)",fontFamily:"'DM Mono',monospace"}}>
                           {h.buyCurrency==="USD"?fmtU(h.basePrice,2):`$${h.basePrice.toLocaleString("es-AR",{maximumFractionDigits:2})}`}
                         </span>
-                        {h.usedBuyPrice&&<span title="Sin historial para este periodo  se uso precio de compra" style={{marginLeft:4,color:"var(--yellow)",fontSize:9}}>pc</span>}
+                        {h.usedBuyPrice&&<span title="Sin historial para este perÃ­odo â se usÃ³ precio de compra" style={{marginLeft:4,color:"var(--yellow)",fontSize:9}}>âpc</span>}
                       </td>
                     )}
                     <td style={{padding:"8px 12px",textAlign:"right",fontWeight:600,color:pc(h.retPct)}}>{fmtP(h.retPct)}</td>
-                    <td style={{padding:"8px 12px",textAlign:"right",color:pc(h.pnlUSD)}}>{hideAmounts?"":(h.pnlUSD>=0?"+":"")+fmtU(h.pnlUSD,0)}</td>
+                    <td style={{padding:"8px 12px",textAlign:"right",color:pc(h.pnlUSD)}}>{hideAmounts?"â¢â¢â¢â¢":(h.pnlUSD>=0?"+":"")+fmtU(h.pnlUSD,0)}</td>
                     <td style={{padding:"8px 12px",textAlign:"right",fontWeight:600,color:pc(contrib)}}>{fmtP(contrib)}</td>
                     <td style={{padding:"8px 12px",width:120}}>
                       <div style={{height:6,borderRadius:3,background:"var(--bg-input)",overflow:"hidden"}}>
@@ -4195,15 +4059,15 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
               <tr style={{borderTop:"1px solid var(--border)"}}>
                 <td colSpan={selP.key!=="todo"?3:2} style={{padding:"8px 12px",fontWeight:700,fontSize:12}}>Total</td>
                 <td/>
-                <td style={{padding:"8px 12px",textAlign:"right",fontWeight:700,color:pc(totalPnlUSD)}}>{hideAmounts?"":(totalPnlUSD>=0?"+":"")+fmtU(totalPnlUSD,0)}</td>
+                <td style={{padding:"8px 12px",textAlign:"right",fontWeight:700,color:pc(totalPnlUSD)}}>{hideAmounts?"â¢â¢â¢â¢":(totalPnlUSD>=0?"+":"")+fmtU(totalPnlUSD,0)}</td>
                 <td colSpan={2}/>
               </tr>
             </tfoot>
           </table>
           {selP.key!=="todo" && contributionsSorted.some(h=>h.usedBuyPrice) && (
             <div style={{marginTop:8,fontSize:11,color:"var(--yellow)",display:"flex",gap:6,alignItems:"center"}}>
-              <span>pc</span>
-              <span>= sin datos historicos para este periodo  se uso precio de compra como base.</span>
+              <span>âpc</span>
+              <span>= sin datos histÃ³ricos para este perÃ­odo â se usÃ³ precio de compra como base.</span>
             </div>
           )}
           </>);})()}
@@ -4211,9 +4075,9 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
         )}
       </div>}
 
-      {(!isMobile||mobileSection==="retornos")&&<>{/* Retornos diarios  version legible */}
+      {(!isMobile||mobileSection==="retornos")&&<>{/* Retornos diarios â versiÃ³n legible */}
       <div style={{...card,padding:"16px 20px"}}>
-        {sectionTitle("Estadisticas de retornos diarios")}
+        {sectionTitle("EstadÃ­sticas de retornos diarios")}
         {(()=>{
           if(dailyReturns.length<5) return <div style={{color:"var(--text-muted)",fontSize:12}}>Sin datos suficientes</div>;
           const avg = dailyReturns.reduce((a,b)=>a+b,0)/dailyReturns.length;
@@ -4240,7 +4104,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
             <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:isMobile?12:20}}>
               {/* Barras por rango */}
               <div>
-                <div style={{fontSize:10,color:"var(--text-muted)",marginBottom:10,textTransform:"uppercase",letterSpacing:1}}>Dias por rango de retorno</div>
+                <div style={{fontSize:10,color:"var(--text-muted)",marginBottom:10,textTransform:"uppercase",letterSpacing:1}}>DÃ­as por rango de retorno</div>
                 <div style={{display:"flex",flexDirection:"column",gap:6}}>
                   {rangos.map(({l,count,c})=>(
                     <div key={l} style={{display:"flex",alignItems:"center",gap:8}}>
@@ -4255,15 +4119,15 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
               </div>
               {/* KPIs */}
               <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:2}}>Metricas clave</div>
+                <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:2}}>MÃ©tricas clave</div>
                 <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr",gap:8}}>
                   {[
-                    {l:"Dias positivos", v:`${pos} (${pctPos}%)`, c:"var(--green)"},
-                    {l:"Dias negativos", v:`${neg} (${(100-parseInt(pctPos))}%)`, c:"var(--red)"},
+                    {l:"DÃ­as positivos", v:`${pos} (${pctPos}%)`, c:"var(--green)"},
+                    {l:"DÃ­as negativos", v:`${neg} (${(100-parseInt(pctPos))}%)`, c:"var(--red)"},
                     {l:"Retorno promedio", v:fmtP(avg), c:pc(avg)},
                     {l:"Volatilidad anualizada", v:fmtP(volAnual), c:"var(--text-secondary)"},
-                    {l:"Mejor dia", v:fmtP(maxR), c:"var(--green)"},
-                    {l:"Peor dia", v:fmtP(minR), c:"var(--red)"},
+                    {l:"Mejor dÃ­a", v:fmtP(maxR), c:"var(--green)"},
+                    {l:"Peor dÃ­a", v:fmtP(minR), c:"var(--red)"},
                   ].map(({l,v,c})=>(
                     <div key={l} style={{background:"var(--bg-input)",borderRadius:7,padding:"8px 10px"}}>
                       <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8,marginBottom:3}}>{l}</div>
@@ -4280,14 +4144,14 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
 
       </div>{/* /filtered-block */}
 
-      {/* Correlacion entre activos  SIN filtro de periodo */}
+      {/* CorrelaciÃ³n entre activos â SIN filtro de perÃ­odo */}
       {(!isMobile||mobileSection==="correlacion")&&<div style={{...card,padding:isMobile?"10px 12px":"16px 20px"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:isMobile?"flex-start":"center",flexDirection:isMobile?"column":"row",gap:isMobile?6:0,marginBottom:12}}>
-          {sectionTitle("Correlacion entre activos - retornos diarios")}
-          <span style={{fontSize:10,color:"var(--text-muted)",fontStyle:"italic",background:"rgba(251,191,36,0.08)",border:"1px solid rgba(251,191,36,0.2)",borderRadius:5,padding:"2px 8px"}}> Usa todo el historico - no aplica filtro</span>
+          {sectionTitle("CorrelaciÃ³n entre activos Â· retornos diarios")}
+          <span style={{fontSize:10,color:"var(--text-muted)",fontStyle:"italic",background:"rgba(251,191,36,0.08)",border:"1px solid rgba(251,191,36,0.2)",borderRadius:5,padding:"2px 8px"}}>â  Usa todo el histÃ³rico Â· no aplica filtro</span>
         </div>
         {(()=>{
-          // Correlacion usa TODO el historico disponible  sin filtro de periodo
+          // CorrelaciÃ³n usa TODO el histÃ³rico disponible â sin filtro de perÃ­odo
           const activos = en.filter(h=>{
             const bars=(historicos?.[h.ticker]||[]);
             return bars.length>=10;
@@ -4295,7 +4159,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
 
           if(activos.length<2) return <div style={{color:"var(--text-muted)",fontSize:12}}>Se necesitan al menos 2 activos con datos</div>;
 
-          // Retornos diarios sobre todo el historico
+          // Retornos diarios sobre todo el histÃ³rico
           const rets = activos.map(h=>{
             const bars=(historicos?.[h.ticker]||[]).slice().sort((a,b)=>a.date.localeCompare(b.date));
             const r=[];
@@ -4303,7 +4167,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
             return {ticker:h.ticker, rets:r};
           });
 
-          // Matriz de correlacion
+          // Matriz de correlaciÃ³n
           const corr = (a,b) => {
             const n=Math.min(a.length,b.length);
             if(n<3) return null;
@@ -4324,7 +4188,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
             return "rgba(255,255,255,0.05)";
           };
 
-          //  Metricas de riesgo ponderadas 
+          // ââ MÃ©tricas de riesgo ponderadas âââââââââââââââââââââââââââââââââââ
           // Pesos en cartera basados en valEnd (USD)
           const totalVal = contributions.reduce((a,c)=>a+Math.max(0,c.valEnd||0),0)||1;
           const weights  = activos.map(h=>{
@@ -4339,11 +4203,11 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
             return Math.sqrt(r.rets.reduce((a,b)=>a+(b-mu)**2,0)/n);
           });
 
-          // Volatilidad ponderada simple (sin correlaciones)  benchmark
+          // Volatilidad ponderada simple (sin correlaciones) â benchmark
           const volWeighted = vols.reduce((a,v,i)=>a+weights[i]*v,0) * Math.sqrt(252) * 100;
 
-          // Volatilidad real del portfolio (con correlaciones)  formula matricial
-          // _p = _i _j w_i * w_j * _i * _j * _ij
+          // Volatilidad real del portfolio (con correlaciones) â fÃ³rmula matricial
+          // Ï_pÂ² = Î£_i Î£_j w_i * w_j * Ï_i * Ï_j * Ï_ij
           let varPort = 0;
           for(let i=0;i<activos.length;i++){
             for(let j=0;j<activos.length;j++){
@@ -4353,11 +4217,11 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
           }
           const volPort = Math.sqrt(Math.max(0,varPort)) * Math.sqrt(252) * 100;
 
-          // Ratio de diversificacion: vol_ponderada / vol_portfolio (>1 = diversificacion efectiva)
+          // Ratio de diversificaciÃ³n: vol_ponderada / vol_portfolio (>1 = diversificaciÃ³n efectiva)
           const divRatio = volWeighted>0 ? volWeighted/volPort : 1;
 
-          // Contribucion marginal al riesgo de cada activo
-          // MCTR_i = w_i * _j (w_j * _i * _j * _ij) / _p
+          // ContribuciÃ³n marginal al riesgo de cada activo
+          // MCTR_i = w_i * Î£_j (w_j * Ï_i * Ï_j * Ï_ij) / Ï_p
           const sigmaP = Math.sqrt(Math.max(0,varPort));
           const mctr = activos.map((_,i)=>{
             if(sigmaP===0) return 0;
@@ -4371,14 +4235,14 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
           const mctrTotal = mctr.reduce((a,b)=>a+b,0)||1;
           const riskContrib = mctr.map(m=>m/mctrTotal*100); // % de riesgo total
 
-          // Correlacion promedio de cada activo con el resto (diversificador = menor valor)
+          // CorrelaciÃ³n promedio de cada activo con el resto (diversificador = menor valor)
           const avgCorr = activos.map((_,i)=>{
             const others = activos.map((_,j)=>j!==i?corr(rets[i].rets,rets[j].rets):null).filter(v=>v!=null);
             return others.length ? others.reduce((a,b)=>a+b,0)/others.length : 0;
           });
           const bestDiversifier = activos[avgCorr.indexOf(Math.min(...avgCorr))];
 
-          // HHI de concentracion por riesgo
+          // HHI de concentraciÃ³n por riesgo
           const hhi = riskContrib.reduce((a,b)=>a+(b/100)**2,0);
           const nEff = hhi>0 ? (1/hhi).toFixed(1) : activos.length; // activos "efectivos"
 
@@ -4404,7 +4268,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
                             const v = i===j ? 1 : corr(rets[i].rets, rets[j].rets);
                             return(
                               <td key={hb.ticker} style={{padding:"4px 8px",textAlign:"center",background:corrColor(v),borderRadius:4,fontSize:11,fontWeight:i===j?700:400,color:i===j?"var(--text-primary)":v!=null?(Math.abs(v)>0.5?"var(--text-primary)":"var(--text-secondary)"):"var(--text-muted)"}}>
-                                {v!=null ? (i===j?"1.00":v.toFixed(2)) : ""}
+                                {v!=null ? (i===j?"1.00":v.toFixed(2)) : "â"}
                               </td>
                             );
                           })}
@@ -4414,8 +4278,8 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
                   </table>
                 </div>
                 <div style={{marginTop:10,display:"flex",gap:16,fontSize:10,color:"var(--text-muted)"}}>
-                  <span><span style={{color:"var(--green)"}}></span> Correlacion positiva (&gt;0.7)</span>
-                  <span><span style={{color:"var(--red)"}}></span> Correlacion negativa (&lt;-0.7)</span>
+                  <span><span style={{color:"var(--green)"}}>â </span> CorrelaciÃ³n positiva (&gt;0.7)</span>
+                  <span><span style={{color:"var(--red)"}}>â </span> CorrelaciÃ³n negativa (&lt;-0.7)</span>
                 </div>
               </div>
 
@@ -4426,42 +4290,42 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
                 {/* KPIs principales */}
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:isMobile?6:8}}>
                   {(()=>{
-                    // Semaforo vol. portfolio: <8% verde, 8-15% amarillo, >15% rojo
+                    // SemÃ¡foro vol. portfolio: <8% verde, 8-15% amarillo, >15% rojo
                     const volColor = volPort<8 ? "var(--green)" : volPort<15 ? "var(--yellow)" : "var(--red)";
                     const volMsg   = volPort<8
-                      ? " Volatilidad baja  cartera conservadora"
+                      ? "â Volatilidad baja â cartera conservadora"
                       : volPort<15
-                      ? " Volatilidad moderada  nivel aceptable pero atencion"
-                      : " Volatilidad alta  la cartera oscila demasiado";
+                      ? "â  Volatilidad moderada â nivel aceptable pero atenciÃ³n"
+                      : "â Volatilidad alta â la cartera oscila demasiado";
                     const ratioColor = divRatio>1.5?"var(--green)":divRatio>1.1?"var(--yellow)":"var(--red)";
                     const ratioMsg   = divRatio>1.5
-                      ? " Buena diversificacion  los activos se compensan bien"
+                      ? "â Buena diversificaciÃ³n â los activos se compensan bien"
                       : divRatio>1.1
-                      ? " Diversificacion moderada  podrias mejorarla"
-                      : " Poca diversificacion  los activos se mueven muy juntos";
+                      ? "â  DiversificaciÃ³n moderada â podrÃ­as mejorarla"
+                      : "â Poca diversificaciÃ³n â los activos se mueven muy juntos";
                     const nEffNum = parseFloat(nEff);
                     const nEffColor = nEffNum/activos.length>0.6?"var(--green)":nEffNum/activos.length>0.4?"var(--yellow)":"var(--red)";
                     const nEffMsg   = nEffNum/activos.length>0.6
-                      ? " Buena variedad  tus activos son realmente distintos"
+                      ? "â Buena variedad â tus activos son realmente distintos"
                       : nEffNum/activos.length>0.4
-                      ? " Variedad moderada  algunos activos se solapan"
-                      : " Poca variedad real  varios activos se mueven igual";
+                      ? "â  Variedad moderada â algunos activos se solapan"
+                      : "â Poca variedad real â varios activos se mueven igual";
                     const kpis = [
                       {l:"Vol. portfolio", v:volPort.toFixed(1)+"%", c:volColor, msg:volMsg,
-                        tip:"Cuanto oscila tu cartera en conjunto por ano. Ej: 7.8% sobre US$10.000 = US$780 en un ano tipico."},
-                      {l:"Vol. sin diversif.", v:volWeighted.toFixed(1)+"%", c:"var(--text-secondary)", msg:"= suma de vol. de cada activo  su peso. Siempre mayor que la real.",
-                        tip:"Si todos tus activos cayeran al mismo tiempo (el peor caso), esta seria la volatilidad. La diferencia con Vol. Portfolio muestra cuanto te protege la diversificacion."},
-                      {l:"Ratio diversific.", v:""+divRatio.toFixed(2), c:ratioColor, msg:ratioMsg,
-                        tip:"Vol. sin diversif. - Vol. portfolio. 2 = tu cartera tiene la mitad del riesgo del peor caso."},
+                        tip:"CuÃ¡nto oscila tu cartera en conjunto por aÃ±o. Ej: 7.8% sobre US$10.000 = Â±US$780 en un aÃ±o tÃ­pico."},
+                      {l:"Vol. sin diversif.", v:volWeighted.toFixed(1)+"%", c:"var(--text-secondary)", msg:"= suma de vol. de cada activo Ã su peso. Siempre mayor que la real.",
+                        tip:"Si todos tus activos cayeran al mismo tiempo (el peor caso), esta serÃ­a la volatilidad. La diferencia con Vol. Portfolio muestra cuÃ¡nto te protege la diversificaciÃ³n."},
+                      {l:"Ratio diversific.", v:"Ã"+divRatio.toFixed(2), c:ratioColor, msg:ratioMsg,
+                        tip:"Vol. sin diversif. Ã· Vol. portfolio. Ã2 = tu cartera tiene la mitad del riesgo del peor caso."},
                       {l:"Activos efectivos", v:nEff+" / "+activos.length, c:nEffColor, msg:nEffMsg,
-                        tip:"Cuantos activos realmente distintos tenes. Si tenes 4 CEDEARs muy correlacionados, se cuentan casi como 1."},
+                        tip:"CuÃ¡ntos activos realmente distintos tenÃ©s. Si tenÃ©s 4 CEDEARs muy correlacionados, se cuentan casi como 1."},
                     ];
                     return kpis.map(({l,v,c,msg,tip})=>(
                       <div key={l} title={tip}
                         style={{background:"var(--bg-input)",borderRadius:8,padding:"10px 12px",cursor:"help",
                           borderLeft:"3px solid "+c}}>
                         <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8,marginBottom:2,display:"flex",alignItems:"center",gap:4}}>
-                          {l} <span style={{fontSize:9,opacity:0.4}}></span>
+                          {l} <span style={{fontSize:9,opacity:0.4}}>â</span>
                         </div>
                         <div style={{fontSize:16,fontWeight:700,color:c,fontFamily:"'DM Mono',monospace"}}>{v}</div>
                         <div style={{fontSize:10,color:c,marginTop:4,opacity:0.85}}>{msg}</div>
@@ -4470,11 +4334,11 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
                   })()}
                 </div>
 
-                {/* Contribucion al riesgo por activo  ordenado de mayor a menor */}
+                {/* ContribuciÃ³n al riesgo por activo â ordenado de mayor a menor */}
                 <div>
                   <div style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>
-                    Contribucion al riesgo
-                    <span style={{fontWeight:400,marginLeft:6,textTransform:"none",letterSpacing:0,fontStyle:"italic"}}> que % del riesgo total aporta cada activo (peso  volatilidad  correlacion)</span>
+                    ContribuciÃ³n al riesgo
+                    <span style={{fontWeight:400,marginLeft:6,textTransform:"none",letterSpacing:0,fontStyle:"italic"}}>â quÃ© % del riesgo total aporta cada activo (peso Ã volatilidad Ã correlaciÃ³n)</span>
                   </div>
                   {activos.map((h,i)=>({ticker:h.ticker, val:riskContrib[i], i}))
                     .sort((a,b)=>b.val-a.val)
@@ -4490,7 +4354,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
                     </div>
                   ))}
                   <div style={{fontSize:10,color:"var(--text-muted)",marginTop:6,fontStyle:"italic"}}>
-                    * Bonos ARS (TZX27, TZXD6): su volatilidad en pesos se diluye al convertir a USD por CCL, por eso su contribucion es baja aunque el precio en ARS varie.
+                    * Bonos ARS (TZX27, TZXD6): su volatilidad en pesos se diluye al convertir a USD por CCL, por eso su contribuciÃ³n es baja aunque el precio en ARS varÃ­e.
                   </div>
                 </div>
 
@@ -4510,7 +4374,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
   );
 }
 
-//  FlujoTab 
+// ââ FlujoTab âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 async function fetchBondFlows(ticker) {
   try {
     const url = `https://api.argenfunds.com/api/v1/bonds/${ticker.toLowerCase()}/cashflows`;
@@ -4535,12 +4399,12 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
   const [loadingTicker, setLoadingTicker] = useState(null);
   const [addingFlow, setAddingFlow]   = useState(null);
   const [newFlow, setNewFlow]         = useState({date:'',tipo:'cupon',amort:'',nota:'',cuponMonto:''});
-  const [editingRowIds, setEditingRowIds] = useState(null); // ids de flows que se estan editando
+  const [editingRowIds, setEditingRowIds] = useState(null); // ids de flows que se estÃ¡n editando
   const [viewMode, setViewMode]       = useState('micobro');
   const [cerCoef, setCerCoef]         = useState({});
-  const [editingCell, setEditingCell] = useState(null); // {id, field, value}  id del flow
+  const [editingCell, setEditingCell] = useState(null); // {id, field, value} â id del flow
   const [editingMeta, setEditingMeta] = useState(false);
-  // bondMeta: {ticker:{tna, base}}  tna=% anual, base='30/360'|'dias/365'
+  // bondMeta: {ticker:{tna, base}} â tna=% anual, base='30/360'|'dias/365'
   const BOND_META_DEFAULT = {
     'AO27D': {tna:6,  base:'30/360', emisionDate:null},
     'GD38D': {tna:5,  base:'30/360', emisionDate:null},
@@ -4568,30 +4432,30 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
   };
   const [metaDraft, setMetaDraft] = useState({tna:'', base:'30/360', emisionDate:''});
   const [wizardFlujosOpen, setWizardFlujosOpen] = useState(false); // BondWizard inline en FlujoTab
-  // CER: serie historica {date:string, valor:number}[], cacheada en memoria
-  // CER: se lee desde historicos.json  cargado por update_historicos.py
+  // CER: serie histÃ³rica {date:string, valor:number}[], cacheada en memoria
+  // CER: se lee desde historicos.json â cargado por update_historicos.py
   // No hace fetch desde el browser (evita CORS)
   const cerSerie = useMemo(()=>{
     if(!historicos?.cer?.length) return null;
-    // historicos.cer: [{date, close}]  close es el valor CER
+    // historicos.cer: [{date, close}] â close es el valor CER
     return historicos.cer.map(x=>({date:x.date, valor:x.close}));
   },[historicos]);
   const cerLoading = false; // siempre listo (viene del JSON)
   const fetchCER = ()=>{}; // no-op, ya no se necesita
-  // Feriados argentinos: {ano: Set<'YYYY-MM-DD'>}
+  // Feriados argentinos: {aÃ±o: Set<'YYYY-MM-DD'>}
   const [feriados, setFeriados] = useState({});
   const feriadosRef = React.useRef({});
 
-  // Buscar el ultimo CER conocido <= dateStr (si no hay, devuelve el mas antiguo disponible)
+  // Buscar el Ãºltimo CER conocido <= dateStr (si no hay, devuelve el mÃ¡s antiguo disponible)
   const getCER = (serie, dateStr) => {
     if(!serie||!serie.length) return null;
     const filtered = serie.filter(x=>x.date<=dateStr);
     if(filtered.length) return filtered[filtered.length-1].valor;
-    // Si no hay dato anterior, devolver el mas antiguo conocido
+    // Si no hay dato anterior, devolver el mÃ¡s antiguo conocido
     return serie[0].valor;
   };
 
-  // Fetch feriados de un ano desde argentinadatos
+  // Fetch feriados de un aÃ±o desde argentinadatos
   const fetchFeriados = async (year) => {
     if(feriadosRef.current[year]) return feriadosRef.current[year];
     try {
@@ -4608,7 +4472,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
     return new Set();
   };
 
-  // Restar N dias habiles a una fecha (lunes-viernes, excluyendo feriados AR)
+  // Restar N dÃ­as hÃ¡biles a una fecha (lunes-viernes, excluyendo feriados AR)
   const restarDiasHabiles = async (dateStr, n) => {
     const d = new Date(dateStr);
     let restantes = n;
@@ -4625,7 +4489,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
     return d.toISOString().slice(0,10);
   };
 
-  // Version sincronica con feriados ya cargados en cache
+  // VersiÃ³n sincrÃ³nica con feriados ya cargados en cache
   const restarDiasHabilesSync = (dateStr, n) => {
     const d = new Date(dateStr);
     let restantes = n;
@@ -4643,36 +4507,36 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
     return d.toISOString().slice(0,10);
   };
 
-  // CER de 10 dias habiles antes de una fecha
-  // Si fecha-10hd es futura  usar CER de (hoy - 10 dias habiles)
+  // CER de 10 dÃ­as hÃ¡biles antes de una fecha
+  // Si fecha-10hd es futura â usar CER de (hoy - 10 dÃ­as hÃ¡biles)
   const getCERMinus10 = (serie, dateStr) => {
     if(!serie||!serie.length||!dateStr) return null;
     const todayStr = todayAR();
     const fechaRef = restarDiasHabilesSync(dateStr, 10);
-    // Si la fecha de referencia aun no llego, usar hoy - 10 dias habiles
+    // Si la fecha de referencia aÃºn no llegÃ³, usar hoy - 10 dÃ­as hÃ¡biles
     const fechaConsulta = fechaRef > todayStr
       ? restarDiasHabilesSync(todayStr, 10)
       : fechaRef;
     return getCER(serie, fechaConsulta);
   };
 
-  // Pre-cargar feriados de los anos relevantes al montar
+  // Pre-cargar feriados de los aÃ±os relevantes al montar
   useEffect(()=>{
     const currentYear = new Date().getFullYear();
     [currentYear-1, currentYear, currentYear+1].forEach(y => fetchFeriados(y));
   },[]);
 
   // Calcular flujos CER ajustados para un bono
-  // Para cada cupon: interes = tasa  (CER_pago/CER_base)  VN_original  dias/base
-  // Para amort: monto = (CER_pago/CER_base)  amort_original
-  // cerBase = CER del dia 10 dias antes de emisionDate
+  // Para cada cupÃ³n: interÃ©s = tasa Ã (CER_pago/CER_base) Ã VN_original Ã dÃ­as/base
+  // Para amort: monto = (CER_pago/CER_base) Ã amort_original
+  // cerBase = CER del dÃ­a 10 dÃ­as antes de emisionDate
   const calcFlujoCER = (flow, vnOriginal, cerBase, cerPago, tna, base, dias) => {
     if(!cerBase||!cerPago||cerBase<=0) return flow.monto; // fallback sin CER
     const coefCER = cerPago / cerBase;
     if(flow.tipo==='amortizacion'){
       return parseFloat((vnOriginal * coefCER * (flow.monto/100)).toFixed(6));
     } else {
-      // Interes = tna  dias/base  VN ajustado
+      // InterÃ©s = tna Ã dias/base Ã VN ajustado
       const divisor = base==='30/360' ? 360 : 365;
       return parseFloat(((tna/100) * (dias/divisor) * vnOriginal * coefCER).toFixed(6));
     }
@@ -4685,8 +4549,8 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
 
   const bonds = port.filter(h => h.type==='bono_ars'||h.type==='bono_usd');
 
-  //  Helpers de calculo 
-  // Dias 30/360: convencion ICMA/Bond
+  // ââ Helpers de cÃ¡lculo ââââââââââââââââââââââââââââââââââââââââââââââââââ
+  // DÃ­as 30/360: convenciÃ³n ICMA/Bond
   const dias30_360 = (d1, d2) => {
     const a=new Date(d1), b=new Date(d2);
     const [y1,m1,day1] = [a.getFullYear(), a.getMonth()+1, a.getDate()];
@@ -4710,12 +4574,12 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
     const sorted = [...flows].sort((a,b)=>a.date.localeCompare(b.date));
     // Construir VN residual acumulado
     let vn = 100;
-    const vnMap = {}; // date  vn antes de ese pago
+    const vnMap = {}; // date â vn antes de ese pago
     sorted.forEach(f => {
       if(!vnMap[f.date]) vnMap[f.date] = vn;
       if(f.tipo==='amortizacion') vn = Math.max(0, vn - f.monto);
     });
-    // Fechas ordenadas unicas para calcular dias
+    // Fechas ordenadas Ãºnicas para calcular dÃ­as
     const dates = [...new Set(sorted.map(f=>f.date))].sort();
 
     return flows.map(f => {
@@ -4733,9 +4597,9 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
     });
   };
 
-  // CER se carga desde historicos.json  no necesita fetch propio
+  // CER se carga desde historicos.json â no necesita fetch propio
 
-  //  Handlers 
+  // ââ Handlers âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   const fetchFlows = async (ticker) => {
     setLoadingTicker(ticker);
     const flows = await fetchBondFlows(ticker);
@@ -4798,7 +4662,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
     // VN residual hasta esta fecha
     let vn = 100;
     flows.forEach(f => { if(f.date<newFlow.date && f.tipo==='amortizacion') vn=Math.max(0,vn-f.monto); });
-    // Fecha anterior para calcular dias
+    // Fecha anterior para calcular dÃ­as
     const prevDates = [...new Set(flows.map(f=>f.date))].filter(d=>d<newFlow.date).sort();
     const prevDate = prevDates.length ? prevDates[prevDates.length-1] : newFlow.date;
     const diasCalc = meta.base==='30/360'
@@ -4819,7 +4683,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
     setNewFlow({date:'',tipo:'cupon',amort:'',nota:''});
   };
 
-  // Guarda edicion de una fila existente (reemplaza los flows con los mismos IDs)
+  // Guarda ediciÃ³n de una fila existente (reemplaza los flows con los mismos IDs)
   const saveEditFlow = () => {
     if(!newFlow.date || !editingRowIds) return;
     const amortVal  = parseFloat(newFlow.amort)||0;
@@ -4839,7 +4703,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
     setNewFlow({date:'',tipo:'cupon',amort:'',nota:'',cuponMonto:''});
   };
 
-  //  Proximos pagos  todos los pagos futuros de todos los bonos, ordenados cronologicamente
+  // ââ PrÃ³ximos pagos â todos los pagos futuros de todos los bonos, ordenados cronolÃ³gicamente
   const proximosPagos = bonds.flatMap(b => {
     const flows = (bondFlows[b.ticker]||[]);
     const byDate = {};
@@ -4862,7 +4726,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
           const cerPago = getCERMinus10(cerSerie, r.date);
           const coef = cerPago && cerBase ? cerPago/cerBase : 1;
           totalAmort = r.montoAmort * coef * b.qty / 100;
-          // Para interes CER usamos una aproximacion: monto%  coef  qty/100
+          // Para interÃ©s CER usamos una aproximaciÃ³n: monto% Ã coef Ã qty/100
           totalCupon = r.montoCupon * coef * b.qty / 100;
           total = totalAmort + totalCupon;
         } else {
@@ -4892,7 +4756,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
 
   const inp = {background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:6,padding:'5px 9px',color:'var(--text-primary)',fontSize:12,width:'100%'};
 
-  //  Agrupar flows por fecha 
+  // ââ Agrupar flows por fecha âââââââââââââââââââââââââââââââââââââââââââââââ
   const buildRows = (flows) => {
     const byDate = {};
     flows.forEach(f => {
@@ -4910,7 +4774,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
       const interestPct = row.cupon?.monto ?? 0;
       const vnAntes     = vn;
       vn = Math.max(0, vn - amortPct);
-      // Dias: usar dateCalc (teorica) para el calculo, no la fecha de pago
+      // DÃ­as: usar dateCalc (teÃ³rica) para el cÃ¡lculo, no la fecha de pago
       const prevRow = i>0 ? rows[i-1] : null;
       const prevCalc = prevRow ? (prevRow.dateCalc||prevRow.date) : (row.dateCalc||row.date);
       const curCalc  = row.dateCalc || row.date;
@@ -4932,7 +4796,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
     <>
     <div style={{display:'flex',flexDirection:'column',gap:16}}>
 
-      {/*  Calendario de cobros  */}
+      {/* ââ Calendario de cobros ââââââââââââââââââââââââââââââââââââââââââââ */}
       {(()=>{
         // Agrupar todos los pagos por fecha (YYYY-MM-DD)
         const pagosByDate = {};
@@ -4945,17 +4809,17 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
         const calMon   = calMonth.getMonth(); // 0-indexed
         const firstDay = new Date(calYear, calMon, 1);
         const lastDay  = new Date(calYear, calMon+1, 0);
-        // Dia de semana del 1ero (0=Dom, ajustar a Lun=0)
+        // DÃ­a de semana del 1ero (0=Dom, ajustar a Lun=0)
         const startDow = (firstDay.getDay()+6)%7;
         const daysInMonth = lastDay.getDate();
-        const DAYS = ['Lun','Mar','Mie','Jue','Vie','Sab','Dom'];
+        const DAYS = ['Lun','Mar','MiÃ©','Jue','Vie','SÃ¡b','Dom'];
         const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
         // Total del mes visible
         const totalMesUSD = proximosPagos.filter(p=>p.date.startsWith(`${calYear}-${String(calMon+1).padStart(2,'0')}`))
           .reduce((a,p)=>a+(p.currency==='USD'?p.total:p.total/fxRate),0);
 
-        // Celdas del calendario: blancos antes + dias del mes
+        // Celdas del calendario: blancos antes + dÃ­as del mes
         const cells = [];
         for(let i=0;i<startDow;i++) cells.push(null);
         for(let d=1;d<=daysInMonth;d++) cells.push(d);
@@ -4976,21 +4840,21 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                   </div>
                   {totalMesUSD>0&&(
                     <div style={{fontSize:11,color:'var(--accent)',marginTop:2}}>
-                      Total del mes: <b style={{fontFamily:"'DM Mono',monospace"}}> US${fmtN2(totalMesUSD)}</b>
+                      Total del mes: <b style={{fontFamily:"'DM Mono',monospace"}}>â US${fmtN2(totalMesUSD)}</b>
                     </div>
                   )}
                 </div>
                 <div style={{display:'flex',gap:6,alignItems:'center'}}>
                   <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()-1,1))}
-                    style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:8,width:32,height:32,cursor:'pointer',color:'var(--text-secondary)',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center'}}></button>
+                    style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:8,width:32,height:32,cursor:'pointer',color:'var(--text-secondary)',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center'}}>â¹</button>
                   <button onClick={()=>setCalMonth(new Date())}
                     style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:8,padding:'4px 12px',cursor:'pointer',color:'var(--text-secondary)',fontSize:11}}>Hoy</button>
                   <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()+1,1))}
-                    style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:8,width:32,height:32,cursor:'pointer',color:'var(--text-secondary)',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center'}}></button>
+                    style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:8,width:32,height:32,cursor:'pointer',color:'var(--text-secondary)',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center'}}>âº</button>
                 </div>
               </div>
 
-              {/* Grid dias semana */}
+              {/* Grid dÃ­as semana */}
               <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:3,marginBottom:3}}>
                 {DAYS.map(d=>(
                   <div key={d} style={{textAlign:'center',fontSize:10,color:'var(--text-muted)',fontWeight:600,textTransform:'uppercase',letterSpacing:0.8,padding:'4px 0'}}>{d}</div>
@@ -5008,7 +4872,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                   const hasPago = pagos.length>0;
                   const hasAmort = pagos.some(p=>p.hasAmort);
                   const dotColor = hasAmort?'var(--yellow)':'var(--accent)';
-                  // Total del dia en USD
+                  // Total del dÃ­a en USD
                   const totalDia = pagos.reduce((a,p)=>a+(p.currency==='USD'?p.total:p.total/fxRate),0);
 
                   return(
@@ -5039,7 +4903,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                             ))}
                             {pagos.length>3&&<div style={{width:5,height:5,borderRadius:'50%',background:'var(--text-muted)'}}/>}
                           </div>
-                          {/* Total del dia */}
+                          {/* Total del dÃ­a */}
                           <div style={{fontSize:9,color:dotColor,fontFamily:"'DM Mono',monospace",fontWeight:600,lineHeight:1}}>
                             {totalDia>=1000?`${(totalDia/1000).toFixed(1)}k`:`${fmtN2(totalDia)}`}
                           </div>
@@ -5052,15 +4916,15 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
 
               {/* Leyenda */}
               <div style={{display:'flex',gap:16,marginTop:12,fontSize:10,color:'var(--text-muted)'}}>
-                <div style={{display:'flex',alignItems:'center',gap:4}}><div style={{width:7,height:7,borderRadius:'50%',background:'var(--accent)'}}/> Cupon</div>
+                <div style={{display:'flex',alignItems:'center',gap:4}}><div style={{width:7,height:7,borderRadius:'50%',background:'var(--accent)'}}/> CupÃ³n</div>
                 <div style={{display:'flex',alignItems:'center',gap:4}}><div style={{width:7,height:7,borderRadius:'50%',background:'var(--yellow)'}}/> Amort.</div>
               </div>
             </div>
 
-            {/* Panel derecho: proximos o detalle del dia */}
+            {/* Panel derecho: prÃ³ximos o detalle del dÃ­a */}
             <div style={{borderLeft:'1px solid var(--border)',paddingLeft:20,display:'flex',flexDirection:'column',gap:0,overflow:'hidden'}}>
               {calSelectedDate?(()=>{
-                // Detalle del dia seleccionado
+                // Detalle del dÃ­a seleccionado
                 const pagosDelDia = pagosByDate[calSelectedDate]||[];
                 const [dd,mm,yyyy] = [calSelectedDate.slice(8),calSelectedDate.slice(5,7),calSelectedDate.slice(0,4)];
                 return(<>
@@ -5070,7 +4934,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                       <div style={{fontSize:10,color:'var(--text-muted)',marginTop:1}}>{pagosDelDia.length} pago{pagosDelDia.length!==1?'s':''}</div>
                     </div>
                     <button onClick={()=>setCalSelectedDate(null)}
-                      style={{background:'transparent',border:'none',color:'var(--text-muted)',cursor:'pointer',fontSize:16}}></button>
+                      style={{background:'transparent',border:'none',color:'var(--text-muted)',cursor:'pointer',fontSize:16}}>â</button>
                   </div>
                   <div style={{display:'flex',flexDirection:'column',gap:8,overflowY:'auto',maxHeight:380}}>
                     {pagosDelDia.map(p=>(
@@ -5083,7 +4947,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
                           <span style={{fontWeight:700,fontSize:13,color:'var(--accent)',fontFamily:"'DM Mono',monospace"}}>{p.ticker}</span>
                           <span style={{fontSize:10,color:p.hasAmort?'var(--yellow)':'var(--accent)'}}>
-                            {p.hasAmort&&p.hasCupon?'+':p.hasAmort?'':''}
+                            {p.hasAmort&&p.hasCupon?'ð°+ð«':p.hasAmort?'ð°':'ð«'}
                           </span>
                         </div>
                         <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:6,lineHeight:1.4}}>{p.name}</div>
@@ -5101,11 +4965,11 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                   </div>
                 </>);
               })():(()=>{
-                // Lista proximos pagos
+                // Lista prÃ³ximos pagos
                 const proximos = proximosPagos.filter(p=>p.date>=todayStr2);
                 return(<>
                   <div style={{fontSize:10,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:1,fontWeight:600,marginBottom:12}}>
-                    Proximos cobros
+                    PrÃ³ximos cobros
                   </div>
                   <div style={{display:'flex',flexDirection:'column',gap:1,overflowY:'auto',maxHeight:390}}>
                     {proximos.length===0
@@ -5135,7 +4999,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                                 <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:2}}>
                                   <span style={{fontWeight:700,fontSize:12,color:'var(--text-primary)',fontFamily:"'DM Mono',monospace"}}>{p.ticker}</span>
                                   <span style={{fontSize:9,color:p.hasAmort?'var(--yellow)':'var(--accent)'}}>
-                                    {p.hasAmort&&p.hasCupon?'Amort.+Cupon':p.hasAmort?'Amort.':'Cupon'}
+                                    {p.hasAmort&&p.hasCupon?'Amort.+CupÃ³n':p.hasAmort?'Amort.':'CupÃ³n'}
                                   </span>
                                   {isFirst&&<span style={{fontSize:8,background:'var(--accent)',color:'#fff',borderRadius:3,padding:'1px 4px',fontWeight:700}}>NEXT</span>}
                                 </div>
@@ -5169,7 +5033,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                   background:isActive?'var(--accent)':'var(--bg-input)',
                   color:isActive?'#fff':'var(--text-secondary)',cursor:'pointer',fontSize:12,fontWeight:isActive?700:400,
                   display:'flex',alignItems:'center',gap:6}}>
-                {loadingTicker===b.ticker?' ':hasFlows?' ':'+ '}
+                {loadingTicker===b.ticker?'â³ ':hasFlows?'â ':'+ '}
                 {b.ticker}
               </button>
             );
@@ -5186,10 +5050,10 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                 <span style={{color:'var(--text-muted)',fontSize:11,marginLeft:8}}>{selBond.qty.toLocaleString('es-AR')} nominales</span>
               </div>
               <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
-                {/* TNA + Base  editable */}
+                {/* TNA + Base â editable */}
                 {editingMeta ? (
                   <div style={{display:'flex',gap:8,alignItems:'center',background:'var(--bg-input)',border:'1px solid var(--accent)',borderRadius:8,padding:'6px 12px'}}>
-                    <span style={{fontSize:11,color:'var(--text-muted)'}}>Cupon:</span>
+                    <span style={{fontSize:11,color:'var(--text-muted)'}}>CupÃ³n:</span>
                     <input type="number" step="0.01" value={metaDraft.tna}
                       onChange={e=>setMetaDraft(p=>({...p,tna:e.target.value}))}
                       style={{...inp,width:70,textAlign:'right'}}/>
@@ -5198,36 +5062,36 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                     <select value={metaDraft.base} onChange={e=>setMetaDraft(p=>({...p,base:e.target.value}))}
                       style={{...inp,width:110}}>
                       <option value="30/360">30/360</option>
-                      <option value="dias/365">Dias/365</option>
+                      <option value="dias/365">DÃ­as/365</option>
                     </select>
                     {adjustsBy==='CER'&&<>
-                      <span style={{fontSize:11,color:'var(--text-muted)',marginLeft:8}}>Emision:</span>
+                      <span style={{fontSize:11,color:'var(--text-muted)',marginLeft:8}}>EmisiÃ³n:</span>
                       <input type="date" value={metaDraft.emisionDate||''}
                         onChange={e=>setMetaDraft(p=>({...p,emisionDate:e.target.value}))}
                         style={{...inp,width:140}}/>
                     </>}
                     <button onClick={applyMeta}
                       style={{background:'var(--accent)',border:'none',borderRadius:6,padding:'4px 12px',color:'#fff',cursor:'pointer',fontSize:12,fontWeight:600}}>
-                       Aplicar
+                      â Aplicar
                     </button>
                     <button onClick={()=>setEditingMeta(false)}
                       style={{background:'transparent',border:'1px solid var(--border)',borderRadius:6,padding:'4px 8px',color:'var(--text-muted)',cursor:'pointer',fontSize:12}}>
-                      
+                      â
                     </button>
                   </div>
                 ) : (
                   <div style={{display:'flex',gap:6,alignItems:'center',background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:8,padding:'6px 12px',cursor:'pointer'}}
                     onClick={()=>{setMetaDraft({tna:selMeta.tna, base:selMeta.base, emisionDate:selMeta.emisionDate||''});setEditingMeta(true);}}>
-                    <span style={{fontSize:12,color:'var(--text-secondary)'}}>Cupon <b style={{color:'var(--accent)'}}>{selMeta.tna}%</b></span>
-                    <span style={{fontSize:10,color:'var(--text-muted)'}}>-</span>
+                    <span style={{fontSize:12,color:'var(--text-secondary)'}}>CupÃ³n <b style={{color:'var(--accent)'}}>{selMeta.tna}%</b></span>
+                    <span style={{fontSize:10,color:'var(--text-muted)'}}>Â·</span>
                     <span style={{fontSize:12,color:'var(--text-secondary)'}}>Base <b style={{color:'var(--text-primary)'}}>{selMeta.base}</b></span>
-                    {adjustsBy==='CER'&&<><span style={{fontSize:10,color:'var(--text-muted)'}}>-</span><span style={{fontSize:12,color:'var(--text-secondary)'}}>Emision <b style={{color:'var(--yellow)'}}>{selMeta.emisionDate?fmtD(selMeta.emisionDate):''}</b></span></>}
-                    <span style={{fontSize:10,color:'var(--text-muted)',marginLeft:4}}></span>
+                    {adjustsBy==='CER'&&<><span style={{fontSize:10,color:'var(--text-muted)'}}>Â·</span><span style={{fontSize:12,color:'var(--text-secondary)'}}>EmisiÃ³n <b style={{color:'var(--yellow)'}}>{selMeta.emisionDate?fmtD(selMeta.emisionDate):'â'}</b></span></>}
+                    <span style={{fontSize:10,color:'var(--text-muted)',marginLeft:4}}>âï¸</span>
                   </div>
                 )}
                 <button onClick={()=>setWizardFlujosOpen(true)}
                   style={{background:'rgba(59,130,246,0.12)',border:'1px solid rgba(59,130,246,0.3)',borderRadius:6,padding:'5px 12px',cursor:'pointer',color:'#60A5FA',fontSize:12,fontWeight:600}}>
-                   Carga rapida
+                  â¡ Carga rÃ¡pida
                 </button>
                 <button onClick={()=>setAddingFlow(selected)}
                   style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:6,padding:'5px 12px',cursor:'pointer',color:'var(--text-secondary)',fontSize:12}}>
@@ -5236,30 +5100,30 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
               </div>
             </div>
 
-            {/* Descripcion */}
+            {/* DescripciÃ³n */}
             {seedMeta.desc&&(
               <div style={{background:'rgba(59,130,246,0.06)',border:'1px solid rgba(59,130,246,0.12)',borderRadius:8,padding:'9px 14px',marginBottom:10,fontSize:12,color:'var(--text-secondary)'}}>
-                 {seedMeta.desc}
+                ð {seedMeta.desc}
               </div>
             )}
 
-            {/* Estado CER  inline */}
+            {/* Estado CER â inline */}
             {adjustsBy==='CER'&&(()=>{
               const emisionDate = selMeta.emisionDate||null;
               const cerBaseVal = emisionDate&&cerSerie ? getCERMinus10(cerSerie,emisionDate) : null;
               const cerHoy = cerSerie ? getCER(cerSerie,todayAR()) : null;
               const coefHoy = cerBaseVal&&cerHoy ? (cerHoy/cerBaseVal) : null;
-              // Fecha efectiva del CER base (10d antes de emision)
+              // Fecha efectiva del CER base (10d antes de emisiÃ³n)
               const cerBaseFecha = emisionDate ? (()=>{const d=new Date(emisionDate);d.setDate(d.getDate()-10);return d.toISOString().slice(0,10);})() : null;
               return(
                 <div style={{background:'rgba(251,191,36,0.06)',border:'1px solid rgba(251,191,36,0.2)',borderRadius:8,padding:'8px 14px',marginBottom:10,display:'flex',alignItems:'center',gap:16,flexWrap:'wrap',fontSize:11}}>
-                  <span style={{color:'var(--yellow)',fontWeight:600}}> CER</span>
-                  {!cerSerie&&<span style={{color:'var(--text-muted)'}}> Esperando datos del historico  el script Python actualiza el CER diariamente</span>}
-                  {cerSerie&&!emisionDate&&<span style={{color:'var(--text-muted)'}}>Edita el chip  para ingresar la fecha de emision</span>}
+                  <span style={{color:'var(--yellow)',fontWeight:600}}>â¡ CER</span>
+                  {!cerSerie&&<span style={{color:'var(--text-muted)'}}>â³ Esperando datos del histÃ³rico â el script Python actualiza el CER diariamente</span>}
+                  {cerSerie&&!emisionDate&&<span style={{color:'var(--text-muted)'}}>EditÃ¡ el chip âï¸ para ingresar la fecha de emisiÃ³n</span>}
                   {cerBaseVal&&<span style={{color:'var(--text-muted)'}}>CER base ({fmtD(cerBaseFecha)}): <b style={{color:'var(--text-secondary)',fontFamily:"'DM Mono',monospace"}}>{cerBaseVal.toFixed(4)}</b></span>}
                   {cerHoy&&<span style={{color:'var(--text-muted)'}}>CER hoy: <b style={{color:'var(--text-secondary)',fontFamily:"'DM Mono',monospace"}}>{cerHoy.toFixed(4)}</b></span>}
                   {coefHoy&&<span style={{color:'var(--text-muted)'}}>Coef. actual: <b style={{color:'var(--yellow)',fontFamily:"'DM Mono',monospace"}}>{coefHoy.toFixed(4)}</b></span>}
-                  {cerSerie&&cerSerie.length>0&&!cerLoading&&<span style={{color:'var(--green)',marginLeft:'auto',fontSize:10}}> {cerSerie.length} registros</span>}
+                  {cerSerie&&cerSerie.length>0&&!cerLoading&&<span style={{color:'var(--green)',marginLeft:'auto',fontSize:10}}>â {cerSerie.length} registros</span>}
 
                 </div>
               );
@@ -5268,24 +5132,24 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
             {/* Form agregar pago */}
             {addingFlow===selected&&(
               <div style={{background:editingRowIds?'rgba(96,165,250,0.06)':'rgba(59,130,246,0.06)',border:`1px solid ${editingRowIds?'rgba(96,165,250,0.3)':'rgba(59,130,246,0.15)'}`,borderRadius:10,padding:'14px 16px',marginBottom:12,display:'flex',gap:10,alignItems:'flex-end',flexWrap:'wrap'}}>
-                {editingRowIds&&<div style={{width:'100%',fontSize:11,color:'#60A5FA',fontWeight:600,marginBottom:2}}> Editando fila  modifica los campos y guarda</div>}
+                {editingRowIds&&<div style={{width:'100%',fontSize:11,color:'#60A5FA',fontWeight:600,marginBottom:2}}>âï¸ Editando fila â modificÃ¡ los campos y guardÃ¡</div>}
                 {/* F. Pago */}
                 <div style={{display:'flex',flexDirection:'column',gap:4,minWidth:130}}>
                   <span style={{fontSize:10,color:'var(--text-muted)'}}>F. Pago</span>
                   <input type="date" value={newFlow.date} onChange={e=>setNewFlow(p=>({...p,date:e.target.value}))} style={inp}/>
                 </div>
-                {/* F. Teorica */}
+                {/* F. TeÃ³rica */}
                 <div style={{display:'flex',flexDirection:'column',gap:4,minWidth:130}}>
-                  <span style={{fontSize:10,color:'var(--text-muted)'}}>F. Teorica (calculo)</span>
+                  <span style={{fontSize:10,color:'var(--text-muted)'}}>F. TeÃ³rica (cÃ¡lculo)</span>
                   <input type="date" value={newFlow.dateCalc||newFlow.date} onChange={e=>setNewFlow(p=>({...p,dateCalc:e.target.value}))} style={{...inp,color:'var(--text-secondary)'}}/>
                 </div>
                 {/* Tipo */}
                 <div style={{display:'flex',flexDirection:'column',gap:4,minWidth:140}}>
                   <span style={{fontSize:10,color:'var(--text-muted)'}}>Tipo</span>
                   <select value={newFlow.tipo} onChange={e=>setNewFlow(p=>({...p,tipo:e.target.value}))} style={inp}>
-                    <option value="cupon"> Solo cupon</option>
-                    <option value="amortizacion"> Solo amort.</option>
-                    <option value="ambos">+ Amort.+Cupon</option>
+                    <option value="cupon">ð« Solo cupÃ³n</option>
+                    <option value="amortizacion">ð° Solo amort.</option>
+                    <option value="ambos">ð°+ð« Amort.+CupÃ³n</option>
                   </select>
                 </div>
                 {/* Amort */}
@@ -5295,15 +5159,15 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                     <input type="number" step="0.0001" value={newFlow.amort} onChange={e=>setNewFlow(p=>({...p,amort:e.target.value}))} placeholder="ej: 4.5455" style={inp}/>
                   </div>
                 )}
-                {/* Cupon  editable si modo edicion, calculado si modo nuevo */}
+                {/* CupÃ³n â editable si modo ediciÃ³n, calculado si modo nuevo */}
                 {(newFlow.tipo==='cupon'||newFlow.tipo==='ambos')&&(
                   <div style={{display:'flex',flexDirection:'column',gap:4,minWidth:110}}>
-                    <span style={{fontSize:10,color:'var(--text-muted)'}}>{editingRowIds?'Cupon % VN':'Interes calculado'}</span>
+                    <span style={{fontSize:10,color:'var(--text-muted)'}}>{editingRowIds?'CupÃ³n % VN':'InterÃ©s calculado'}</span>
                     {editingRowIds
                       ? <input type="number" step="0.000001" value={newFlow.cuponMonto} onChange={e=>setNewFlow(p=>({...p,cuponMonto:e.target.value}))} placeholder="ej: 3.25" style={{...inp,color:'var(--accent)',fontWeight:700}}/>
                       : <div style={{...inp,background:'transparent',color:'var(--accent)',fontWeight:700,textAlign:'right'}}>
                           {(()=>{
-                            if(!newFlow.date) return '';
+                            if(!newFlow.date) return 'â';
                             const meta2 = bondMeta[addingFlow]||{tna:0,base:'30/360'};
                             const flows2 = (bondFlows[addingFlow]||[]).sort((a,b)=>a.date.localeCompare(b.date));
                             let vn2=100;
@@ -5324,7 +5188,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                 </div>
                 <button onClick={editingRowIds ? saveEditFlow : addNewFlow}
                   style={{background:'var(--accent)',border:'none',borderRadius:8,padding:'7px 16px',color:'#fff',cursor:'pointer',fontSize:13,fontWeight:600}}>
-                  {editingRowIds ? ' Guardar cambios' : 'Guardar'}
+                  {editingRowIds ? 'â Guardar cambios' : 'Guardar'}
                 </button>
                 <button onClick={()=>{setAddingFlow(null);setEditingRowIds(null);setNewFlow({date:'',tipo:'cupon',amort:'',nota:'',cuponMonto:'',dateCalc:''});}}
                   style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:8,padding:'7px 12px',color:'var(--text-muted)',cursor:'pointer',fontSize:13}}>
@@ -5334,11 +5198,11 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
             )}
 
             {rows.length===0
-              ? <div style={{color:'var(--text-muted)',fontSize:13,padding:'20px 0'}}>No hay flujos. Usa "+ Agregar pago" para cargarlos.</div>
+              ? <div style={{color:'var(--text-muted)',fontSize:13,padding:'20px 0'}}>No hay flujos. UsÃ¡ "+ Agregar pago" para cargarlos.</div>
               : (<>
                 {/* Toggle vista */}
                 <div style={{display:'flex',gap:8,marginBottom:12}}>
-                  {[['prospecto',' Prospecto'],['micobro',' Mi cobro']].map(([k,lbl])=>(
+                  {[['prospecto','ð Prospecto'],['micobro','ð° Mi cobro']].map(([k,lbl])=>(
                     <button key={k} onClick={()=>setViewMode(k)}
                       style={{padding:'5px 14px',borderRadius:6,border:`1px solid ${viewMode===k?'var(--accent)':'var(--border)'}`,
                         background:viewMode===k?'var(--accent)':'var(--bg-input)',
@@ -5348,13 +5212,13 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                   ))}
                 </div>
 
-                {/*  VISTA PROSPECTO  */}
+                {/* ââ VISTA PROSPECTO ââ */}
                 {viewMode==='prospecto'&&(()=>{
                   // Datos CER para este bono si aplica
                   const isCERBond = adjustsBy==='CER';
                   const meta2 = SEED_BOND_META[selected]||{};
                   const emisionDate2 = selMeta.emisionDate||meta2.emisionDate||null;
-                  // CER base = ultimo CER conocido 10 dias antes de la emision
+                  // CER base = Ãºltimo CER conocido 10 dÃ­as antes de la emisiÃ³n
                   const cerBaseVal2 = (isCERBond&&cerSerie&&emisionDate2) ? getCERMinus10(cerSerie,emisionDate2) : null;
 
                   return(
@@ -5364,15 +5228,15 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                         <tr>
                           <th style={{...thPL,width:28}}>#</th>
                           <th style={{...thPL}}>F. Pago</th>
-                          <th style={{...thPL,color:'var(--text-muted)',fontSize:9}}>F. Teorica</th>
-                          <th style={thP}>Dias ({selMeta.base})</th>
+                          <th style={{...thPL,color:'var(--text-muted)',fontSize:9}}>F. TeÃ³rica</th>
+                          <th style={thP}>DÃ­as ({selMeta.base})</th>
                           <th style={thP}>Amort. % VN</th>
                           <th style={thP}>VN Residual</th>
-                          <th style={thP}>Cupon</th>
-                          <th style={thP}>Interes % VN</th>
-                          {isCERBond&&<><th style={{...thP,background:'rgba(251,191,36,0.06)',color:'var(--yellow)'}}>CER</th><th style={{...thP,background:'rgba(251,191,36,0.06)',color:'var(--yellow)'}}>VN Ajust.</th><th style={{...thP,background:'rgba(251,191,36,0.06)',color:'var(--yellow)'}}>Interes Aj.</th></>}
+                          <th style={thP}>CupÃ³n</th>
+                          <th style={thP}>InterÃ©s % VN</th>
+                          {isCERBond&&<><th style={{...thP,background:'rgba(251,191,36,0.06)',color:'var(--yellow)'}}>CER</th><th style={{...thP,background:'rgba(251,191,36,0.06)',color:'var(--yellow)'}}>VN Ajust.</th><th style={{...thP,background:'rgba(251,191,36,0.06)',color:'var(--yellow)'}}>InterÃ©s Aj.</th></>}
                           <th style={{...thP,background:'rgba(251,191,36,0.1)',color:'var(--yellow)'}}>Amort.</th>
-                          <th style={{...thP,background:'rgba(59,130,246,0.1)',color:'var(--accent)'}}>Interes</th>
+                          <th style={{...thP,background:'rgba(59,130,246,0.1)',color:'var(--accent)'}}>InterÃ©s</th>
                           <th style={{...thP,background:'rgba(52,211,153,0.1)',color:'var(--green)'}}>Total</th>
                           <th style={{...thP,textAlign:'center',width:56}}>Acc.</th>
                         </tr>
@@ -5381,15 +5245,15 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                         {rows.map((row,i)=>{
                           const isPast    = row.date < today;
                           const isCobrado = (row.cupon?.cobrado??!row.cupon) && (row.amort?.cobrado??!row.amort);
-                          const dias      = i===0 ? '' : (selMeta.base==='30/360' ? row.dias30360 : row.diasReales);
+                          const dias      = i===0 ? 'â' : (selMeta.base==='30/360' ? row.dias30360 : row.diasReales);
                           const rowBg = isCobrado?'rgba(52,211,153,0.04)':isPast?'rgba(251,191,36,0.03)':'transparent';
                           // CER de la fecha de pago
-                          // getCER devuelve el ultimo valor conocido <= fecha (o el mas antiguo si no hay anterior)
-                          // CER de pago = CER de (fecha_pago - 10 dias habiles), o (hoy - 10hd) si es futuro
+                          // getCER devuelve el Ãºltimo valor conocido <= fecha (o el mÃ¡s antiguo si no hay anterior)
+                          // CER de pago = CER de (fecha_pago - 10 dÃ­as hÃ¡biles), o (hoy - 10hd) si es futuro
                           const cerPagoVal = (isCERBond&&cerSerie&&cerBaseVal2) ? getCERMinus10(cerSerie,row.date) : null;
                           const coefCER = (cerBaseVal2&&cerPagoVal) ? cerPagoVal/cerBaseVal2 : null;
                           const vnAjust = coefCER ? 100*coefCER : null; // VN ajustado por cada 100 originales
-                          // Interes ajustado CER
+                          // InterÃ©s ajustado CER
                           const diasNum = typeof dias === 'number' ? dias : 0;
                           const divisor = selMeta.base==='30/360'?360:365;
                           const interesAjust = (coefCER&&selMeta.tna&&diasNum>0) ? parseFloat(((selMeta.tna/100)*(diasNum/divisor)*100*coefCER).toFixed(4)) : null;
@@ -5397,13 +5261,13 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                             <tr key={row.date} style={{background:rowBg}}>
                               <td style={{...tdPL,color:'var(--text-muted)',fontSize:11}}>{i+1}</td>
                               <td style={{...tdPL,fontWeight:600,color:isCobrado?'var(--green)':isPast?'var(--yellow)':'var(--text-primary)'}}>
-                                {fmtD(row.date)}{isCobrado&&<span style={{fontSize:9,marginLeft:5,color:'var(--green)'}}></span>}
+                                {fmtD(row.date)}{isCobrado&&<span style={{fontSize:9,marginLeft:5,color:'var(--green)'}}>â</span>}
                               </td>
                               <td style={{...tdPL,fontSize:10,color:row.dateCalc&&row.dateCalc!==row.date?'var(--text-secondary)':'var(--text-muted)'}}>
                                 {fmtD(row.dateCalc||row.date)}
                               </td>
                               <td style={{...tdP,color:'var(--text-muted)'}}>{dias}</td>
-                              {/* Amort  input siempre visible en todas las filas */}
+                              {/* Amort â input siempre visible en todas las filas */}
                               <td style={{...tdP,color:row.amortPct>0?'var(--yellow)':'var(--text-muted)',padding:'4px 6px'}}>
                                 <input type="number" step="0.0001" min="0"
                                     defaultValue={row.amortPct||0}
@@ -5431,7 +5295,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                               </td>
                               <td style={tdP}>{fmtN2(row.vnDespues)}%</td>
                               <td style={{...tdP,color:'var(--text-muted)'}}>{selMeta.tna}%</td>
-                              {/* Interes  input siempre visible, estilo texto hasta focus */}
+                              {/* InterÃ©s â input siempre visible, estilo texto hasta focus */}
                               <td style={{...tdP,color:'var(--accent)',padding:'4px 6px'}}>
                                 {row.cupon
                                   ?<input type="number" step="0.0001"
@@ -5441,28 +5305,28 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                                       onBlur={e=>{e.target.style.background='transparent';e.target.style.border='none';e.target.style.color='var(--accent)';saveCellEdit(selected,row.cupon.id,'monto',e.target.value);}}
                                       onKeyDown={e=>{if(e.key==='Enter')e.target.blur();if(e.key==='Escape'){e.target.value=row.cupon.monto;e.target.blur();}}}
                                       style={{background:'transparent',border:'none',color:'inherit',fontFamily:"'DM Mono',monospace",fontSize:12,textAlign:'right',width:'100%',outline:'none',cursor:'pointer',borderRadius:4,padding:'2px 4px'}}/>
-                                  :<span style={{color:'var(--text-muted)'}}></span>
+                                  :<span style={{color:'var(--text-muted)'}}>â</span>
                                 }
                               </td>
-                              {/* Celdas CER  solo bonos CER con serie cargada */}
+                              {/* Celdas CER â solo bonos CER con serie cargada */}
                               {isCERBond&&(
                                 <>
                                   <td style={{...tdP,background:'rgba(251,191,36,0.03)',color:'var(--yellow)',fontSize:11}}>
-                                    {cerPagoVal?cerPagoVal.toFixed(4):<span style={{color:'var(--text-muted)'}}></span>}
+                                    {cerPagoVal?cerPagoVal.toFixed(4):<span style={{color:'var(--text-muted)'}}>â</span>}
                                   </td>
                                   <td style={{...tdP,background:'rgba(251,191,36,0.03)',color:'var(--yellow)',fontSize:11}}>
-                                    {vnAjust?fmtN2(vnAjust):<span style={{color:'var(--text-muted)'}}></span>}
+                                    {vnAjust?fmtN2(vnAjust):<span style={{color:'var(--text-muted)'}}>â</span>}
                                   </td>
                                   <td style={{...tdP,background:'rgba(251,191,36,0.03)',color:'var(--yellow)',fontSize:11,fontWeight:600}}>
-                                    {interesAjust!=null?fmtN(interesAjust)+'%':<span style={{color:'var(--text-muted)'}}></span>}
+                                    {interesAjust!=null?fmtN(interesAjust)+'%':<span style={{color:'var(--text-muted)'}}>â</span>}
                                   </td>
                                 </>
                               )}
                               <td style={{...tdP,background:'rgba(251,191,36,0.04)',color:'var(--yellow)',fontWeight:row.amortPct>0?700:400}}>
-                                {row.amortPct>0?fmtN(row.amortPct):''}
+                                {row.amortPct>0?fmtN(row.amortPct):'â'}
                               </td>
                               <td style={{...tdP,background:'rgba(59,130,246,0.04)',color:'var(--accent)'}}>
-                                {row.interestPct>0?fmtN(row.interestPct):''}
+                                {row.interestPct>0?fmtN(row.interestPct):'â'}
                               </td>
                               <td style={{...tdP,background:'rgba(52,211,153,0.04)',color:'var(--green)',fontWeight:700}}>
                                 {fmtN(row.totalPct)}
@@ -5481,9 +5345,9 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                                       nota:      (row.cupon||row.amort)?.nota||''
                                     });
                                   }}
-                                  title="Editar" style={{background:'transparent',border:'none',cursor:'pointer',color:'#60A5FA',fontSize:11,padding:'0 2px'}}></button>
+                                  title="Editar" style={{background:'transparent',border:'none',cursor:'pointer',color:'#60A5FA',fontSize:11,padding:'0 2px'}}>âï¸</button>
                                 <button onClick={()=>deleteRow(selected,row.ids)}
-                                  title="Eliminar" style={{background:'transparent',border:'none',cursor:'pointer',color:'var(--red)',fontSize:12,padding:'0 2px'}}></button>
+                                  title="Eliminar" style={{background:'transparent',border:'none',cursor:'pointer',color:'var(--red)',fontSize:12,padding:'0 2px'}}>ð</button>
                               </td>
                             </tr>
                           );
@@ -5500,15 +5364,15 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                       </tfoot>
                     </table>
                     <div style={{fontSize:9,color:'var(--text-muted)',padding:'6px 10px'}}>
-                       Click en celda para editar
-                      {isCERBond&&cerSerie&&cerSerie.length>0?' - Columnas CER calculadas con serie argentinadatos':''}
-                      {isCERBond&&!cerSerie?' - Carga la serie CER para ver columnas ajustadas':''}
+                      â Click en celda para editar
+                      {isCERBond&&cerSerie&&cerSerie.length>0?' Â· Columnas CER calculadas con serie argentinadatos':''}
+                      {isCERBond&&!cerSerie?' Â· CargÃ¡ la serie CER para ver columnas ajustadas':''}
                     </div>
                   </div>
                   );
                 })()}
 
-                {/*  VISTA MI COBRO  */}
+                {/* ââ VISTA MI COBRO ââ */}
                 {viewMode==='micobro'&&(
                   <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
                     <thead>
@@ -5524,22 +5388,22 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                         const cobrado   = (row.cupon?.cobrado??!row.cupon) && (row.amort?.cobrado??!row.amort);
                         const hasAmort  = !!row.amort;
                         const hasCupon  = !!row.cupon;
-                        // Para bonos CER: cobro = VN ajustado  qty / 100
-                        // VN ajustado = vnDespues (o vnAntes para amort)  coefCER
+                        // Para bonos CER: cobro = VN ajustado Ã qty / 100
+                        // VN ajustado = vnDespues (o vnAntes para amort) Ã coefCER
                         const isCERRow = adjustsBy==='CER' && cerSerie;
                         const cerPagoRow = isCERRow ? getCERMinus10(cerSerie, row.date) : null;
                         const cerBaseRow = isCERRow && selMeta.emisionDate ? getCERMinus10(cerSerie, selMeta.emisionDate) : null;
                         const coefCERRow = (cerPagoRow && cerBaseRow) ? cerPagoRow/cerBaseRow : null;
 
-                        // Amortizacion: monto%  VN ajustado  qty/100
+                        // AmortizaciÃ³n: monto% Ã VN ajustado Ã qty/100
                         const montoAmortBase = hasAmort ? row.amort.monto : 0;
                         const montoIntBase   = hasCupon ? row.cupon.monto : 0;
 
                         let totalCobro;
                         if(isCERRow && coefCERRow){
-                          // Amort: montoAmortBase%  100  coefCER  qty/100 = montoAmortBase  coefCER  qty/100
+                          // Amort: montoAmortBase% Ã 100 Ã coefCER Ã qty/100 = montoAmortBase Ã coefCER Ã qty/100
                           const cobroAmort = montoAmortBase * coefCERRow * selBond.qty / 100;
-                          // Interes: sobre VN ajustado antes del pago
+                          // InterÃ©s: sobre VN ajustado antes del pago
                           const vnAjustAntes = row.vnAntes * coefCERRow;
                           const divisorBase  = selMeta.base==='30/360' ? 360 : 365;
                           const diasRow      = row.dias30360 || 0;
@@ -5553,7 +5417,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                           totalCobro = (montoAmort+montoInt)*(selBond.qty/100);
                         }
                         const montoTotal= (montoAmortBase+montoIntBase); // para mostrar % VN
-                        const tipoLabel = hasAmort&&hasCupon?'+ Amort.+Cupon':hasAmort?' Amort.':' Cupon';
+                        const tipoLabel = hasAmort&&hasCupon?'ð°+ð« Amort.+CupÃ³n':hasAmort?'ð° Amort.':'ð« CupÃ³n';
                         const tipoColor = hasAmort?'var(--yellow)':'var(--accent)';
                         return(
                           <tr key={row.date} style={{borderBottom:'1px solid var(--border)',
@@ -5562,7 +5426,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                             <td style={{padding:'10px 12px'}}><span style={{color:tipoColor,fontSize:12}}>{tipoLabel}</span></td>
                             <td style={{padding:'10px 12px',textAlign:'right',fontFamily:"'DM Mono',monospace",fontSize:12}}>
                               {fmtN(montoTotal)}%
-                              {adjustsBy&&coef!==1&&<span style={{fontSize:9,color:'var(--yellow)',display:'block'}}>{coef} {adjustsBy}</span>}
+                              {adjustsBy&&coef!==1&&<span style={{fontSize:9,color:'var(--yellow)',display:'block'}}>Ã{coef} {adjustsBy}</span>}
                             </td>
                             <td style={{padding:'10px 12px',textAlign:'right',fontFamily:"'DM Mono',monospace",fontSize:12,color:'var(--text-muted)'}}>{selBond.qty.toLocaleString('es-AR')}</td>
                             <td style={{padding:'10px 12px',textAlign:'right',fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:13}}>
@@ -5570,18 +5434,18 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                             </td>
                             <td style={{padding:'10px 12px',fontSize:12}}>
                               {cobrado
-                                ?<span style={{color:'var(--green)'}}> {fmtD(row.cupon?.fechaCobro||row.amort?.fechaCobro)}</span>
+                                ?<span style={{color:'var(--green)'}}>â {fmtD(row.cupon?.fechaCobro||row.amort?.fechaCobro)}</span>
                                 :!isFuture
                                   ?<button onClick={()=>confirmCobro(selected,row.ids)}
                                     style={{background:'rgba(52,211,153,0.1)',border:'1px solid rgba(52,211,153,0.3)',borderRadius:6,padding:'3px 10px',color:'var(--green)',cursor:'pointer',fontSize:11}}>
                                     Confirmar cobro
                                   </button>
-                                  :<span style={{color:'var(--text-muted)',fontSize:11}}> Pendiente</span>
+                                  :<span style={{color:'var(--text-muted)',fontSize:11}}>ð¡ Pendiente</span>
                               }
                             </td>
                             <td style={{padding:'10px 12px'}}>
                               <button onClick={()=>deleteRow(selected,row.ids)}
-                                style={{background:'transparent',border:'none',cursor:'pointer',color:'var(--red)',fontSize:13}}></button>
+                                style={{background:'transparent',border:'none',cursor:'pointer',color:'var(--red)',fontSize:13}}>ð</button>
                             </td>
                           </tr>
                         );
@@ -5596,7 +5460,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
       </div>
     </div>
 
-    {/* BondWizard inline  carga rapida desde FlujoTab */}
+    {/* BondWizard inline â carga rÃ¡pida desde FlujoTab */}
     {wizardFlujosOpen && selected && (
       <BondWizard
         ticker={selected}
@@ -5606,7 +5470,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
           if(existing.length > 0){
             const replace = window.confirm(
               `Ya hay ${existing.length} flujo(s) cargados para ${selected}.\n\n` +
-              `Reemplazar todo? (Cancelar = agregar al final)`
+              `Â¿Reemplazar todo? (Cancelar = agregar al final)`
             );
             if(replace){
               setBondFlows(prev=>({...prev,[selected]:newFlows}));
@@ -5631,9 +5495,9 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
 
 
 function App(){
-  //  State 
+  // ââ State ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   const SEED_TRADES = [
-    //  Posiciones al 01/01/26 (tenencia previa) 
+    // ââ Posiciones al 01/01/26 (tenencia previa) âââââââââââââââââââââ
     {id:1, ticker:"YPFD",      tipo:"compra", qty:78,       price:54214.29,  currency:"ARS", date:"2026-01-01", ts:1000,  name:"YPF Ordinarias D",                comision:0},
     {id:2, ticker:"TZXD6",     tipo:"compra", qty:781503,   price:179,       currency:"ARS", date:"2026-01-01", ts:2000,  name:"BONTES CER V15/12/26",            comision:0},
     {id:3, ticker:"TLCUD",     tipo:"compra", qty:7000,     price:100.0,     currency:"USD", date:"2026-01-01", ts:3000,  name:"ON Telecom C28 05/03/29",         comision:0},
@@ -5643,7 +5507,7 @@ function App(){
     {id:7, ticker:"FIMA-AHP",  tipo:"compra", qty:9.88,     price:600.718,   currency:"ARS", date:"2026-01-01", ts:7000,  name:"FIMA Ahorro Pesos Cl A",          comision:0},
     {id:8, ticker:"FIMA-AHPP", tipo:"compra", qty:2.30,     price:147.952,   currency:"ARS", date:"2026-01-01", ts:8000,  name:"FIMA Ahorro Plus Cl A",           comision:0},
     {id:9, ticker:"FIMA-PREMD",tipo:"compra", qty:140,      price:1.012932,  currency:"USD", date:"2026-01-01", ts:9000,  name:"FIMA Premium Dolares Cl A",       comision:0},
-    //  Operaciones 2026 
+    // ââ Operaciones 2026 ââââââââââââââââââââââââââââââââââââââââââââââ
     // GLD
     {id:100,ticker:"GLD",  tipo:"compra",qty:74,  price:13490.5802,  currency:"ARS",date:"2026-02-05",ts:100000,name:"ETF SPDR Gold Trust",        comision:2994.91},
     {id:101,ticker:"GLD",  tipo:"compra",qty:103, price:14438.9393, currency:"ARS",date:"2026-03-03",ts:101000,name:"ETF SPDR Gold Trust",        comision:4461.63},
@@ -5692,7 +5556,7 @@ function App(){
   const [syncChecked,setSyncChecked] = useState(false);
   const [historicos,setHistoricos] = useState(null);
 
-  // Cargar historicos desde JSON generado por GitHub Actions
+  // Cargar histÃ³ricos desde JSON generado por GitHub Actions
   useEffect(()=>{
     fetch("/historicos.json")
       .then(r=>r.ok?r.json():null)
@@ -5716,9 +5580,9 @@ function App(){
   const [lastRefresh,setLastRefresh] = useState(null);
   const [countdown,setCountdown]   = useState(300);
 
-  // countdown movido a CountdownDisplay component  no re-renderiza el App
+  // countdown movido a CountdownDisplay component â no re-renderiza el App
 
-  //  GitHub Sync 
+  // ââ GitHub Sync ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   const REPO = "MoloMolinaCa/mi-portfolio";
   const DATA_FILE = "public/portfolio_data.json";
   const [syncStatus, setSyncStatus] = useState("idle"); // idle|loading|saving|error
@@ -5726,7 +5590,7 @@ function App(){
 
   // GitHub data se carga via /api/sync (unica fuente de verdad)
 
-  // Guardar datos via /api/sync (Vercel serverless  token seguro en servidor)
+  // Guardar datos via /api/sync (Vercel serverless â token seguro en servidor)
   const saveToGitHub = async (newPort, newTrades, newFlows, newMeta) => {
     try{
       setSyncStatus("saving");
@@ -5746,12 +5610,12 @@ function App(){
         localStorage.setItem('gal_last_save', Date.now().toString());
         setSyncStatus("idle");
       } else if(res.status===409){
-        // SHA desactualizado  refrescar y reintentar una vez
+        // SHA desactualizado â refrescar y reintentar una vez
         try{
           const r2 = await fetch('/api/sync');
           if(r2.ok){ const d2=await r2.json(); setGhSha(d2.sha); }
         }catch{}
-        setSyncStatus("idle"); // reintentar en el proximo save
+        setSyncStatus("idle"); // reintentar en el prÃ³ximo save
       } else {
         console.warn("Sync save error:", res.status);
         setSyncStatus("error");
@@ -5762,10 +5626,10 @@ function App(){
     }
   };
 
-  //  Storage 
+  // ââ Storage âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   const [bondMetaFromGH, setBondMetaFromGH] = useState(null);
   useEffect(()=>{
-    // 0. Generar device ID unico para este dispositivo
+    // 0. Generar device ID Ãºnico para este dispositivo
     if(!localStorage.getItem('gal_device_id')){
       localStorage.setItem('gal_device_id', Math.random().toString(36).slice(2)+Date.now().toString(36));
     }
@@ -5786,7 +5650,7 @@ function App(){
     }catch{}
     setStorageReady(true);
 
-    // 2. Cargar desde /api/sync  SOLO si localStorage esta vacio (dispositivo nuevo)
+    // 2. Cargar desde /api/sync â SOLO si localStorage estÃ¡ vacÃ­o (dispositivo nuevo)
     const localPortData = localStorage.getItem("gal_port_v1");
     const localTradesData = localStorage.getItem("gal_trades_v3");
     const localHasData = localPortData && JSON.parse(localPortData||'[]').length > 0;
@@ -5802,7 +5666,7 @@ function App(){
         const ghDeviceId = data.deviceId;
         const localTs = parseInt(localStorage.getItem('gal_last_save')||'0');
         const ghTs = new Date(data.updatedAt||0).getTime();
-        // Aplicar si: no tengo datos locales, O si GitHub es mas nuevo Y fue otro dispositivo
+        // Aplicar si: no tengo datos locales, O si GitHub es mÃ¡s nuevo Y fue otro dispositivo
         const shouldApply = true;
         if(shouldApply){
           isLoadingFromGH.current = true;
@@ -5844,10 +5708,10 @@ function App(){
     }catch{}
   },[bondFlows,storageReady]);
 
-  // Sync a GitHub con debounce de 2s  solo si hubo cambio local reciente
+  // Sync a GitHub con debounce de 2s â solo si hubo cambio local reciente
   const isLoadingFromGH = React.useRef(false); // true mientras se cargan datos de GitHub
   const _loadTs = React.useRef(Date.now());
-  const lastSyncRef = React.useRef(0); // timestamp del ultimo sync exitoso
+  const lastSyncRef = React.useRef(0); // timestamp del Ãºltimo sync exitoso
   useEffect(()=>{
     if(!storageReady || !syncChecked) return;
     if(saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -5858,7 +5722,7 @@ function App(){
       if(Date.now() - _loadTs.current < 5000) return;
       // No sobreescribir GitHub si tenemos menos datos
       if(port.length===0 && trades.length===0) return;
-      // Solo guardar si este save es mas nuevo que el ultimo sync
+      // Solo guardar si este save es mÃ¡s nuevo que el Ãºltimo sync
       if(saveTs < lastSyncRef.current) return;
       const meta = (() => { try{ return JSON.parse(localStorage.getItem('gal_bond_meta_v1')||'{}'); }catch{ return {}; } })();
       lastSyncRef.current = saveTs;
@@ -5867,7 +5731,7 @@ function App(){
     return ()=>{ if(saveTimerRef.current) clearTimeout(saveTimerRef.current); };
   },[port, trades, bondFlows, storageReady, syncChecked]);
 
-  //  Live prices 
+  // ââ Live prices âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   const fxRate = liveFX[fx] || FX_FALLBACK[fx];
 
   const portRef = React.useRef(port);
@@ -5882,13 +5746,13 @@ function App(){
       setLiveFX(newFX);
       setLivePrices(newPrices);
       setLiveT10Y(newT10Y);
-      // S&P500 en vivo via Yahoo proxy  usar meta.regularMarketPrice que siempre es el precio actual
+      // S&P500 en vivo via Yahoo proxy â usar meta.regularMarketPrice que siempre es el precio actual
       try{
         const r=await fetch(YAHOO_PROXY+"?symbol=%5EGSPC&range=1d&interval=5m",{signal:AbortSignal.timeout(6000)});
         if(r.ok){
           const d=await r.json();
           const meta=d?.chart?.result?.[0]?.meta;
-          // Preferir regularMarketPrice del meta  es el precio en tiempo real
+          // Preferir regularMarketPrice del meta â es el precio en tiempo real
           const price=meta?.regularMarketPrice||meta?.chartPreviousClose||null;
           if(price&&price>1000)setLiveSP500(price);
         }
@@ -5898,7 +5762,7 @@ function App(){
     } catch { setPriceStatus("error"); }
   };
 
-  // Refresh al cargar  esperar que localStorage este listo
+  // Refresh al cargar â esperar que localStorage estÃ© listo
   useEffect(()=>{ if(storageReady){
       refreshPrices();
       const iv=setInterval(refreshPrices,5*60*1000);
@@ -5925,7 +5789,7 @@ function App(){
       return()=>{clearInterval(iv);document.removeEventListener('visibilitychange',onVisible);};
     } },[storageReady]);
 
-  //  Portfolio calcs 
+  // ââ Portfolio calcs âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   const ppcByTicker = useMemo(()=>port.reduce((acc,t)=>{
     const buys = trades.filter(tr=>tr.ticker===t.ticker&&tr.tipo==="compra");
     if(!buys.length){ acc[t.ticker]=t.buyPrice; return acc; }
@@ -5953,14 +5817,14 @@ function App(){
           liveChangePct = parseFloat(((livePrice-prevClose)/prevClose*100).toFixed(2));
         }
       } else {
-        // Sin historico: si fue dado de alta hoy, variacion vs PPC de compra
+        // Sin histÃ³rico: si fue dado de alta hoy, variaciÃ³n vs PPC de compra
         const buyToday = trades.some(t=>t.ticker===h.ticker&&t.tipo==="compra"&&t.date===today);
         if(buyToday && ppc>0){
           liveChangePct = parseFloat(((livePrice-ppc)/ppc*100).toFixed(2));
         }
       }
     }
-    // Bonos cotizan por cada 100 VN  dividir por 100 para obtener valor real
+    // Bonos cotizan por cada 100 VN â dividir por 100 para obtener valor real
     const isBond = h.type==="bono_usd" || h.type==="bono_ars";
     const qtyFactor = isBond ? h.qty/100 : h.qty;
 
@@ -5971,7 +5835,7 @@ function App(){
       return cclBarsH.reduce((b,x)=>Math.abs(new Date(x.date)-t)<Math.abs(new Date(b.date)-t)?x:b,cclBarsH[0])?.close||fxRate;
     };
 
-    // costUSD: sumar cada lote de compra al TC de ese dia + comisiones
+    // costUSD: sumar cada lote de compra al TC de ese dÃ­a + comisiones
     let costUSD;
     if(h.buyCurrency==="USD"){
       const buyLots = trades.filter(t=>t.ticker===h.ticker&&t.tipo==="compra");
@@ -5984,7 +5848,7 @@ function App(){
         const isBondLot = h.type==="bono_usd"||h.type==="bono_ars";
         const lotFactor = isBondLot ? lotUsed/100 : lotUsed;
         const lotTotal = lot.price * lotFactor;
-        // Comision prorrateada por lote
+        // ComisiÃ³n prorrateada por lote
         const lotComision = lot.comision ? (+lot.comision * lotUsed / lot.qty) : 0;
         costUSDTotal += lotTotal + lotComision;
         qtyToAccount -= lotUsed;
@@ -6035,7 +5899,7 @@ function App(){
   },[en]);
 
   // P&L realizado: suma de pnlAmt de todas las ventas ya ejecutadas
-  // pnlAmt en ARS  convertir a USD usando CCL de la fecha de la venta
+  // pnlAmt en ARS â convertir a USD usando CCL de la fecha de la venta
   const pnlRealizado = useMemo(()=>{
     const cclBars = historicos?.CCL||[];
     // Para cada venta, calcular P&L en USD comparando proceeds vs costo en USD
@@ -6075,7 +5939,7 @@ function App(){
 
   const totPnlTotal = totPnl + pnlRealizado; // no realizado + realizado
 
-  // TWR anualizado + P&L real por ano
+  // TWR anualizado + P&L real por aÃ±o
   const twrStats = useMemo(()=>{
     try{
     if(!historicos||!trades.length) return null;
@@ -6095,8 +5959,8 @@ function App(){
     if(!firstDate) return null;
     const today = todayAR();
 
-    // Construir serie TWR  usar solo fechas con datos reales para acelerar
-    // (no necesitamos cada dia del calendario, solo los dias con barras de precio)
+    // Construir serie TWR â usar solo fechas con datos reales para acelerar
+    // (no necesitamos cada dÃ­a del calendario, solo los dÃ­as con barras de precio)
     const allDatesSet = new Set();
     allTradeTickers.forEach(ticker=>{
       (tickerBars[ticker]||[]).forEach(b=>{ if(b.date>=firstDate) allDatesSet.add(b.date); });
@@ -6116,7 +5980,7 @@ function App(){
     const dias = Math.max(1, Math.round((new Date(today)-new Date(firstDate))/(1000*60*60*24)));
     const twrAnual = (Math.pow(1+twrTotal, 365/dias) - 1) * 100;
 
-    // Helper: convertir monto en moneda a USD usando CCL de esa fecha  biseccion
+    // Helper: convertir monto en moneda a USD usando CCL de esa fecha â bisecciÃ³n
     const cclCacheT={};
     const getCCLT=(date)=>{
       if(cclCacheT[date]) return cclCacheT[date];
@@ -6130,12 +5994,12 @@ function App(){
       return monto / getCCLT(date);
     };
 
-    // P&L por ano: solo TWR % por ano
-    // El P&L en USD total lo calculamos desde pnlRealizado + totPnl (mas confiable)
+    // P&L por aÃ±o: solo TWR % por aÃ±o
+    // El P&L en USD total lo calculamos desde pnlRealizado + totPnl (mÃ¡s confiable)
     const years = [...new Set(allDates.map(d=>d.slice(0,4)))];
     const byYear = {};
 
-    // P&L realizado por ano (ventas FIFO en USD, por ano de la venta)
+    // P&L realizado por aÃ±o (ventas FIFO en USD, por aÃ±o de la venta)
     const pnlRealizadoPorAnio = {};
     trades.filter(t=>t.tipo==="venta").forEach(t=>{
       const y = t.date.slice(0,4);
@@ -6172,9 +6036,9 @@ function App(){
       const twrFin    = puntos[puntos.length-1].val;
       const rendAnio  = ((twrFin/twrInicio)-1)*100;
 
-      // P&L USD del ano = realizado en el ano + cambio en valor de cartera
-      // Para el ano en curso: no realizado = totPnl (ya calculado fuera)
-      // Para anos cerrados: no realizado = 0 (todo fue realizado o rolado)
+      // P&L USD del aÃ±o = realizado en el aÃ±o + cambio en valor de cartera
+      // Para el aÃ±o en curso: no realizado = totPnl (ya calculado fuera)
+      // Para aÃ±os cerrados: no realizado = 0 (todo fue realizado o rolado)
       const esAnioActual = y === today.slice(0,4);
       const realizadoAnio = pnlRealizadoPorAnio[y]||0;
       const noRealizadoAnio = esAnioActual ? totPnl : 0;
@@ -6185,7 +6049,7 @@ function App(){
 
     return { twrTotal: twrTotal*100, twrAnual, dias, serie, byYear, firstDate };
     }catch(e){ console.error("twrStats error:",e); return null; }
-  },[trades, en, historicos, fxRate]); // sin livePrices  no recalcular por cada precio
+  },[trades, en, historicos, fxRate]); // sin livePrices â no recalcular por cada precio
 
   const benchPct=(Math.pow(1+liveT10Y/100,90/365)-1)*100;
   const alpha=totPct-benchPct;
@@ -6200,12 +6064,12 @@ function App(){
     return{key,...meta,val,cost,pnl,pnlP,items,pct:totUSD>0?(val/totUSD)*100:0};
   }).filter(t=>t.val>0).sort((a,b)=>b.val-a.val);
 
-  //  Handlers 
+  // ââ Handlers ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   const del=(id)=>setModal(port.find(x=>x.id===id)||null);
 
-  //  Exporta portfolio_tickers.json  lo lee update_historicos.py 
+  // ââ Exporta portfolio_tickers.json â lo lee update_historicos.py âââââââââââââ
   // Todos los tickers que alguna vez estuvieron en cartera (activos + vendidos)
-  // para que el script descargue historico completo sin perder datos de posiciones cerradas
+  // para que el script descargue histÃ³rico completo sin perder datos de posiciones cerradas
   const downloadPortfolioTickers = (currentTrades) => {
     try {
       const allTickers = [...new Set(currentTrades.map(t=>t.ticker))];
@@ -6316,8 +6180,8 @@ function App(){
     }
         return newPort;
       });
-      // portfolio_tickers.json se descarga manualmente desde el boton CSV
-      // Si es bono/ON sin flujos cargados  disparar wizard
+      // portfolio_tickers.json se descarga manualmente desde el botÃ³n CSV
+      // Si es bono/ON sin flujos cargados â disparar wizard
       const isBond = h.type==='bono_ars'||h.type==='bono_usd';
       const yaFlows = bondFlows[h.ticker.toUpperCase()]?.length > 0;
       if(isBond && !yaFlows){
@@ -6351,7 +6215,7 @@ function App(){
     if(!trades||!trades.length){alert("No hay movimientos.");return;}
     const sep=";";
     const fmtNum=(n,d=2)=>Number(n).toFixed(d).replace(".",",");
-    const header=["Fecha","Ticker","Nombre","Tipo","Nominales","Precio","Moneda","Monto Bruto","Comision","Monto Neto","PnL Monto","PnL %"].join(sep);
+    const header=["Fecha","Ticker","Nombre","Tipo","Nominales","Precio","Moneda","Monto Bruto","ComisiÃ³n","Monto Neto","PnL Monto","PnL %"].join(sep);
     const rows=[...trades].sort((a,b)=>a.date.localeCompare(b.date)).map(t=>{
       const qty=fmtNum(t.qty,Number(t.qty)%1===0?0:4);
       const bruto=Number(t.qty)*Number(t.price);
@@ -6369,7 +6233,7 @@ function App(){
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
   };
 
-  //  Venta result benchmark fetch 
+  // ââ Venta result benchmark fetch ââââââââââââââââââââââââââââââââââââââââââ
   const [benchmarkData,setBenchmarkData]=useState(null);
   useEffect(()=>{
     if(!ventaResult){setBenchmarkData(null);return;}
@@ -6378,11 +6242,11 @@ function App(){
       const {buyDate,sellDate}=ventaResult;
       const days=Math.max(1,(new Date(sellDate)-new Date(buyDate))/(1000*60*60*24));
       try{
-        // Fetch SPY historico para el periodo de la operacion
+        // Fetch SPY histÃ³rico para el perÃ­odo de la operaciÃ³n
         const range = days<=32?"1mo":days<=95?"3mo":days<=370?"1y":"3y";
         const result={loading:false,sources:{}};
 
-        // Usar historico del JSON pre-generado
+        // Usar histÃ³rico del JSON pre-generado
         const spyBars = historicos?.sp500 || [];
         if(spyBars.length){
           const pb=findPrice(spyBars,buyDate), ps=findPrice(spyBars,sellDate);
@@ -6401,7 +6265,7 @@ function App(){
           if(pb&&ps){result.mepPct=((ps-pb)/pb)*100;result.sources.mep="historicos.json";}
         }
 
-        // CER como proxy de inflacion ARS
+        // CER como proxy de inflaciÃ³n ARS
         const cerBars = historicos?.CER || [];
         if(cerBars.length){
           const pb=findPrice(cerBars,buyDate), ps=findPrice(cerBars,sellDate);
@@ -6471,37 +6335,37 @@ function App(){
         <div style={{background:"var(--bg-card)",borderBottom:"1px solid var(--border)",padding:isMobile?"8px 12px":"11px 24px"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
             <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
-              <div style={{width:28,height:28,flexShrink:0,borderRadius:8,background:"linear-gradient(135deg,var(--accent),var(--accent2))",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}></div>
+              <div style={{width:28,height:28,flexShrink:0,borderRadius:8,background:"linear-gradient(135deg,var(--accent),var(--accent2))",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>ð</div>
               <div style={{minWidth:0}}>
                 <div style={{fontWeight:700,fontSize:isMobile?13:15,color:"var(--title-color)",letterSpacing:"-0.3px"}}>Mi Portfolio</div>
                 {!isMobile&&<div style={{fontSize:11,color:"var(--text-muted)",display:"flex",alignItems:"center",gap:8}}>
                   <CountdownDisplay lastRefresh={lastRefresh} priceStatus={priceStatus} liveCount={liveCount} portLen={port.length}/>
-                  {syncStatus==="saving"&&<span style={{color:"var(--yellow)"}}> guardando...</span>}
-                  {syncStatus==="error"&&<span style={{color:"var(--red)"}}> error de sync</span>}
-                  {syncStatus==="loading"&&<span style={{color:"var(--text-muted)"}}> cargando datos...</span>}
+                  {syncStatus==="saving"&&<span style={{color:"var(--yellow)"}}>â guardando...</span>}
+                  {syncStatus==="error"&&<span style={{color:"var(--red)"}}>â  error de sync</span>}
+                  {syncStatus==="loading"&&<span style={{color:"var(--text-muted)"}}>â cargando datos...</span>}
                 </div>}
               </div>
             </div>
             <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
               {!isMobile&&<div style={{display:"flex",flexDirection:"column",gap:1}}>
                 <select value={fx} onChange={e=>setFx(e.target.value)} style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"5px 10px",color:"var(--text-secondary)",fontSize:12,cursor:"pointer"}}>
-                  <option value="CCL"> CCL {fmtA(liveFX.CCL)}</option>
-                  <option value="MEP"> MEP {fmtA(liveFX.MEP)}</option>
-                  <option value="oficial"> Oficial {fmtA(liveFX.oficial)}</option>
+                  <option value="CCL">ðµ CCL {fmtA(liveFX.CCL)}</option>
+                  <option value="MEP">ðµ MEP {fmtA(liveFX.MEP)}</option>
+                  <option value="oficial">ðµ Oficial {fmtA(liveFX.oficial)}</option>
                 </select>
-                <div style={{fontSize:9,color:"var(--text-muted)",textAlign:"center"}}>dolar de valuacion</div>
+                <div style={{fontSize:9,color:"var(--text-muted)",textAlign:"center"}}>dÃ³lar de valuaciÃ³n</div>
               </div>}
-              <button onClick={refreshPrices} disabled={priceStatus==="loading"} style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"5px 8px",color:"var(--text-secondary)",cursor:"pointer",fontSize:12}}></button>
-              {!isMobile&&<button onClick={downloadTrades} style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"6px 10px",color:"var(--text-secondary)",cursor:"pointer",fontSize:13}}> CSV</button>}
+              <button onClick={refreshPrices} disabled={priceStatus==="loading"} style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"5px 8px",color:"var(--text-secondary)",cursor:"pointer",fontSize:12}}>â»</button>
+              {!isMobile&&<button onClick={downloadTrades} style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"6px 10px",color:"var(--text-secondary)",cursor:"pointer",fontSize:13}}>â¬ CSV</button>}
               <button onClick={()=>setHideAmounts(h=>!h)}
                 style={{background:hideAmounts?"rgba(37,99,235,0.15)":"var(--bg-card)",border:hideAmounts?"1px solid var(--accent)":"1px solid var(--border)",borderRadius:6,padding:"5px 8px",color:hideAmounts?"var(--accent)":"var(--text-secondary)",cursor:"pointer",fontSize:13}}>
-                {hideAmounts?"":""}
+                {hideAmounts?"ð":"ð"}
               </button>
               <button onClick={()=>setDarkMode(d=>!d)}
                 style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"5px 8px",color:"var(--text-secondary)",cursor:"pointer",fontSize:13}}>
-                {darkMode?"":""}
+                {darkMode?"âï¸":"ð"}
               </button>
-              <button onClick={()=>setModal("add")} style={{background:"var(--accent)",border:"none",borderRadius:6,padding:"6px 12px",color:"#fff",cursor:"pointer",fontSize:isMobile?12:13,fontWeight:600}}>+ Posicion</button>
+              <button onClick={()=>setModal("add")} style={{background:"var(--accent)",border:"none",borderRadius:6,padding:"6px 12px",color:"#fff",cursor:"pointer",fontSize:isMobile?12:13,fontWeight:600}}>+ PosiciÃ³n</button>
             </div>
           </div>
           {isMobile&&<div style={{marginTop:6,display:"flex",gap:8,alignItems:"center",justifyContent:"space-between"}}>
@@ -6512,17 +6376,17 @@ function App(){
             </select>
             <span style={{fontSize:10,display:"flex",alignItems:"center",gap:6}}>
               <CountdownDisplay lastRefresh={lastRefresh} priceStatus={priceStatus} liveCount={liveCount} portLen={port.length}/>
-              {syncStatus==="saving"&&<span style={{color:"var(--yellow)",fontSize:9}}> sync</span>}
-              {syncStatus==="error"&&<span style={{color:"var(--red)",fontSize:9}}> sync</span>}
-              {syncStatus==="loading"&&<span style={{color:"var(--text-muted)",fontSize:9}}> cargando</span>}
+              {syncStatus==="saving"&&<span style={{color:"var(--yellow)",fontSize:9}}>â sync</span>}
+              {syncStatus==="error"&&<span style={{color:"var(--red)",fontSize:9}}>â  sync</span>}
+              {syncStatus==="loading"&&<span style={{color:"var(--text-muted)",fontSize:9}}>â cargando</span>}
             </span>
-            <button onClick={downloadTrades} style={{background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:6,padding:"4px 8px",color:"var(--text-secondary)",cursor:"pointer",fontSize:11}}> CSV</button>
+            <button onClick={downloadTrades} style={{background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:6,padding:"4px 8px",color:"var(--text-secondary)",cursor:"pointer",fontSize:11}}>â¬ CSV</button>
           </div>}
         </div>
 
         {/* Nav */}
         <div style={{background:"var(--bg-card)",borderBottom:"1px solid var(--border)",padding:"0 12px",display:"flex",gap:0,overflowX:"auto",WebkitOverflowScrolling:"touch",scrollbarWidth:"none"}}>
-          {[["dashboard"," Dashboard"],["portfolio"," Portfolio"],["analisis"," Analisis"],["flujos"," Flujos"],["operaciones"," Operaciones"]].map(([id,lbl])=>(
+          {[["dashboard","ð Dashboard"],["portfolio","ð¼ Portfolio"],["analisis","ð AnÃ¡lisis"],["flujos","ð¸ Flujos"],["operaciones","ð Operaciones"]].map(([id,lbl])=>(
             <button key={id} onClick={()=>handleTabChange(id)} className="nav-btn"
               style={{padding:isMobile?"10px 12px":"13px 18px",background:"transparent",border:"none",
                 borderBottom:tab===id?"2px solid var(--accent)":"2px solid transparent",
@@ -6535,7 +6399,7 @@ function App(){
         </div>
 
         <div style={{padding:isMobile?"10px 12px":"22px 60px",maxWidth:"100%",boxSizing:"border-box",overflowX:"hidden"}}>
-          {/* Notificacion flujos pendientes */}
+          {/* NotificaciÃ³n flujos pendientes */}
           {(()=>{
             const todayN=todayAR();
             if(!bondFlows||typeof bondFlows!=='object')return null;
@@ -6552,10 +6416,10 @@ function App(){
                   return(
                     <div key={f.id} style={{background:'rgba(251,191,36,0.08)',border:'1px solid rgba(251,191,36,0.25)',borderRadius:10,padding:'12px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
                       <div style={{display:'flex',alignItems:'center',gap:10}}>
-                        <span style={{fontSize:18}}></span>
+                        <span style={{fontSize:18}}>ð°</span>
                         <div>
                           <span style={{fontWeight:700,color:'var(--yellow)',fontSize:13}}>{f.ticker}</span>
-                          <span style={{color:'var(--text-secondary)',fontSize:12,marginLeft:8}}>{f.tipo==='amortizacion'?'Amortizacion':'Cupon'} - {f.date?.slice(8)+'/'+f.date?.slice(5,7)+'/'+f.date?.slice(0,4)}</span>
+                          <span style={{color:'var(--text-secondary)',fontSize:12,marginLeft:8}}>{f.tipo==='amortizacion'?'AmortizaciÃ³n':'CupÃ³n'} Â· {f.date?.slice(8)+'/'+f.date?.slice(5,7)+'/'+f.date?.slice(0,4)}</span>
                           <span style={{color:'var(--text-primary)',fontWeight:700,fontSize:13,marginLeft:8,fontFamily:"'DM Mono',monospace"}}>
                             {f.currency==='USD'?'US$':'$'}{total.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})}
                           </span>
@@ -6564,7 +6428,7 @@ function App(){
                       <button onClick={()=>{
                         setBondFlows(prev=>({...prev,[f.ticker]:(prev[f.ticker]||[]).map(x=>x.id===f.id?{...x,cobrado:true,fechaCobro:todayN}:x)}));
                       }} style={{background:'rgba(251,191,36,0.15)',border:'1px solid rgba(251,191,36,0.4)',borderRadius:6,padding:'5px 14px',color:'var(--yellow)',cursor:'pointer',fontSize:12,fontWeight:600,whiteSpace:'nowrap'}}>
-                         Confirmar cobro
+                        â Confirmar cobro
                       </button>
                     </div>
                   );
@@ -6576,14 +6440,14 @@ function App(){
           {/* DASHBOARD */}
           {tab==="dashboard"&&(
             <div className="fi" style={{display:"grid",gap:16}}>
-              {/* KPI Cards  redisenados */}
+              {/* KPI Cards â rediseÃ±ados */}
               {(()=>{
                 // Rendimiento diario: usar liveChangePct de cada activo (viene de data912, es el cambio vs cierre anterior real)
-                // Esto es mas preciso que comparar con el ultimo bar del historicos.json
+                // Esto es mÃ¡s preciso que comparar con el Ãºltimo bar del historicos.json
                 const todayKPI=todayAR();
                 let dayPnlUSD=0, baseValUSD=0;
                 for(const h of en){
-                  // Solo activos con precio live y cambio % del dia
+                  // Solo activos con precio live y cambio % del dÃ­a
                   if(h.liveChangePct==null||!h.isLive)continue;
                   const isBond=h.type==="bono_usd"||h.type==="bono_ars";
 
@@ -6606,33 +6470,33 @@ function App(){
 
                 const kpis=[
                   {
-                    icon:"", lbl:"Valor total",
-                    main:hideAmounts?"":fmtU(totUSD),
-                    sub:hideAmounts?"":fmtA(totUSD*fxRate),
+                    icon:"ð¼", lbl:"Valor total",
+                    main:hideAmounts?"â¢â¢â¢â¢â¢â¢":fmtU(totUSD),
+                    sub:hideAmounts?"â¢â¢â¢â¢":fmtA(totUSD*fxRate),
                     subLabel:"ARS",
                     mainColor:"var(--accent)",
                     trend:null,
                     bigSub:true,
                   },
                   {
-                    icon:"", lbl:"TWR anualizado",
+                    icon:"ð", lbl:"TWR anualizado",
                     main:twrStats?fmtP(twrStats.twrAnual):fmtP(totPct),
-                    sub:twrStats?fmtP(twrStats.twrTotal)+" total - "+twrStats.dias+"d":(hideAmounts?"":fmtU(totPnl)),
+                    sub:twrStats?fmtP(twrStats.twrTotal)+" total Â· "+twrStats.dias+"d":(hideAmounts?"â¢â¢â¢â¢":fmtU(totPnl)),
                     subLabel:twrStats?"Rendimiento acumulado":"No realizado",
                     mainColor:twrStats?pc(twrStats.twrAnual):pc(totPct),
                     trend:twrStats?twrStats.twrAnual:totPct,
                   },
 
                   {
-                    icon:"", lbl:"Rendimiento del dia",
+                    icon:"ð", lbl:"Rendimiento del dÃ­a",
                     main:fmtP(dayPct),
-                    sub:hideAmounts?"":(dayPnlUSD>=0?"+":"")+fmtU(dayPnlUSD),spyBadge:spyDayPct,
+                    sub:hideAmounts?"â¢â¢â¢â¢":(dayPnlUSD>=0?"+":"")+fmtU(dayPnlUSD),spyBadge:spyDayPct,
                     subLabel:"P&L hoy USD",
                     mainColor:pc(dayPct),
                     trend:dayPct,
                   },
                 ];
-                // Proximo vencimiento de bonos
+                // PrÃ³ximo vencimiento de bonos
                 const allBonds = port.filter(h=>h.type==='bono_ars'||h.type==='bono_usd');
                 const proxVto = allBonds.flatMap(b=>{
                   const flows = (bondFlows[b.ticker]||[]);
@@ -6670,10 +6534,10 @@ function App(){
                     ))}
                   {proxVto&&(
                     <div style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderLeft:"3px solid var(--yellow)",borderRadius:10,padding:"16px 20px",display:"flex",flexDirection:"column",justifyContent:"center",gap:6,minWidth:160}}>
-                      <span style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1.2,fontWeight:600}}>Prox. vencimiento</span>
+                      <span style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1.2,fontWeight:600}}>PrÃ³x. vencimiento</span>
                       <span style={{fontSize:20,fontWeight:700,color:"var(--yellow)",fontFamily:"'DM Mono',monospace"}}>{proxVto.ticker}</span>
                       <span style={{fontSize:13,color:"var(--text-secondary)",fontFamily:"'DM Mono',monospace"}}>{proxVto.date.slice(8)+'/'+proxVto.date.slice(5,7)+'/'+proxVto.date.slice(0,4)}</span>
-                      <span style={{fontSize:11,color:"var(--text-muted)"}}>{Math.round((new Date(proxVto.date)-new Date(todayKPI))/(1000*60*60*24))} dias</span>
+                      <span style={{fontSize:11,color:"var(--text-muted)"}}>{Math.round((new Date(proxVto.date)-new Date(todayKPI))/(1000*60*60*24))} dÃ­as</span>
                     </div>
                   )}
                   </div>
@@ -6682,7 +6546,7 @@ function App(){
 
               <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"220px 1fr",gap:14,alignItems:"stretch"}}>
                 <div style={{...card,padding:"18px 16px",display:"flex",flexDirection:"column"}}>
-                  <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1.2,marginBottom:12,fontWeight:600}}>Asignacion por tipo</div>
+                  <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1.2,marginBottom:12,fontWeight:600}}>AsignaciÃ³n por tipo</div>
                   <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
                     <Donut segs={byType.map(t=>({k:t.key,v:t.val,color:t.color,label:t.label}))} size={170}/>
                     <div style={{width:"100%",display:"grid",gap:8}}>
@@ -6720,25 +6584,25 @@ function App(){
 
               <DayMoversWidget en={enGrouped} historicos={historicos} fxRate={fxRate} livePrices={livePrices} card={card} hideAmounts={hideAmounts}/>
 
-              {/* Rendimiento por ano */}
+              {/* Rendimiento por aÃ±o */}
               {twrStats&&Object.keys(twrStats.byYear||{}).length>0&&(()=>{
                 try{
                 const entries = Object.entries(twrStats.byYear).sort(([a],[b])=>a.localeCompare(b));
                 const maxAbs  = Math.max(...entries.map(([,d])=>Math.abs(d.rend)), 1);
-                const BAR_MAX = 80; // px altura maxima de barra
+                const BAR_MAX = 80; // px altura mÃ¡xima de barra
                 return(
                 <div style={{...card,padding:"20px 24px"}}>
                   {/* Header */}
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
                     <div>
-                      <div style={{fontSize:11,fontWeight:600,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Rendimiento anual - TWR</div>
-                      <div style={{fontSize:10,color:"var(--text-muted)",marginTop:2,opacity:0.7}}>Incluye activos ya vendidos - punta a punta por ano calendario</div>
+                      <div style={{fontSize:11,fontWeight:600,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Rendimiento anual Â· TWR</div>
+                      <div style={{fontSize:10,color:"var(--text-muted)",marginTop:2,opacity:0.7}}>Incluye activos ya vendidos Â· punta a punta por aÃ±o calendario</div>
                     </div>
                     <div style={{display:"flex",gap:20,alignItems:"center"}}>
                       <div style={{textAlign:"right"}}>
                         <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8}}>TWR anualizado</div>
                         <div style={{fontSize:18,fontWeight:700,color:pc(twrStats.twrAnual),fontFamily:"'DM Mono',monospace"}}>
-                          {twrStats.twrAnual>=0?"+":""}{twrStats.twrAnual.toFixed(1)}%<span style={{fontSize:11,fontWeight:400,opacity:0.6}}>/ano</span>
+                          {twrStats.twrAnual>=0?"+":""}{twrStats.twrAnual.toFixed(1)}%<span style={{fontSize:11,fontWeight:400,opacity:0.6}}>/aÃ±o</span>
                         </div>
                       </div>
                       <div style={{textAlign:"right"}}>
@@ -6753,7 +6617,7 @@ function App(){
                   {/* Layout: barras a la izquierda, panel total a la derecha */}
                   <div style={{display:"flex",gap:20,alignItems:"stretch"}}>
 
-                    {/* Barras por ano */}
+                    {/* Barras por aÃ±o */}
                     <div style={{flex:1}}>
                       <div style={{display:"flex",gap:0,alignItems:"flex-end",borderBottom:"1px solid var(--border)"}}>
                         {entries.map(([year,data],i)=>{
@@ -6768,14 +6632,14 @@ function App(){
                                 {isPos?"+":""}{data.rend.toFixed(1)}%
                               </div>
                               <div style={{fontSize:11,fontWeight:600,color:data.pnl>=0?"var(--green)":"var(--red)",marginBottom:10,fontFamily:"'DM Mono',monospace"}}>
-                                {hideAmounts?"":(data.pnl>=0?"+":"")+fmtU(data.pnl,0)}
+                                {hideAmounts?"â¢â¢â¢â¢":(data.pnl>=0?"+":"")+fmtU(data.pnl,0)}
                               </div>
                               <div style={{width:28,height:barH,background:color,borderRadius:"3px 3px 0 0",opacity:0.8,transition:"height 0.5s ease"}}/>
                             </div>
                           );
                         })}
                       </div>
-                      {/* Anos debajo */}
+                      {/* AÃ±os debajo */}
                       <div style={{display:"flex",gap:0}}>
                         {entries.map(([year,,],i)=>(
                           <div key={year} style={{flex:1,textAlign:"center",padding:"7px 0",
@@ -6786,29 +6650,29 @@ function App(){
                       </div>
                     </div>
 
-                    {/* Panel total  a la derecha, mismo alto que las barras */}
+                    {/* Panel total â a la derecha, mismo alto que las barras */}
                     <div style={{background:"var(--bg-input)",borderRadius:10,padding:"16px 20px",minWidth:180,display:"flex",flexDirection:"column",justifyContent:"space-between",flexShrink:0}}>
                       <div>
                         <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8,marginBottom:6}}>P&L total acumulado</div>
                         <div style={{fontSize:30,fontWeight:700,color:pc(totPnlTotal),fontFamily:"'DM Mono',monospace",lineHeight:1.1}}>
-                          {hideAmounts?"":(totPnlTotal>=0?"+":"")+fmtU(totPnlTotal,0)}
+                          {hideAmounts?"â¢â¢â¢â¢":(totPnlTotal>=0?"+":"")+fmtU(totPnlTotal,0)}
                         </div>
                       </div>
                       <div style={{marginTop:12,display:"flex",flexDirection:"column",gap:6}}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                           <span style={{fontSize:10,color:"var(--text-muted)"}}>Realizado</span>
                           <span style={{fontSize:12,fontWeight:600,color:pc(pnlRealizado),fontFamily:"'DM Mono',monospace"}}>
-                            {hideAmounts?"":(pnlRealizado>=0?"+":"")+fmtU(pnlRealizado,0)}
+                            {hideAmounts?"â¢â¢â¢â¢":(pnlRealizado>=0?"+":"")+fmtU(pnlRealizado,0)}
                           </span>
                         </div>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                           <span style={{fontSize:10,color:"var(--text-muted)"}}>No realizado</span>
                           <span style={{fontSize:12,fontWeight:600,color:pc(totPnl),fontFamily:"'DM Mono',monospace"}}>
-                            {hideAmounts?"":(totPnl>=0?"+":"")+fmtU(totPnl,0)}
+                            {hideAmounts?"â¢â¢â¢â¢":(totPnl>=0?"+":"")+fmtU(totPnl,0)}
                           </span>
                         </div>
                         <div style={{borderTop:"1px solid var(--border)",paddingTop:6,marginTop:2,fontSize:10,color:"var(--text-muted)"}}>
-                          {twrStats.dias} dias de historia
+                          {twrStats.dias} dÃ­as de historia
                         </div>
                       </div>
                     </div>
@@ -6818,7 +6682,7 @@ function App(){
                 }catch(e){ return <div style={{color:"var(--red)",fontSize:11,padding:8}}>Error cargando rendimiento anual</div>; }
               })()}
 
-              {/* Top/Bottom 5 del dia en Dashboard */}
+              {/* Top/Bottom 5 del dÃ­a en Dashboard */}
 
 
 
@@ -6834,7 +6698,7 @@ function App(){
               trades={trades} historicos={historicos} isMobile={isMobile}/>
           )}
 
-          {/* ANLISIS */}
+          {/* ANÃLISIS */}
           {tab==="analisis"&&visitedTabs.has("analisis")&&(
             <AnalisisTab en={enGrouped} historicos={historicos} fxRate={fxRate} currency={fx} card={card} livePrices={livePrices} hideAmounts={hideAmounts} trades={trades} isMobile={isMobile}/>
           )}
@@ -6857,9 +6721,9 @@ function App(){
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
               <div>
                 <div style={{fontFamily:"Georgia,serif",fontSize:16,fontWeight:700}}>Resultado de la venta</div>
-                <div style={{fontSize:12,color:"var(--text-muted)",marginTop:2}}>{ventaResult.ticker} - {ventaResult.name}</div>
+                <div style={{fontSize:12,color:"var(--text-muted)",marginTop:2}}>{ventaResult.ticker} Â· {ventaResult.name}</div>
               </div>
-              <button onClick={()=>setVentaResult(null)} style={{background:"transparent",border:"none",color:"var(--text-muted)",cursor:"pointer",fontSize:20}}></button>
+              <button onClick={()=>setVentaResult(null)} style={{background:"transparent",border:"none",color:"var(--text-muted)",cursor:"pointer",fontSize:20}}>Ã</button>
             </div>
             <div style={{background:"var(--bg-input)",borderRadius:12,padding:"18px 20px",marginBottom:16,textAlign:"center"}}>
               <div style={{fontSize:12,color:"var(--text-muted)",marginBottom:6}}>Resultado FIFO</div>
@@ -6878,23 +6742,23 @@ function App(){
               const loading=!bd||bd.loading;
               const isCurrencyARS = ventaResult.currency==="ARS";
               const benchmarks=[
-                {label:"Tu operacion",val:ventaResult.pnlPct,color:ventaResult.pnlPct>=0?"var(--green)":"var(--red)",bold:true},
+                {label:"Tu operaciÃ³n",val:ventaResult.pnlPct,color:ventaResult.pnlPct>=0?"var(--green)":"var(--red)",bold:true},
                 // T10Y: solo USD
                 ...(!isCurrencyARS?[{label:"Treasury 10Y ("+liveT10Y+"%)",val:t10yPeriod,color:"var(--yellow)"}]:[]),
                 // S&P 500: solo USD
                 ...(!isCurrencyARS?[{label:"S&P 500",val:bd?.sp500Pct??null,color:"#60A5FA"}]:[]),
-                // CCL y MEP: siempre (son benchmarks utiles en ambas monedas)
-                {label:"Dolar CCL",val:bd?.cclPct??null,color:"#A78BFA"},
-                {label:"Dolar MEP",val:bd?.mepPct??null,color:"#818CF8"},
-                // CER (inflacion ARS): siempre
-                {label:"Inflacion ARS (CER)",val:bd?.infArPct??null,color:"#F97316"},
+                // CCL y MEP: siempre (son benchmarks Ãºtiles en ambas monedas)
+                {label:"DÃ³lar CCL",val:bd?.cclPct??null,color:"#A78BFA"},
+                {label:"DÃ³lar MEP",val:bd?.mepPct??null,color:"#818CF8"},
+                // CER (inflaciÃ³n ARS): siempre
+                {label:"InflaciÃ³n ARS (CER)",val:bd?.infArPct??null,color:"#F97316"},
               ];
               const maxVal=Math.max(...benchmarks.filter(b=>b.val!=null).map(b=>Math.abs(b.val)),1);
               return(
                 <div style={{background:"var(--bg-input)",borderRadius:12,padding:"14px 16px"}}>
                   <div style={{fontSize:11,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:12,display:"flex",justifyContent:"space-between"}}>
-                    <span>vs benchmarks - {Math.round(days)} dias</span>
-                    {loading&&<span style={{animation:"spin 0.8s linear infinite",display:"inline-block"}}></span>}
+                    <span>vs benchmarks Â· {Math.round(days)} dÃ­as</span>
+                    {loading&&<span style={{animation:"spin 0.8s linear infinite",display:"inline-block"}}>â³</span>}
                   </div>
                   {benchmarks.map(b=>(
                     <div key={b.label} style={{marginBottom:10}}>
@@ -6927,7 +6791,7 @@ function App(){
           onConfirm={(flows, meta)=>{
             setBondFlows(prev=>({...prev,[bondWizard.ticker]:flows}));
             if(meta){
-              // bondMeta vive en FlujoTab  actualizar localStorage para que lo levante
+              // bondMeta vive en FlujoTab â actualizar localStorage para que lo levante
               try{
                 const saved = localStorage.getItem('gal_bond_meta_v1');
                 const cur = saved ? JSON.parse(saved) : {};

@@ -4012,7 +4012,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
       {/* Fila superior: Extremos Portfolio + S&P */}
       {(!isMobile||mobileSection==="extremos")&&<div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12}}>
         {[
-          {label:"ð <span aria-hidden="true" style={{display:'inline-flex',width:18,height:18,marginRight:8,verticalAlign:'-3px'}}><svg viewBox="0 0 24 24" width="18" height="18" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 19V5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><path d="M4 19H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><path d="M7 15l3-4 3 3 5-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg></span>Mi Portfolio", ex:portExtremes},
+          {label:"[CHART] Mi Portfolio", ex:portExtremes},
           {label:"ðºð¸ S&P 500",      ex:spExtremes},
         ].map(({label,ex})=>(
           <div key={label} style={{...card,padding:"16px 20px"}}>

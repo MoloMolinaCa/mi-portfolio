@@ -1274,72 +1274,80 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
         return res>=0 ? _cclBarsXIRR[res].close : (liveFX?.CCL || fxRate || 1);
       };
 
-      // Detectar si el periodo arranca exactamente en el primer trade historico (seed)
       const firstTradeDate = [...trades].map(t=>t.date).sort()[0];
       const includeStartDayAsPosition = (s === firstTradeDate);
 
-      // Helper: detectar bonos (para /100 y para rawAmt*0.01) aunque ya no esten en cartera
       const isBondTicker = (tkr) => {
         const T = String(tkr||'').toUpperCase();
         if(SEED_BOND_META && SEED_BOND_META[T]) return true;
-        // fallback conservador para tickers de bonos/ON (suelen tener digitos y/o terminan en D)
-        if(/\d/.test(T) && (T.endsWith('D') || T.startsWith('TZX') || T.startsWith('TX') || T.startsWith('GD') || T.startsWith('AL') || T.startsWith('AE') || T.startsWith('AO') || T.startsWith('TLCU'))) return true;
+        if(/\d/.test(T) && (T.endsWith('D') || T.startsWith('TZX') || T.startsWith('GD') || T.startsWith('AL') || T.startsWith('AE') || T.startsWith('AO') || T.startsWith('TLCU'))) return true;
         return false;
       };
 
-      // Moneda por ticker segun trades (para posiciones cerradas)
       const currencyByTicker = {};
       for(const t0 of trades){
         if(!t0?.ticker||!t0?.currency) continue;
         currencyByTicker[String(t0.ticker).toUpperCase()] = String(t0.currency).toUpperCase();
       }
 
-      const endValUSD=en.reduce((a,h)=>a+h.valUSD,0);
-      // Valor del portfolio al inicio del periodo (posiciones vivas al startDate)
-      const posAtStart={};
-      for(const t2 of trades){
-        // si NO es seed-day, entonces trades del dia s son flujos (no posicion)
-        if(t2.date > s || (t2.date === s && !includeStartDayAsPosition)) continue;
-        if(t2.tipo==="compra") posAtStart[t2.ticker]=(posAtStart[t2.ticker]||0)+t2.qty;
-        if(t2.tipo==="venta") posAtStart[t2.ticker]=(posAtStart[t2.ticker]||0)-t2.qty;
-      }
       const _findHistPrice=(ticker,dateStr)=>{
         const bars=historicos?.[ticker]||[];
         let lo2=0,hi2=bars.length-1,res2=-1;
         while(lo2<=hi2){const mid2=(lo2+hi2)>>1;if(bars[mid2].date<=dateStr){res2=mid2;lo2=mid2+1;}else hi2=mid2-1;}
         return res2>=0?bars[res2].close:0;
       };
-      const cclAtStart=_getCCLForDate(s);
-      let startValCalc=0;
-      for(const [tkr,qty] of Object.entries(posAtStart)){
-        if(qty<=0) continue;
-        const T=String(tkr).toUpperCase();
-        const price=_findHistPrice(T,s);
-        if(price<=0) continue;
-        const isBondS=isBondTicker(T);
-        const cur = currencyByTicker[T] || (en.find(h=>h.ticker===T)?.buyCurrency||'ARS');
-        const isUSDpos=String(cur).toUpperCase()==='USD';
-        const qtyF=isBondS?qty/100:qty;
-        startValCalc+=isUSDpos?price*qtyF:(price*qtyF)/cclAtStart;
-      }
-      let startValUSD=startValCalc;
-      if(startValUSD<=0){
-        // Fallback: si no hay historicos para valuar el start, estimacion por indice port100
+
+      const posAsOf = (dateStr, includeSameDay) => {
+        const pos = {};
+        for(const t of trades){
+          if(!t?.ticker) continue;
+          if(includeSameDay){ if(t.date>dateStr) continue; } else { if(t.date>=dateStr) continue; }
+          if(t.tipo==="compra") pos[t.ticker]=(pos[t.ticker]||0)+(+t.qty||0);
+          if(t.tipo==="venta")  pos[t.ticker]=(pos[t.ticker]||0)-(+t.qty||0);
+        }
+        return pos;
+      };
+
+      const valuePosUSD = (posMap, dateStr) => {
+        const ccl = _getCCLForDate(dateStr);
+        let v=0;
+        for(const [tkr,qty] of Object.entries(posMap)){
+          if(!qty||qty<=0) continue;
+          const T=String(tkr).toUpperCase();
+          const price=_findHistPrice(T,dateStr);
+          if(!price||price<=0) continue;
+          const isBond=isBondTicker(T);
+          const qtyF=isBond?qty/100:qty;
+          const cur = currencyByTicker[T] || (en.find(h=>h.ticker===T)?.buyCurrency||'ARS');
+          const isUSD=String(cur).toUpperCase()==='USD';
+          v += isUSD ? price*qtyF : (price*qtyF)/ccl;
+        }
+        return v;
+      };
+
+      const posStart = posAsOf(s, includeStartDayAsPosition);
+      const posEnd   = posAsOf(e, true);
+      let startValUSD = valuePosUSD(posStart, s);
+      let endValUSD   = valuePosUSD(posEnd,   e);
+
+      const endValNow = en.reduce((a,h)=>a+h.valUSD,0);
+      if(!endValUSD || endValUSD<=0) endValUSD = endValNow;
+
+      if(!startValUSD || startValUSD<=0 || startValUSD < (endValUSD*0.3)) {
         const lastP=cd.port100&&cd.port100.length>0?cd.port100[cd.port100.length-1].val:100;
         const firstP=cd.port100&&cd.port100.length>0?cd.port100[0].val:100;
         const sc=lastP>0?endValUSD/lastP:0;
         startValUSD=firstP*sc;
       }
 
-      // Trades dentro del periodo: incluir el dia s SOLO si no es seed-day
       const periodTrades=trades.filter(t=>((t.date > s) || (t.date === s && !includeStartDayAsPosition)) && t.date<=e);
       const flows=[];
       if(startValUSD>0) flows.push({date:s, amount:-startValUSD});
       for(const t of periodTrades){
         const T=String(t.ticker||'').toUpperCase();
         const isBond=isBondTicker(T);
-        const rawAmt=t.qty*(t.price||0)*(isBond?0.01:1);
-        const com=t.comision||0;
+        const rawAmt=(+t.qty||0)*(+t.price||0)*(isBond?0.01:1);
+        const com=+t.comision||0;
         const amt=t.tipo==="compra"?rawAmt+com:rawAmt-com;
         const isUSD=(t.currency||"ARS")==='USD';
         const fxT=isUSD?1:_getCCLForDate(t.date);
@@ -1350,17 +1358,15 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
       if(flows.length<2) return null;
       flows.sort((a,b)=>a.date.localeCompare(b.date));
 
-      // Debug opcional
       try{
         if(localStorage.getItem('gal_debug_xirr')==='1'){
           const sumIn = flows.filter(f=>f.amount<0).reduce((a,f)=>a+f.amount,0);
           const sumOut = flows.filter(f=>f.amount>0).reduce((a,f)=>a+f.amount,0);
-          console.log('[XIRR DEBUG]', {s,e,startValUSD,endValUSD, nFlows:flows.length, sumIn, sumOut, net:sumIn+sumOut});
+          console.log('[XIRR DEBUG]', {s,e, includeStartDayAsPosition, startValUSD, endValUSD, nFlows:flows.length, sumIn, sumOut, net:sumIn+sumOut});
         }
       }catch{}
 
       let portXIRR=calcXIRR(flows);
-      // Fallback: si XIRR no converge, usar TWR anualizado
       if(portXIRR==null&&cd.port100&&cd.port100.length>=2){
         const pS=cd.port100[0].val,pE=cd.port100[cd.port100.length-1].val;
         const dys=Math.max(1,Math.round((new Date(e)-new Date(s))/(1000*60*60*24)));

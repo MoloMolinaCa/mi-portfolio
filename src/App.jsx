@@ -1665,7 +1665,8 @@ function VentaTickerSearch({port, value, onSelect}){
           placeholder="EscribÃ­ para filtrar (ej: AAPL, GD...)"
           style={{...inp,borderColor:value?"var(--green)":undefined}}
         />
-        {value&&<span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:13}}>â</span>}
+        {value&&<span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:13}}>â
+</span>}
         {open&&filtered.length>0&&(
           <div style={{position:"absolute",top:"100%",left:0,right:0,background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:8,zIndex:50,maxHeight:200,overflowY:"auto",marginTop:4,boxShadow:"0 8px 24px rgba(0,0,0,0.4)"}}>
             {[...filtered].sort((a,b)=>a.ticker.localeCompare(b.ticker)).map(pos=>(
@@ -2339,7 +2340,8 @@ function Modal({h,port=[],onSave,onClose,darkMode=true}){
                   style={{...inp,border:`1px solid ${statusColor[tickerStatus]}`,paddingRight:36}}/>
                 <span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:14}}>
                   {tickerStatus==="checking"&&<span style={{animation:"spin 0.8s linear infinite",display:"inline-block"}}>â³</span>}
-                  {tickerStatus==="confirmed"&&"â"}
+                  {tickerStatus==="confirmed"&&"â
+"}
                   {tickerStatus==="notfound"&&"â"}
                 </span>
 
@@ -4012,8 +4014,8 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
       {/* Fila superior: Extremos Portfolio + S&P */}
       {(!isMobile||mobileSection==="extremos")&&<div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12}}>
         {[
-          {label:"ð <span aria-hidden="true" style={{display:'inline-flex',width:18,height:18,marginRight:8,verticalAlign:'-3px'}}><svg viewBox="0 0 24 24" width="18" height="18" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 19V5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><path d="M4 19H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><path d="M7 15l3-4 3 3 5-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg></span>Mi Portfolio", ex:portExtremes},
-          {label:"ðºð¸ S&P 500",      ex:spExtremes},
+          {label:"Mi Portfolio", ex:portExtremes},
+          {label:"S&P 500", ex:spExtremes},
         ].map(({label,ex})=>(
           <div key={label} style={{...card,padding:"16px 20px"}}>
             <div style={{fontSize:12,fontWeight:700,color:"var(--text-primary)",marginBottom:12}}>{label}</div>
@@ -4146,7 +4148,8 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
                         <span style={{color:h.usedBuyPrice?"var(--yellow)":"var(--text-muted)",fontFamily:"'DM Mono',monospace"}}>
                           {h.buyCurrency==="USD"?fmtU(h.basePrice,2):`$${h.basePrice.toLocaleString("es-AR",{maximumFractionDigits:2})}`}
                         </span>
-                        {h.usedBuyPrice&&<span title="Sin historial para este perÃ­odo â se usÃ³ precio de compra" style={{marginLeft:4,color:"var(--yellow)",fontSize:9}}>âpc</span>}
+                        {h.usedBuyPrice&&<span title="Sin historial para este perÃ­odo â se usÃ³ precio de compra" style={{marginLeft:4,color:"var(--yellow)",fontSize:9}}>â
+pc</span>}
                       </td>
                     )}
                     <td style={{padding:"8px 12px",textAlign:"right",fontWeight:600,color:pc(h.retPct)}}>{fmtP(h.retPct)}</td>
@@ -4172,7 +4175,8 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
           </table>
           {selP.key!=="todo" && contributionsSorted.some(h=>h.usedBuyPrice) && (
             <div style={{marginTop:8,fontSize:11,color:"var(--yellow)",display:"flex",gap:6,alignItems:"center"}}>
-              <span>âpc</span>
+              <span>â
+pc</span>
               <span>= sin datos histÃ³ricos para este perÃ­odo â se usÃ³ precio de compra como base.</span>
             </div>
           )}
@@ -5540,7 +5544,8 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                             </td>
                             <td style={{padding:'10px 12px',fontSize:12}}>
                               {cobrado
-                                ?<span style={{color:'var(--green)'}}>â {fmtD(row.cupon?.fechaCobro||row.amort?.fechaCobro)}</span>
+                                ?<span style={{color:'var(--green)'}}>â
+ {fmtD(row.cupon?.fechaCobro||row.amort?.fechaCobro)}</span>
                                 :!isFuture
                                   ?<button onClick={()=>confirmCobro(selected,row.ids)}
                                     style={{background:'rgba(52,211,153,0.1)',border:'1px solid rgba(52,211,153,0.3)',borderRadius:6,padding:'3px 10px',color:'var(--green)',cursor:'pointer',fontSize:11}}>
@@ -6594,7 +6599,8 @@ function App(){
                   },
 
                   {
-                    icon:"ð", lbl:"Rendimiento del dÃ­a",
+                    icon:"ð
+", lbl:"Rendimiento del dÃ­a",
                     main:fmtP(dayPct),
                     sub:hideAmounts?"â¢â¢â¢â¢":(dayPnlUSD>=0?"+":"")+fmtU(dayPnlUSD),spyBadge:spyDayPct,
                     subLabel:"P&L hoy USD",

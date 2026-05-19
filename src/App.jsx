@@ -1356,13 +1356,24 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
 
       let portXIRR = flows.length>=2 ? calcXIRR(flows) : null;
 
-      // SPY XIRR (si hay spy100)
+      // SPY XIRR: benchmark "qué pasaba si ponía la misma plata en SPY"
+      // Cada cashflow crece por el retorno de SPY desde su fecha hasta el final
       let spyXIRR=null;
       if(cd.spy100&&cd.spy100.length>=2){
-        const spyStart=cd.spy100[0].val, spyEnd=cd.spy100[cd.spy100.length-1].val;
-        if(spyStart>0&&spyEnd>0){
+        const spy100=cd.spy100;
+        const spyEnd=spy100[spy100.length-1].val;
+        // Helper: valor de spy100 más cercano a una fecha
+        const spyAt=(dateStr)=>{
+          let best=spy100[0];
+          for(const p of spy100){ if(p.date<=dateStr) best=p; else break; }
+          return best.val||100;
+        };
+        const spyStartVal=spyAt(s);
+        if(spyStartVal>0&&spyEnd>0){
           const spyFlows=[];
+          // Inversión inicial: crece por todo el período SPY
           spyFlows.push({date:s, amount:-startValUSD});
+          // Cada trade intermedio: mismo monto, misma dirección
           for(const t of periodTrades){
             const isBond=isBondTicker(String(t.ticker||'').toUpperCase());
             const rawAmt=(+t.qty||0)*(+t.price||0)*(isBond?0.01:1);
@@ -1373,7 +1384,14 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
             const usd=amt/fxT;
             spyFlows.push({date:t.date, amount:t.tipo==="compra"?-usd:usd});
           }
-          spyFlows.push({date:e, amount:startValUSD*(spyEnd/spyStart)});
+          // Valor final: cada flujo creció por SPY desde su fecha
+          let spyFinalVal=0;
+          for(const fl of spyFlows){
+            const spyAtFlow=spyAt(fl.date);
+            const growth=spyAtFlow>0?spyEnd/spyAtFlow:1;
+            spyFinalVal+=(-fl.amount)*growth; // fl.amount es negativo para compras
+          }
+          spyFlows.push({date:e, amount:spyFinalVal});
           spyFlows.sort((a,b)=>a.date.localeCompare(b.date));
           spyXIRR=calcXIRR(spyFlows);
         }
@@ -2990,7 +3008,6 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
     // Valor actual en ARS (precio actual × qty × TC actual)
     const valARS=isUSD?origVal*fxRate:origVal;
     const pnlARS=isUSD?origPnl*fxRate:valARS-costARSHist;
-
     const pctARS=isUSD?origPct:(costARSHist>0?(pnlARS/costARSHist)*100:0);
 
     // Costo en USD usando TC histórico de cada lote

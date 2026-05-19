@@ -2340,8 +2340,7 @@ function Modal({h,port=[],onSave,onClose,darkMode=true}){
                   style={{...inp,border:`1px solid ${statusColor[tickerStatus]}`,paddingRight:36}}/>
                 <span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:14}}>
                   {tickerStatus==="checking"&&<span style={{animation:"spin 0.8s linear infinite",display:"inline-block"}}>â³</span>}
-                  {tickerStatus==="confirmed"&&"â
-"}
+                  {tickerStatus==="confirmed"&&"â"}
                   {tickerStatus==="notfound"&&"â"}
                 </span>
 

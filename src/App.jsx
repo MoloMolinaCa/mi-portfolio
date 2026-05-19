@@ -1296,7 +1296,12 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
         for(const [tkr,qty] of Object.entries(posMap||{})){
           if(!qty||qty<=0) continue;
           const T=String(tkr).toUpperCase();
-          const price=_findHistPrice(T,dateStr);
+          let price=_findHistPrice(T,dateStr);
+          // Fallback: si no hay precio histórico, usar último precio de compra
+          if(!price||price<=0){
+            const lastBuy=(trades||[]).filter(t=>t.ticker===T&&t.tipo==="compra"&&t.date<=dateStr).sort((a,b)=>(b.ts||0)-(a.ts||0))[0];
+            price=lastBuy?(+lastBuy.price||0):0;
+          }
           if(!price||price<=0) continue;
           const isBond=isBondTicker(T);
           const qtyF=isBond?qty/100:qty;
@@ -1315,24 +1320,21 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
       const endValNow = en.reduce((a,h)=>a+h.valUSD,0);
       if(!endValUSD || endValUSD<=0) endValUSD = endValNow;
 
-      // Guardrail: si startVal no se pudo calcular, estimar desde trades (NO del gráfico)
+      // Guardrail: si startVal no se pudo calcular, estimar desde trades
       if(!startValUSD || startValUSD<=0) {
-        // Estimar posición inicial valuando cada ticker al precio de compra más reciente
         const ccl0 = _getCCLForDate(s);
         for(const [tkr,qty] of Object.entries(posStart||{})){
           if(!qty||qty<=0) continue;
           const T=String(tkr).toUpperCase();
           const isBond=isBondTicker(T);
           const qtyF=isBond?qty/100:qty;
-          const buyTrades=(trades||[]).filter(t=>t.ticker===T&&t.tipo==="compra"&&t.date<=s).sort((a,b)=>b.ts-a.ts);
-          const buyPrice=buyTrades.length>0?(+buyTrades[0].price||0):0;
-          if(!buyPrice) continue;
+          const lastBuy=(trades||[]).filter(t=>t.ticker===T&&t.tipo==="compra"&&t.date<=s).sort((a,b)=>(b.ts||0)-(a.ts||0))[0];
+          const buyP=lastBuy?(+lastBuy.price||0):0;
+          if(!buyP) continue;
           const cur=currencyByTicker[T]||'ARS';
-          const isUSD=cur==='USD';
-          startValUSD += isUSD ? buyPrice*qtyF : (buyPrice*qtyF)/ccl0;
+          startValUSD += cur==="USD" ? buyP*qtyF : (buyP*qtyF)/ccl0;
         }
       }
-
 
       // Trades dentro del periodo: excluir el dia final e para evitar doble conteo
       const periodTrades=(trades||[]).filter(t=>((t.date > s) || (t.date === s && !includeStartDayAsPosition)) && t.date < e);
@@ -2987,8 +2989,9 @@ function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxRate,fxMode,setM
 
     // Valor actual en ARS (precio actual × qty × TC actual)
     const valARS=isUSD?origVal*fxRate:origVal;
-    const pnlARS=valARS-costARSHist;
-    const pctARS=costARSHist>0?(pnlARS/costARSHist)*100:0;
+    const pnlARS=isUSD?origPnl*fxRate:valARS-costARSHist;
+
+    const pctARS=isUSD?origPct:(costARSHist>0?(pnlARS/costARSHist)*100:0);
 
     // Costo en USD usando TC histórico de cada lote
     // Para activos ARS: suma cada lote ÷ TC_del_dia_de_compra

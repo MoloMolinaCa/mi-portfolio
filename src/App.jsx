@@ -6598,8 +6598,7 @@ function App(){
                   },
 
                   {
-                    icon:"ð
-", lbl:"Rendimiento del dÃ­a",
+                    icon:"ð", lbl:"Rendimiento del dÃ­a",
                     main:fmtP(dayPct),
                     sub:hideAmounts?"â¢â¢â¢â¢":(dayPnlUSD>=0?"+":"")+fmtU(dayPnlUSD),spyBadge:spyDayPct,
                     subLabel:"P&L hoy USD",

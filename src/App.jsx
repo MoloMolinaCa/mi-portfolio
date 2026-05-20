@@ -1296,12 +1296,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
         for(const [tkr,qty] of Object.entries(posMap||{})){
           if(!qty||qty<=0) continue;
           const T=String(tkr).toUpperCase();
-          let price=_findHistPrice(T,dateStr);
-          // Fallback: si no hay precio histórico, usar último precio de compra
-          if(!price||price<=0){
-            const lastBuy=(trades||[]).filter(t=>t.ticker===T&&t.tipo==="compra"&&t.date<=dateStr).sort((a,b)=>(b.ts||0)-(a.ts||0))[0];
-            price=lastBuy?(+lastBuy.price||0):0;
-          }
+          const price=_findHistPrice(T,dateStr);
           if(!price||price<=0) continue;
           const isBond=isBondTicker(T);
           const qtyF=isBond?qty/100:qty;
@@ -1312,17 +1307,24 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
         return v;
       };
 
-      const posStart = posAsOf(s, includeStartDayAsPosition);
-      const posEnd   = posAsOf(e, true);
-      let startValUSD = valuePosUSD(posStart, s);
-      let endValUSD   = valuePosUSD(posEnd,   e);
-
+      // endValUSD: valor actual del portfolio
       const endValNow = en.reduce((a,h)=>a+h.valUSD,0);
-      if(!endValUSD || endValUSD<=0) endValUSD = endValNow;
+      let endValUSD = endValNow;
 
-      // Guardrail: si startVal no se pudo calcular, estimar desde trades
-      if(!startValUSD || startValUSD<=0) {
+      // startValUSD: derivado de port100 (TWR) para consistencia con gráfico
+      // startVal = endVal × (port100_inicio / port100_fin)
+      let startValUSD = 0;
+      if(cd.port100 && cd.port100.length >= 2) {
+        const p0 = cd.port100[0].val;
+        const pN = cd.port100[cd.port100.length-1].val;
+        if(p0 > 0 && pN > 0) {
+          startValUSD = endValUSD * (p0 / pN);
+        }
+      }
+      // Fallback: estimar desde trades si port100 no disponible
+      if(!startValUSD || startValUSD <= 0) {
         const ccl0 = _getCCLForDate(s);
+        const posStart = posAsOf(s, includeStartDayAsPosition);
         for(const [tkr,qty] of Object.entries(posStart||{})){
           if(!qty||qty<=0) continue;
           const T=String(tkr).toUpperCase();
@@ -1356,13 +1358,11 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
 
       let portXIRR = flows.length>=2 ? calcXIRR(flows) : null;
 
-      // SPY XIRR: benchmark "qué pasaba si ponía la misma plata en SPY"
-      // Cada cashflow crece por el retorno de SPY desde su fecha hasta el final
+      // SPY XIRR: cada cashflow crece por SPY desde su fecha
       let spyXIRR=null;
       if(cd.spy100&&cd.spy100.length>=2){
         const spy100=cd.spy100;
         const spyEnd=spy100[spy100.length-1].val;
-        // Helper: valor de spy100 más cercano a una fecha
         const spyAt=(dateStr)=>{
           let best=spy100[0];
           for(const p of spy100){ if(p.date<=dateStr) best=p; else break; }
@@ -1371,9 +1371,7 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
         const spyStartVal=spyAt(s);
         if(spyStartVal>0&&spyEnd>0){
           const spyFlows=[];
-          // Inversión inicial: crece por todo el período SPY
           spyFlows.push({date:s, amount:-startValUSD});
-          // Cada trade intermedio: mismo monto, misma dirección
           for(const t of periodTrades){
             const isBond=isBondTicker(String(t.ticker||'').toUpperCase());
             const rawAmt=(+t.qty||0)*(+t.price||0)*(isBond?0.01:1);
@@ -1384,12 +1382,11 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
             const usd=amt/fxT;
             spyFlows.push({date:t.date, amount:t.tipo==="compra"?-usd:usd});
           }
-          // Valor final: cada flujo creció por SPY desde su fecha
           let spyFinalVal=0;
           for(const fl of spyFlows){
             const spyAtFlow=spyAt(fl.date);
             const growth=spyAtFlow>0?spyEnd/spyAtFlow:1;
-            spyFinalVal+=(-fl.amount)*growth; // fl.amount es negativo para compras
+            spyFinalVal+=(-fl.amount)*growth;
           }
           spyFlows.push({date:e, amount:spyFinalVal});
           spyFlows.sort((a,b)=>a.date.localeCompare(b.date));
@@ -1696,8 +1693,7 @@ function VentaTickerSearch({port, value, onSelect}){
           placeholder="Escribí para filtrar (ej: AAPL, GD...)"
           style={{...inp,borderColor:value?"var(--green)":undefined}}
         />
-        {value&&<span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:13}}>â
-</span>}
+        {value&&<span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:13}}>â</span>}
         {open&&filtered.length>0&&(
           <div style={{position:"absolute",top:"100%",left:0,right:0,background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:8,zIndex:50,maxHeight:200,overflowY:"auto",marginTop:4,boxShadow:"0 8px 24px rgba(0,0,0,0.4)"}}>
             {[...filtered].sort((a,b)=>a.ticker.localeCompare(b.ticker)).map(pos=>(
@@ -2433,7 +2429,7 @@ function Modal({h,port=[],onSave,onClose,darkMode=true}){
                   </div>
                 </div>
               )}
-              {tickerStatus==="notfound"&&<div style={{marginTop:8,background:"rgba(251,191,36,0.07)",border:"1px solid rgba(251,191,36,0.2)",borderRadius:8,padding:"10px 12px",fontSize:12,color:"var(--yellow)"}}>⚠ï¸ Sin resultados en data912 ni Yahoo — podés guardar igual ingresando los datos manualmente.</div>}
+              {tickerStatus==="notfound"&&<div style={{marginTop:8,background:"rgba(251,191,36,0.07)",border:"1px solid rgba(251,191,36,0.2)",borderRadius:8,padding:"10px 12px",fontSize:12,color:"var(--yellow)"}}>⚠️ Sin resultados en data912 ni Yahoo — podés guardar igual ingresando los datos manualmente.</div>}
             </div>
           )}
 
@@ -3437,7 +3433,7 @@ function OperacionesTab({trades,port,setTrades,setPort,card,livePrices,darkMode}
                         </div>
                       ):(
                         <div style={{display:"flex",gap:4,justifyContent:"flex-end"}}>
-                          <button onClick={()=>startEdit(t)} style={{padding:"4px 8px",background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:5,color:"var(--text-muted)",cursor:"pointer",fontSize:11}}>✏ï¸</button>
+                          <button onClick={()=>startEdit(t)} style={{padding:"4px 8px",background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:5,color:"var(--text-muted)",cursor:"pointer",fontSize:11}}>✏️</button>
                           <button onClick={()=>setConfirmDelete(t)} style={{padding:"4px 8px",background:"rgba(248,113,113,0.1)",border:"1px solid rgba(248,113,113,0.3)",borderRadius:5,color:"var(--red)",cursor:"pointer",fontSize:11}}>🗑</button>
                         </div>
                       )}
@@ -5226,7 +5222,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                     <span style={{fontSize:10,color:'var(--text-muted)'}}>·</span>
                     <span style={{fontSize:12,color:'var(--text-secondary)'}}>Base <b style={{color:'var(--text-primary)'}}>{selMeta.base}</b></span>
                     {adjustsBy==='CER'&&<><span style={{fontSize:10,color:'var(--text-muted)'}}>·</span><span style={{fontSize:12,color:'var(--text-secondary)'}}>Emisión <b style={{color:'var(--yellow)'}}>{selMeta.emisionDate?fmtD(selMeta.emisionDate):'—'}</b></span></>}
-                    <span style={{fontSize:10,color:'var(--text-muted)',marginLeft:4}}>✏ï¸</span>
+                    <span style={{fontSize:10,color:'var(--text-muted)',marginLeft:4}}>✏️</span>
                   </div>
                 )}
                 <button onClick={()=>setWizardFlujosOpen(true)}
@@ -5259,7 +5255,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                 <div style={{background:'rgba(251,191,36,0.06)',border:'1px solid rgba(251,191,36,0.2)',borderRadius:8,padding:'8px 14px',marginBottom:10,display:'flex',alignItems:'center',gap:16,flexWrap:'wrap',fontSize:11}}>
                   <span style={{color:'var(--yellow)',fontWeight:600}}>⚡ CER</span>
                   {!cerSerie&&<span style={{color:'var(--text-muted)'}}>⏳ Esperando datos del histórico — el script Python actualiza el CER diariamente</span>}
-                  {cerSerie&&!emisionDate&&<span style={{color:'var(--text-muted)'}}>Editá el chip ✏ï¸ para ingresar la fecha de emisión</span>}
+                  {cerSerie&&!emisionDate&&<span style={{color:'var(--text-muted)'}}>Editá el chip ✏️ para ingresar la fecha de emisión</span>}
                   {cerBaseVal&&<span style={{color:'var(--text-muted)'}}>CER base ({fmtD(cerBaseFecha)}): <b style={{color:'var(--text-secondary)',fontFamily:"'DM Mono',monospace"}}>{cerBaseVal.toFixed(4)}</b></span>}
                   {cerHoy&&<span style={{color:'var(--text-muted)'}}>CER hoy: <b style={{color:'var(--text-secondary)',fontFamily:"'DM Mono',monospace"}}>{cerHoy.toFixed(4)}</b></span>}
                   {coefHoy&&<span style={{color:'var(--text-muted)'}}>Coef. actual: <b style={{color:'var(--yellow)',fontFamily:"'DM Mono',monospace"}}>{coefHoy.toFixed(4)}</b></span>}
@@ -5272,7 +5268,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
             {/* Form agregar pago */}
             {addingFlow===selected&&(
               <div style={{background:editingRowIds?'rgba(96,165,250,0.06)':'rgba(59,130,246,0.06)',border:`1px solid ${editingRowIds?'rgba(96,165,250,0.3)':'rgba(59,130,246,0.15)'}`,borderRadius:10,padding:'14px 16px',marginBottom:12,display:'flex',gap:10,alignItems:'flex-end',flexWrap:'wrap'}}>
-                {editingRowIds&&<div style={{width:'100%',fontSize:11,color:'#60A5FA',fontWeight:600,marginBottom:2}}>✏ï¸ Editando fila — modificá los campos y guardá</div>}
+                {editingRowIds&&<div style={{width:'100%',fontSize:11,color:'#60A5FA',fontWeight:600,marginBottom:2}}>✏️ Editando fila — modificá los campos y guardá</div>}
                 {/* F. Pago */}
                 <div style={{display:'flex',flexDirection:'column',gap:4,minWidth:130}}>
                   <span style={{fontSize:10,color:'var(--text-muted)'}}>F. Pago</span>
@@ -5485,7 +5481,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                                       nota:      (row.cupon||row.amort)?.nota||''
                                     });
                                   }}
-                                  title="Editar" style={{background:'transparent',border:'none',cursor:'pointer',color:'#60A5FA',fontSize:11,padding:'0 2px'}}>✏ï¸</button>
+                                  title="Editar" style={{background:'transparent',border:'none',cursor:'pointer',color:'#60A5FA',fontSize:11,padding:'0 2px'}}>✏️</button>
                                 <button onClick={()=>deleteRow(selected,row.ids)}
                                   title="Eliminar" style={{background:'transparent',border:'none',cursor:'pointer',color:'var(--red)',fontSize:12,padding:'0 2px'}}>🗑</button>
                               </td>
@@ -5574,8 +5570,7 @@ function FlujoTab({port, trades, bondFlows, setBondFlows, card, fxRate, historic
                             </td>
                             <td style={{padding:'10px 12px',fontSize:12}}>
                               {cobrado
-                                ?<span style={{color:'var(--green)'}}>â
- {fmtD(row.cupon?.fechaCobro||row.amort?.fechaCobro)}</span>
+                                ?<span style={{color:'var(--green)'}}>â{fmtD(row.cupon?.fechaCobro||row.amort?.fechaCobro)}</span>
                                 :!isFuture
                                   ?<button onClick={()=>confirmCobro(selected,row.ids)}
                                     style={{background:'rgba(52,211,153,0.1)',border:'1px solid rgba(52,211,153,0.3)',borderRadius:6,padding:'3px 10px',color:'var(--green)',cursor:'pointer',fontSize:11}}>
@@ -6497,14 +6492,14 @@ function App(){
                 <div style={{fontSize:9,color:"var(--text-muted)",textAlign:"center"}}>dólar de valuación</div>
               </div>}
               <button onClick={refreshPrices} disabled={priceStatus==="loading"} style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"5px 8px",color:"var(--text-secondary)",cursor:"pointer",fontSize:12}}>↻</button>
-              {!isMobile&&<button onClick={downloadTrades} style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"6px 10px",color:"var(--text-secondary)",cursor:"pointer",fontSize:13}}>â¬ CSV</button>}
+              {!isMobile&&<button onClick={downloadTrades} style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"6px 10px",color:"var(--text-secondary)",cursor:"pointer",fontSize:13}}>⬇ CSV</button>}
               <button onClick={()=>setHideAmounts(h=>!h)}
                 style={{background:hideAmounts?"rgba(37,99,235,0.15)":"var(--bg-card)",border:hideAmounts?"1px solid var(--accent)":"1px solid var(--border)",borderRadius:6,padding:"5px 8px",color:hideAmounts?"var(--accent)":"var(--text-secondary)",cursor:"pointer",fontSize:13}}>
                 {hideAmounts?"🙈":"👁"}
               </button>
               <button onClick={()=>setDarkMode(d=>!d)}
                 style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:6,padding:"5px 8px",color:"var(--text-secondary)",cursor:"pointer",fontSize:13}}>
-                {darkMode?"☀ï¸":"🌙"}
+                {darkMode?"☀️":"🌙"}
               </button>
               <button onClick={()=>setModal("add")} style={{background:"var(--accent)",border:"none",borderRadius:6,padding:"6px 12px",color:"#fff",cursor:"pointer",fontSize:isMobile?12:13,fontWeight:600}}>+ Posición</button>
             </div>
@@ -6521,7 +6516,7 @@ function App(){
               {syncStatus==="error"&&<span style={{color:"var(--red)",fontSize:9}}>⚠ sync</span>}
               {syncStatus==="loading"&&<span style={{color:"var(--text-muted)",fontSize:9}}>↓ cargando</span>}
             </span>
-            <button onClick={downloadTrades} style={{background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:6,padding:"4px 8px",color:"var(--text-secondary)",cursor:"pointer",fontSize:11}}>â¬ CSV</button>
+            <button onClick={downloadTrades} style={{background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:6,padding:"4px 8px",color:"var(--text-secondary)",cursor:"pointer",fontSize:11}}>⬇ CSV</button>
           </div>}
         </div>
 
@@ -6629,7 +6624,7 @@ function App(){
                   },
 
                   {
-                    icon:"ð", lbl:"Rendimiento del día",
+                    icon:"📊", lbl:"Rendimiento del día",
                     main:fmtP(dayPct),
                     sub:hideAmounts?"••••":(dayPnlUSD>=0?"+":"")+fmtU(dayPnlUSD),spyBadge:spyDayPct,
                     subLabel:"P&L hoy USD",

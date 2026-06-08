@@ -5701,8 +5701,10 @@ function App(){
   const {historicos, detectedSplits} = useMemo(() => {
     if(!rawHistoricos) return { historicos: null, detectedSplits: [] };
     try {
-      // Phase 1: detectar splits (solo informativo, NO modifica barras)
+      const adjusted = {};
+      for(const [k,v] of Object.entries(rawHistoricos)) adjusted[k] = v;
       const allSplits = [];
+      // Phase 1: detectar splits en barras de CEDEARs y auto-aplicar
       const cedearTickers = Object.keys(rawHistoricos).filter(t => !!CEDEAR_RATIOS[t]);
       for(const ticker of cedearTickers) {
         const bars = rawHistoricos[ticker];
@@ -5710,16 +5712,20 @@ function App(){
         const detected = detectSplitsFromBars(bars, ticker);
         if(detected.length) allSplits.push(...detected);
       }
-      // Phase 2: SOLO aplicar splits verificados de localStorage
+      // Auto-aplicar splits de barras con alta confianza (discontinuidad 2:1+ en CEDEARs es siempre split)
+      const barSplitsToApply = allSplits.filter(s => s.confidence > 0.85 && !s.reverse);
+      for(const split of barSplitsToApply) {
+        if(!adjusted[split.ticker] || !Array.isArray(adjusted[split.ticker])) continue;
+        adjusted[split.ticker] = adjustBarsForSplits(adjusted[split.ticker], [split]);
+      }
+      // Phase 2: aplicar splits verificados adicionales de localStorage
       let appliedSplits = [];
       try { appliedSplits = JSON.parse(localStorage.getItem('gal_applied_splits_v1') || '[]'); } catch {}
       const verified = appliedSplits.filter(s => s.source && s.ticker && s.date && s.ratio);
-      if(verified.length === 0) {
-        return { historicos: rawHistoricos, detectedSplits: allSplits };
-      }
-      const adjusted = {};
-      for(const [k,v] of Object.entries(rawHistoricos)) adjusted[k] = v;
       for(const split of verified) {
+        // No re-aplicar si ya fue aplicado en Phase 1
+        const alreadyApplied = barSplitsToApply.some(bs => bs.ticker === split.ticker && bs.date === split.date);
+        if(alreadyApplied) continue;
         if(!adjusted[split.ticker] || !Array.isArray(adjusted[split.ticker])) continue;
         adjusted[split.ticker] = adjustBarsForSplits(adjusted[split.ticker], [split]);
       }

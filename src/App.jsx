@@ -92,63 +92,35 @@ function isHabil(dateStr) {
   return dow!==0 && dow!==6;
 }
 
-// ── CEDEAR Split Detection ──────────────────────────────────────────────────
-const CEDEAR_RATIOS = { SPY:60, META:30, MSFT:30, GLD:30, NU:15, VIST:5, MELI:30, AAPL:40, AMZN:36, GOOGL:14, TSLA:15, NVDA:20, BABA:9, KO:5, DIS:5, NFLX:8, BA:5, JPM:3, WMT:10, PG:5 };
+const CEDEAR_RATIOS={SPY:60,META:30,MSFT:30,GLD:30,NU:15,VIST:5,MELI:30,AAPL:40,AMZN:36,GOOGL:14,TSLA:15,NVDA:20,BABA:9,KO:5,DIS:5,NFLX:8,BA:5,JPM:3,WMT:10,PG:5};
 
 function detectSplitsFromBars(bars, ticker) {
   if(!bars||bars.length<3) return [];
-  const splits = [];
-  for(let i=1; i<bars.length; i++){
-    const prev = bars[i-1].close;
-    const curr = bars[i].close;
+  const splits=[];
+  for(let i=1;i<bars.length;i++){
+    const prev=bars[i-1].close, curr=bars[i].close;
     if(!prev||!curr||prev<=0||curr<=0) continue;
-    const ratio = prev/curr;
-    if(ratio > 1.3) {
-      const rounded = Math.round(ratio);
-      if(rounded >= 2 && rounded <= 20 && Math.abs(ratio - rounded)/rounded < 0.15) {
-        splits.push({ date: bars[i].date, ratio: rounded, confidence: 1 - Math.abs(ratio-rounded)/rounded, ticker });
-      }
-    }
-    const revRatio = curr/prev;
-    if(revRatio > 1.3) {
-      const rounded = Math.round(revRatio);
-      if(rounded >= 2 && rounded <= 20 && Math.abs(revRatio - rounded)/rounded < 0.15) {
-        splits.push({ date: bars[i].date, ratio: 1/rounded, confidence: 1 - Math.abs(revRatio-rounded)/rounded, ticker, reverse: true });
-      }
-    }
+    const ratio=prev/curr;
+    if(ratio>1.3){const rounded=Math.round(ratio);if(rounded>=2&&rounded<=20&&Math.abs(ratio-rounded)/rounded<0.15) splits.push({date:bars[i].date,ratio:rounded,confidence:1-Math.abs(ratio-rounded)/rounded,ticker});}
+    const revRatio=curr/prev;
+    if(revRatio>1.3){const rounded=Math.round(revRatio);if(rounded>=2&&rounded<=20&&Math.abs(revRatio-rounded)/rounded<0.15) splits.push({date:bars[i].date,ratio:1/rounded,confidence:1-Math.abs(revRatio-rounded)/rounded,ticker,reverse:true});}
   }
   return splits;
 }
 
 function adjustBarsForSplits(bars, splits) {
   if(!bars||!splits||!splits.length) return bars;
-  const adjusted = bars.map(b=>({...b}));
-  for(const split of splits) {
-    const factor = split.ratio;
-    if(!factor||factor<=0) continue;
-    for(const bar of adjusted) {
-      if(bar.date < split.date) {
-        if(bar.open) bar.open = bar.open / factor;
-        if(bar.high) bar.high = bar.high / factor;
-        if(bar.low) bar.low = bar.low / factor;
-        if(bar.close) bar.close = bar.close / factor;
-        if(bar.volume) bar.volume = bar.volume * factor;
-      }
-    }
-  }
+  const adjusted=bars.map(b=>({...b}));
+  for(const split of splits){const factor=split.ratio;if(!factor||factor<=0)continue;for(const bar of adjusted){if(bar.date<split.date){if(bar.open)bar.open/=factor;if(bar.high)bar.high/=factor;if(bar.low)bar.low/=factor;if(bar.close)bar.close/=factor;if(bar.volume)bar.volume*=factor;}}}
   return adjusted;
 }
 
-function verifySplitViaCedearRatios(ticker, preSplitPrice, postSplitPrice, cedearRatio) {
-  if(!preSplitPrice||!postSplitPrice||preSplitPrice<=0||postSplitPrice<=0) return { verified: false, detectedRatio: null };
-  const priceRatio = preSplitPrice / postSplitPrice;
-  const rounded = Math.round(priceRatio);
-  if(rounded < 2 || rounded > 20) return { verified: false, detectedRatio: rounded };
-  const tolerance = 0.15;
-  const verified = Math.abs(priceRatio - rounded) / rounded < tolerance;
-  return { verified, detectedRatio: rounded };
+function verifySplitViaCedearRatios(ticker, preSplitPrice, postSplitPrice) {
+  if(!preSplitPrice||!postSplitPrice||preSplitPrice<=0||postSplitPrice<=0) return {verified:false,detectedRatio:null};
+  const priceRatio=preSplitPrice/postSplitPrice; const rounded=Math.round(priceRatio);
+  if(rounded<2||rounded>20) return {verified:false,detectedRatio:rounded};
+  return {verified:Math.abs(priceRatio-rounded)/rounded<0.15,detectedRatio:rounded};
 }
-
 
 // ── Mapeo de tickers ─────────────────────────────────────────────────────────
 // data912: bonos, ONs, CEDEARs, acciones AR — precios en vivo (2h cache)
@@ -689,31 +661,19 @@ async function fetchYahooPrices(activeTickers=[]) {
   return result;
 }
 
-// ── Yahoo Finance Split Events ──────────────────────────────────────────────
-async function fetchYahooSplitEvents(ticker, period1, period2) {
+async function fetchYahooSplitEvents(ticker) {
   try {
-    const p1 = period1 || Math.floor(Date.now()/1000) - 2*365*86400;
-    const p2 = period2 || Math.floor(Date.now()/1000);
     for(const sym of [ticker+'.BA', ticker]) {
       try {
-        const url = YAHOO_PROXY+"?symbol="+encodeURIComponent(sym)+"&range=2y&interval=1d&events=splits";
-        const res = await fetch(url, {signal: AbortSignal.timeout(8000)});
-        if(!res.ok) continue;
-        const d = await res.json();
-        const events = d?.chart?.result?.[0]?.events?.splits;
-        if(!events) continue;
-        return Object.entries(events).map(([ts, ev]) => ({
-          date: new Date(parseInt(ts)*1000).toISOString().slice(0,10),
-          numerator: ev.numerator || ev.newShares || 1,
-          denominator: ev.denominator || ev.oldShares || 1,
-          ratio: (ev.numerator||ev.newShares||1) / (ev.denominator||ev.oldShares||1),
-        }));
+        const url=YAHOO_PROXY+"?symbol="+encodeURIComponent(sym)+"&range=2y&interval=1d&events=splits";
+        const res=await fetch(url,{signal:AbortSignal.timeout(8000)}); if(!res.ok) continue;
+        const d=await res.json(); const events=d?.chart?.result?.[0]?.events?.splits; if(!events) continue;
+        return Object.entries(events).map(([ts,ev])=>({date:new Date(parseInt(ts)*1000).toISOString().slice(0,10),ratio:(ev.numerator||1)/(ev.denominator||1)}));
       } catch {}
     }
     return [];
   } catch { return []; }
 }
-
 
 // ── FCIs: argentinadatos.com vía CAFCI ───────────────────────────────────────
 // Endpoint: /v1/finanzas/fci/mercadoDinero/ultimo → array con {fondo,clase,vCuotaparte,fecha}
@@ -945,6 +905,20 @@ function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRa
     tradesByTicker[t.ticker].push({...t, _ts: new Date(t.date).getTime()});
   }
 
+    // Adjust trade qty/price for CEDEAR splits (bars are split-adjusted)
+    for(const ticker in tradesByTicker) {
+      if(!CEDEAR_RATIOS[ticker]) continue;
+      const bars=tickerBars[ticker]; if(!bars||bars.length<3) continue;
+      const splits=detectSplitsFromBars(bars,ticker).filter(s=>!s.reverse&&s.confidence>0.85);
+      if(!splits.length) continue;
+      tradesByTicker[ticker]=tradesByTicker[ticker].map(t=>{
+        let adjQty=t.qty, adjPrice=t.price;
+        for(const split of splits){ if(t.date<split.date){ adjQty*=split.ratio; adjPrice/=split.ratio; } }
+        return {...t, qty:adjQty, price:adjPrice};
+      });
+    }
+
+
   // Último precio disponible <= fecha (bisección O(log n))
   // IMPORTANTE: nunca usar precio futuro — solo pasado o igual
   function findPrice2(bars,d){
@@ -1036,72 +1010,40 @@ function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRa
   return twr;
 }
 
-// ── XIRR (Money-Weighted Return) — Newton-Raphson + bisección ────────────────
+// ── XIRR — Newton-Raphson + biseccion ────────────────────────────────────────
 function calcXIRR(flows, guess=0.1) {
   if(!flows||flows.length<2) return null;
-  const d0 = new Date(flows[0].date).getTime();
-  const yf = flows.map(f=>({a:f.amount, t:(new Date(f.date).getTime()-d0)/31557600000}));
-  const npvAt = (r) => { let s=0; for(const f of yf){ const d=Math.pow(1+r,f.t); if(!d||!isFinite(d)) return NaN; s+=f.a/d; } return s; };
-  const dnpvAt = (r) => { let s=0; for(const f of yf){ const d=Math.pow(1+r,f.t); if(!d||!isFinite(d)) return NaN; s-=f.t*f.a/(d*(1+r)); } return s; };
-  // Newton-Raphson
-  let r = guess;
-  for(let i=0;i<100;i++){
-    const npv=npvAt(r), dnpv=dnpvAt(r);
-    if(Math.abs(npv)<1e-7) return r;
-    if(!dnpv||!isFinite(dnpv)||isNaN(npv)) break;
-    const rNew = r - npv/dnpv;
-    if(Math.abs(rNew-r)<1e-10) return r;
-    r = rNew;
-    if(r<-0.99) r=-0.99;
-    if(r>10) r=10;
-  }
-  // Bisección fallback [-0.99, 10]
-  let lo=-0.99, hi=10;
-  let nLo=npvAt(lo), nHi=npvAt(hi);
-  if(isNaN(nLo)||isNaN(nHi)) return null;
-  if(nLo*nHi>0) return null;
-  for(let i=0;i<200;i++){
-    const mid=(lo+hi)/2;
-    const nMid=npvAt(mid);
-    if(isNaN(nMid)) return null;
-    if(Math.abs(nMid)<1e-7) return mid;
-    if(nMid*nLo<0){ hi=mid; nHi=nMid; }
-    else { lo=mid; nLo=nMid; }
-    if(hi-lo<1e-10) return (lo+hi)/2;
-  }
+  const d0=new Date(flows[0].date).getTime();
+  const yf=flows.map(f=>({a:f.amount,t:(new Date(f.date).getTime()-d0)/31557600000}));
+  const npvAt=(r)=>{let s=0;for(const f of yf){const d=Math.pow(1+r,f.t);if(!d||!isFinite(d))return NaN;s+=f.a/d;}return s;};
+  const dnpvAt=(r)=>{let s=0;for(const f of yf){const d=Math.pow(1+r,f.t);if(!d||!isFinite(d))return NaN;s-=f.t*f.a/(d*(1+r));}return s;};
+  let r=guess;
+  for(let i=0;i<100;i++){const npv=npvAt(r),dnpv=dnpvAt(r);if(Math.abs(npv)<1e-7)return r;if(!dnpv||!isFinite(dnpv)||isNaN(npv))break;const rN=r-npv/dnpv;if(Math.abs(rN-r)<1e-10)return r;r=rN;if(r<-0.99)r=-0.99;if(r>10)r=10;}
+  let lo=-0.99,hi=10,nLo=npvAt(lo),nHi=npvAt(hi);
+  if(isNaN(nLo)||isNaN(nHi)||nLo*nHi>0) return null;
+  for(let i=0;i<200;i++){const mid=(lo+hi)/2,nMid=npvAt(mid);if(isNaN(nMid))return null;if(Math.abs(nMid)<1e-7)return mid;if(nMid*nLo<0){hi=mid;nHi=nMid;}else{lo=mid;nLo=nMid;}if(hi-lo<1e-10)return(lo+hi)/2;}
   return null;
 }
 
-// De-anualizar XIRR: convierte tasa anual a retorno del período
 function deannualizeXIRR(xirrAnnual, days) {
   if(xirrAnnual==null||!days||days<=0) return null;
-  return (Math.pow(1 + xirrAnnual, days/365) - 1);
+  return (Math.pow(1+xirrAnnual, days/365)-1);
 }
 
-// Modified Dietz Return como fallback
 function calcModifiedDietzReturn(startVal, endVal, cashFlows, totalDays) {
   if(!startVal||startVal<=0||!totalDays||totalDays<=0) return null;
-  const sumCF = cashFlows.reduce((a,cf)=>a+cf.amount, 0);
-  const weightedCF = cashFlows.reduce((a,cf)=>a+cf.amount*((totalDays-cf.daysSinceStart)/totalDays), 0);
-  const denom = startVal + weightedCF;
-  if(Math.abs(denom)<0.01) return null;
-  return (endVal - startVal - sumCF) / denom;
+  const sumCF=cashFlows.reduce((a,cf)=>a+cf.amount,0);
+  const wCF=cashFlows.reduce((a,cf)=>a+cf.amount*((totalDays-cf.daysSinceStart)/totalDays),0);
+  const denom=startVal+wCF; if(Math.abs(denom)<0.01) return null;
+  return (endVal-startVal-sumCF)/denom;
 }
 
-// Retorno simple de una serie de barras entre dos fechas
 function calcSeriesPeriodReturn(bars, startDate, endDate) {
   if(!bars||bars.length<2||!startDate||!endDate) return null;
-  const findClose = (d) => {
-    let lo=0,hi=bars.length-1,res=-1;
-    while(lo<=hi){ const mid=(lo+hi)>>1; if(bars[mid].date<=d){res=mid;lo=mid+1;}else hi=mid-1; }
-    return res>=0 ? bars[res].close : null;
-  };
-  const s = findClose(startDate);
-  const e = findClose(endDate);
-  if(!s||!e||s<=0) return null;
-  return (e/s - 1);
+  const fc=(d)=>{let lo=0,hi=bars.length-1,res=-1;while(lo<=hi){const mid=(lo+hi)>>1;if(bars[mid].date<=d){res=mid;lo=mid+1;}else hi=mid-1;}return res>=0?bars[res].close:null;};
+  const s=fc(startDate),e=fc(endDate); if(!s||!e||s<=0) return null;
+  return (e/s-1);
 }
-
 
 function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=false,livePricesAll={},onExpand=null}){
   const PERIODS=[{key:"mtd",label:"MTD",days:null,mtd:true},{key:"30d",label:"30d",days:30},{key:"90d",label:"90d",days:90},{key:"ytd",label:"YTD",days:null},{key:"1y",label:"1 año",days:365},{key:"3y",label:"3 años",days:1095}];
@@ -5693,7 +5635,6 @@ function App(){
   const [syncChecked,setSyncChecked] = useState(false);
   const [rawHistoricos,setRawHistoricos] = useState(null);
 
-  // ── Split detection + adjusted historicos ────────────────────────────────
   const [pendingSplits, setPendingSplits] = useState([]);
   const [appliedSplitsVer, setAppliedSplitsVer] = useState(0);
   const cedearRatiosRef = React.useRef({...CEDEAR_RATIOS});
@@ -5701,51 +5642,22 @@ function App(){
   const {historicos, detectedSplits} = useMemo(() => {
     if(!rawHistoricos) return { historicos: null, detectedSplits: [] };
     try {
-      const adjusted = {};
-      for(const [k,v] of Object.entries(rawHistoricos)) adjusted[k] = v;
+      const adjusted = {}; for(const [k,v] of Object.entries(rawHistoricos)) adjusted[k] = v;
       const allSplits = [];
-      // Phase 1: detectar splits en barras de CEDEARs y auto-aplicar
-      const cedearTickers = Object.keys(rawHistoricos).filter(t => !!CEDEAR_RATIOS[t]);
-      for(const ticker of cedearTickers) {
-        const bars = rawHistoricos[ticker];
-        if(!bars || bars.length < 3) continue;
-        const detected = detectSplitsFromBars(bars, ticker);
-        if(detected.length) allSplits.push(...detected);
-      }
-      // Auto-aplicar splits de barras con alta confianza (discontinuidad 2:1+ en CEDEARs es siempre split)
-      const barSplitsToApply = allSplits.filter(s => s.confidence > 0.85 && !s.reverse);
-      for(const split of barSplitsToApply) {
-        if(!adjusted[split.ticker] || !Array.isArray(adjusted[split.ticker])) continue;
-        adjusted[split.ticker] = adjustBarsForSplits(adjusted[split.ticker], [split]);
-      }
-      // Phase 2: aplicar splits verificados adicionales de localStorage
-      let appliedSplits = [];
-      try { appliedSplits = JSON.parse(localStorage.getItem('gal_applied_splits_v1') || '[]'); } catch {}
-      const verified = appliedSplits.filter(s => s.source && s.ticker && s.date && s.ratio);
-      for(const split of verified) {
-        // No re-aplicar si ya fue aplicado en Phase 1
-        const alreadyApplied = barSplitsToApply.some(bs => bs.ticker === split.ticker && bs.date === split.date);
-        if(alreadyApplied) continue;
-        if(!adjusted[split.ticker] || !Array.isArray(adjusted[split.ticker])) continue;
-        adjusted[split.ticker] = adjustBarsForSplits(adjusted[split.ticker], [split]);
-      }
+      const ct = Object.keys(rawHistoricos).filter(t => !!CEDEAR_RATIOS[t]);
+      for(const ticker of ct) { const bars = rawHistoricos[ticker]; if(!bars||bars.length<3) continue; const det = detectSplitsFromBars(bars, ticker); if(det.length) allSplits.push(...det); }
+      const bsa = allSplits.filter(s => s.confidence > 0.85 && !s.reverse);
+      for(const split of bsa) { if(!adjusted[split.ticker]||!Array.isArray(adjusted[split.ticker])) continue; adjusted[split.ticker] = adjustBarsForSplits(adjusted[split.ticker], [split]); }
+      let ap = []; try { ap = JSON.parse(localStorage.getItem('gal_applied_splits_v1') || '[]'); } catch {}
+      const vf = ap.filter(s => s.source && s.ticker && s.date && s.ratio);
+      for(const split of vf) { if(bsa.some(bs=>bs.ticker===split.ticker&&bs.date===split.date)) continue; if(!adjusted[split.ticker]||!Array.isArray(adjusted[split.ticker])) continue; adjusted[split.ticker] = adjustBarsForSplits(adjusted[split.ticker], [split]); }
       return { historicos: adjusted, detectedSplits: allSplits };
-    } catch(e) {
-      console.warn('[Split] useMemo error:', e);
-      return { historicos: rawHistoricos, detectedSplits: [] };
-    }
+    } catch(e) { console.warn('[Split] useMemo error:', e); return { historicos: rawHistoricos, detectedSplits: [] }; }
   }, [rawHistoricos, appliedSplitsVer]);
-
 
   // Cargar históricos desde JSON generado por GitHub Actions
   useEffect(()=>{
-    // Limpiar splits sin verificar de runs anteriores
-    try {
-      const saved = JSON.parse(localStorage.getItem('gal_applied_splits_v1') || '[]');
-      const clean = saved.filter(s => s.source && s.ticker && s.date && s.ratio);
-      if(clean.length !== saved.length) localStorage.setItem('gal_applied_splits_v1', JSON.stringify(clean));
-    } catch {}
-
+    try { const sv=JSON.parse(localStorage.getItem('gal_applied_splits_v1')||'[]'); const cl=sv.filter(s=>s.source&&s.ticker&&s.date&&s.ratio); if(cl.length!==sv.length) localStorage.setItem('gal_applied_splits_v1',JSON.stringify(cl)); } catch {}
     fetch("/historicos.json")
       .then(r=>r.ok?r.json():null)
       .then(d=>{ if(d && Object.keys(d).length>1) setRawHistoricos(d); })
@@ -5874,79 +5786,49 @@ function App(){
   },[]);
 
 
-  // ── CEDEAR Split Detection — useEffects ──────────────────────────────────
-  // 1. Init CEDEAR ratios al montar
+  // ── CEDEAR Split Detection useEffects ──────────────────────────────────
   useEffect(() => {
-    const portCedears = port.filter(h => CEDEAR_RATIOS[h.ticker]);
-    if(portCedears.length) {
-      const ratios = {};
-      for(const h of portCedears) ratios[h.ticker] = CEDEAR_RATIOS[h.ticker];
-      cedearRatiosRef.current = {...CEDEAR_RATIOS, ...ratios};
-    }
+    const pc = port.filter(h => CEDEAR_RATIOS[h.ticker]);
+    if(pc.length) { const r = {}; for(const h of pc) r[h.ticker] = CEDEAR_RATIOS[h.ticker]; cedearRatiosRef.current = {...CEDEAR_RATIOS, ...r}; }
   }, [port]);
 
-  // 2. Detección live vs last bar — detectar splits en tiempo real
   useEffect(() => {
     if(!livePrices || !historicos || Object.keys(livePrices).length === 0 || pendingSplits.length > 0) return;
-    const newPending = [];
-    for(const [ticker, liveData] of Object.entries(livePrices)) {
+    const np = [];
+    for(const [ticker, ld] of Object.entries(livePrices)) {
       if(!CEDEAR_RATIOS[ticker]) continue;
-      const bars = historicos?.[ticker];
-      if(!bars || bars.length < 2) continue;
-      const lastBar = bars[bars.length - 1];
-      if(!lastBar?.close || lastBar.close <= 0 || !liveData?.price || liveData.price <= 0) continue;
-      const ratio = lastBar.close / liveData.price;
-      const rounded = Math.round(ratio);
-      if(ratio >= 1.8 && rounded >= 2 && rounded <= 20 && Math.abs(ratio - rounded)/rounded < 0.10) {
-        newPending.push({ ticker, date: todayAR(), ratio: rounded, lastClose: lastBar.close, livePrice: liveData.price, confidence: 1 - Math.abs(ratio-rounded)/rounded });
-      }
+      const bars = historicos?.[ticker]; if(!bars || bars.length < 2) continue;
+      const lb = bars[bars.length - 1];
+      if(!lb?.close || lb.close <= 0 || !ld?.price || ld.price <= 0) continue;
+      const ratio = lb.close / ld.price; const rounded = Math.round(ratio);
+      if(ratio >= 1.8 && rounded >= 2 && rounded <= 20 && Math.abs(ratio - rounded)/rounded < 0.10)
+        np.push({ ticker, date: todayAR(), ratio: rounded, lastClose: lb.close, livePrice: ld.price, confidence: 1 - Math.abs(ratio-rounded)/rounded });
     }
-    if(newPending.length > 0) {
-      setPendingSplits(prev => {
-        const merged = [...prev];
-        for(const ns of newPending) {
-          if(!merged.some(p => p.ticker === ns.ticker && p.date === ns.date)) merged.push(ns);
-        }
-        return merged;
-      });
-    }
+    if(np.length > 0) setPendingSplits(prev => { const m=[...prev]; for(const ns of np){ if(!m.some(p=>p.ticker===ns.ticker&&p.date===ns.date)) m.push(ns); } return m; });
   }, [livePrices, historicos]);
 
-  // 3. Aplicación con verificación Yahoo → heurística
   useEffect(() => {
     if(!pendingSplits.length) return;
     (async () => {
       const verified = [];
       for(const split of pendingSplits) {
-        const yahooSplits = await fetchYahooSplitEvents(split.ticker);
-        const yahooMatch = yahooSplits.find(ys => ys.date === split.date || (Math.abs(new Date(ys.date) - new Date(split.date)) < 3*86400000));
-        if(yahooMatch) {
-          verified.push({...split, ratio: yahooMatch.ratio > 1 ? Math.round(yahooMatch.ratio) : split.ratio, source: 'yahoo'});
-          continue;
-        }
-        const cedearRatio = CEDEAR_RATIOS[split.ticker];
-        if(cedearRatio) {
-          const check = verifySplitViaCedearRatios(split.ticker, split.lastClose, split.livePrice, cedearRatio);
-          if(check.verified) { verified.push({...split, source: 'heuristic'}); continue; }
-        }
+        const ys = await fetchYahooSplitEvents(split.ticker);
+        const ym = ys.find(y => y.date === split.date || (Math.abs(new Date(y.date) - new Date(split.date)) < 3*86400000));
+        if(ym) { verified.push({...split, ratio: ym.ratio > 1 ? Math.round(ym.ratio) : split.ratio, source: 'yahoo'}); continue; }
+        const cr = CEDEAR_RATIOS[split.ticker];
+        if(cr) { const ck = verifySplitViaCedearRatios(split.ticker, split.lastClose, split.livePrice); if(ck.verified) { verified.push({...split, source: 'heuristic'}); continue; } }
         if(split.confidence > 0.90) verified.push({...split, source: 'confidence'});
       }
       if(verified.length) {
-        let applied = [];
-        try { applied = JSON.parse(localStorage.getItem('gal_applied_splits_v1') || '[]'); } catch {}
-        const newApplied = [...applied];
-        for(const v of verified) {
-          if(!newApplied.some(a => a.ticker === v.ticker && a.date === v.date)) {
-            newApplied.push({ ticker: v.ticker, date: v.date, ratio: v.ratio, source: v.source, appliedAt: new Date().toISOString() });
-          }
-        }
-        localStorage.setItem('gal_applied_splits_v1', JSON.stringify(newApplied));
+        let ap = []; try { ap = JSON.parse(localStorage.getItem('gal_applied_splits_v1') || '[]'); } catch {}
+        const na = [...ap];
+        for(const v of verified) { if(!na.some(a => a.ticker === v.ticker && a.date === v.date)) na.push({ ticker: v.ticker, date: v.date, ratio: v.ratio, source: v.source, appliedAt: new Date().toISOString() }); }
+        localStorage.setItem('gal_applied_splits_v1', JSON.stringify(na));
         setAppliedSplitsVer(v => v + 1);
       }
       setPendingSplits([]);
     })();
   }, [pendingSplits]);
-
 
   // Guardar en localStorage + GitHub cuando cambian los datos
   const saveTimerRef = React.useRef(null);

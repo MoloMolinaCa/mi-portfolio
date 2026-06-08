@@ -5695,32 +5695,41 @@ function App(){
 
   // ── Split detection + adjusted historicos ────────────────────────────────
   const [pendingSplits, setPendingSplits] = useState([]);
+  const [appliedSplitsVer, setAppliedSplitsVer] = useState(0);
   const cedearRatiosRef = React.useRef({...CEDEAR_RATIOS});
 
   const {historicos, detectedSplits} = useMemo(() => {
     if(!rawHistoricos) return { historicos: null, detectedSplits: [] };
-    const adjusted = {...rawHistoricos};
-    const allSplits = [];
-    const cedearTickers = Object.keys(rawHistoricos).filter(t => CEDEAR_RATIOS[t] || (rawHistoricos[t]?.length > 5 && !t.startsWith('FIMA') && t !== 'CCL' && t !== 'MEP' && t !== 'CER' && t !== 'sp500'));
-    for(const ticker of cedearTickers) {
-      const bars = rawHistoricos[ticker];
-      if(!bars || bars.length < 3) continue;
-      const detected = detectSplitsFromBars(bars, ticker);
-      if(detected.length) allSplits.push(...detected);
+    try {
+      const adjusted = {};
+      for(const [k,v] of Object.entries(rawHistoricos)) adjusted[k] = v;
+      const allSplits = [];
+      // SOLO detectar splits en tickers CEDEAR con ratio conocido
+      const cedearTickers = Object.keys(rawHistoricos).filter(t => !!CEDEAR_RATIOS[t]);
+      for(const ticker of cedearTickers) {
+        const bars = rawHistoricos[ticker];
+        if(!bars || bars.length < 3) continue;
+        const detected = detectSplitsFromBars(bars, ticker);
+        if(detected.length) allSplits.push(...detected);
+      }
+      // Phase 2: leer splits ya aplicados de localStorage
+      let appliedSplits = [];
+      try { appliedSplits = JSON.parse(localStorage.getItem('gal_applied_splits_v1') || '[]'); } catch {}
+      const splitsToApply = [...appliedSplits];
+      for(const s of allSplits) {
+        const already = splitsToApply.some(a => a.ticker === s.ticker && a.date === s.date);
+        if(!already && s.confidence > 0.85) splitsToApply.push(s);
+      }
+      for(const split of splitsToApply) {
+        if(!adjusted[split.ticker] || !Array.isArray(adjusted[split.ticker])) continue;
+        adjusted[split.ticker] = adjustBarsForSplits(adjusted[split.ticker], [split]);
+      }
+      return { historicos: adjusted, detectedSplits: allSplits };
+    } catch(e) {
+      console.warn('[Split] useMemo error:', e);
+      return { historicos: rawHistoricos, detectedSplits: [] };
     }
-    let appliedSplits = [];
-    try { appliedSplits = JSON.parse(localStorage.getItem('gal_applied_splits_v1') || '[]'); } catch {}
-    const splitsToApply = [...appliedSplits];
-    for(const s of allSplits) {
-      const already = splitsToApply.some(a => a.ticker === s.ticker && a.date === s.date);
-      if(!already && s.confidence > 0.7) splitsToApply.push(s);
-    }
-    for(const split of splitsToApply) {
-      if(!adjusted[split.ticker]) continue;
-      adjusted[split.ticker] = adjustBarsForSplits(adjusted[split.ticker], [split]);
-    }
-    return { historicos: adjusted, detectedSplits: allSplits };
-  }, [rawHistoricos]);
+  }, [rawHistoricos, appliedSplitsVer]);
 
 
   // Cargar históricos desde JSON generado por GitHub Actions
@@ -5866,7 +5875,7 @@ function App(){
 
   // 2. Detección live vs last bar — detectar splits en tiempo real
   useEffect(() => {
-    if(!livePrices || !historicos || Object.keys(livePrices).length === 0) return;
+    if(!livePrices || !historicos || Object.keys(livePrices).length === 0 || pendingSplits.length > 0) return;
     const newPending = [];
     for(const [ticker, liveData] of Object.entries(livePrices)) {
       if(!CEDEAR_RATIOS[ticker]) continue;
@@ -5920,12 +5929,17 @@ function App(){
           }
         }
         localStorage.setItem('gal_applied_splits_v1', JSON.stringify(newApplied));
-        setRawHistoricos(prev => prev ? {...prev} : prev);
+        // Forzar recálculo sin crear loop — solo incrementar versión
+        setAppliedSplitsVer(v => v + 1);
         setPendingSplits([]);
         console.log('[Split] Applied splits:', verified.map(v => `${v.ticker} ${v.ratio}:1 (${v.source})`));
+      } else {
+        // Ningún split verificado, limpiar pendientes para no reintentar
+        setPendingSplits([]);
       }
     })();
   }, [pendingSplits]);
+
 
   // Guardar en localStorage + GitHub cuando cambian los datos
   const saveTimerRef = React.useRef(null);

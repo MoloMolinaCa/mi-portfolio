@@ -92,88 +92,6 @@ function isHabil(dateStr) {
   return dow!==0 && dow!==6;
 }
 
-// ── Deteccion automatica de splits de CEDEARs ──────────────────────────────
-const SPLIT_CANDIDATE_FACTORS = [2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30];
-
-function detectSplitsFromBars(bars) {
-  if (!Array.isArray(bars) || bars.length < 5) return [];
-  const splits = [];
-  for (let i = 0; i < bars.length - 1; i++) {
-    const prev = bars[i].close, next = bars[i + 1].close;
-    if (!prev || !next || prev <= 0 || next <= 0) continue;
-    const ratio = prev / next;
-    if (ratio > 1.8) {
-      let bestF = null, bestD = Infinity;
-      for (const f of SPLIT_CANDIDATE_FACTORS) { const d = Math.abs(ratio - f) / f; if (d < bestD) { bestD = d; bestF = f; } }
-      if (bestD < 0.12) splits.push({ date: bars[i + 1].date, factor: bestF, type: 'split', rawRatio: parseFloat(ratio.toFixed(4)) });
-    } else if (ratio > 0 && ratio < 0.55) {
-      const inv = 1 / ratio;
-      let bestF = null, bestD = Infinity;
-      for (const f of SPLIT_CANDIDATE_FACTORS) { const d = Math.abs(inv - f) / f; if (d < bestD) { bestD = d; bestF = f; } }
-      if (bestD < 0.12) splits.push({ date: bars[i + 1].date, factor: 1 / bestF, type: 'reverse', rawRatio: parseFloat(ratio.toFixed(4)) });
-    }
-  }
-  return splits;
-}
-
-function adjustBarsForSplits(bars, splits) {
-  if (!bars || !splits || !splits.length) return bars;
-  return bars.map(b => {
-    const adj = { ...b };
-    for (const sp of splits) {
-      if (adj.date < sp.date) {
-        adj.close = adj.close / sp.factor;
-        if (adj.open != null) adj.open = adj.open / sp.factor;
-        if (adj.high != null) adj.high = adj.high / sp.factor;
-        if (adj.low != null) adj.low = adj.low / sp.factor;
-      }
-    }
-    return adj;
-  });
-}
-
-const SKIP_SPLIT_TICKERS = new Set(['CCL','MEP','CER','sp500','oficial','uva','t10y']);
-
-// ── Ratios oficiales CEDEAR — Caja de Valores (cajadevalores.com.ar) ────────
-// Fuente: https://cajadevalores.com.ar/Servicios/Cedears · actualizado 29/05/2026
-const CEDEAR_RATIOS = {
-  SPY:60,QQQ:20,IWM:10,EEM:5,XLF:2,XLE:2,DIA:20,EWZ:2,ARKK:10,SH:8,GLD:50,
-  ETHA:5,URA:5,SMH:50,SPXL:25,XLU:15,CIBR:10,TQQQ:25,VXX:5,ITA:50,ICLN:5,
-  EWY:50,XME:30,RSP:30,AAPL:20,ABBV:10,ABNB:15,ACN:75,ADBE:44,AMD:10,AMGN:10,
-  AMZN:144,AVGO:39,AXP:5,BA:6,BABA:9,BIDU:11,BMY:3,CAT:5,CSCO:5,CVX:8,C:3,
-  CRM:25,COST:30,CL:5,CMCSA:5,DE:10,DIS:5,EBAY:3,F:1,GE:5,GILD:5,GM:2,
-  GOLD:1,GOOGL:58,HD:10,HON:5,IBM:5,INTC:2,JNJ:5,JPM:5,KO:5,LLY:30,LMT:10,
-  LOW:5,MA:15,MCD:10,MDT:3,MELI:120,META:30,MMM:10,MO:4,MRK:5,MSFT:30,
-  MSTR:20,MU:5,NFLX:24,NKE:3,NVDA:20,NU:5,OXY:5,PANW:50,PBR:2,PEP:5,PFE:3,
-  PG:5,PYPL:5,QCOM:5,SBUX:5,SHOP:15,SNAP:1,T:3,TGT:5,TSLA:15,TSM:10,UBER:2,
-  UNH:15,UNP:5,UPST:5,V:5,VALE:1,VIST:5,VZ:3,WFC:3,WMT:5,XOM:5,ZM:5,
-  HUT:5,KEEL:0.2,RBLX:2,UAL:5,SATL:1,MSTR:20,PRIO3:2,BBAS3:2,VALE3:1,
-  PETR3:1,BBDC3:1,MGLU3:1,ITUB3:1,RENT3:2,
-};
-
-function verifySplitViaCedearRatios(ticker, detectedFactor) {
-  const T = String(ticker).toUpperCase();
-  const currentRatio = CEDEAR_RATIOS[T];
-  if (!currentRatio) return { verified: false };
-  let stored;
-  try { stored = JSON.parse(localStorage.getItem('gal_cedear_prev_ratios_v1') || '{}'); } catch { stored = {}; }
-  const oldRatio = stored[T];
-  if (!oldRatio || oldRatio === currentRatio) {
-    stored[T] = currentRatio;
-    try { localStorage.setItem('gal_cedear_prev_ratios_v1', JSON.stringify(stored)); } catch {}
-    return { verified: false };
-  }
-  const expectedFactor = currentRatio / oldRatio;
-  const tolerance = Math.abs(expectedFactor - detectedFactor) / Math.max(detectedFactor, 0.01);
-  if (tolerance < 0.10) {
-    stored[T] = currentRatio;
-    try { localStorage.setItem('gal_cedear_prev_ratios_v1', JSON.stringify(stored)); } catch {}
-    return { verified: true, source: 'CajaDeValores', oldRatio, newRatio: currentRatio, factor: expectedFactor };
-  }
-  return { verified: false };
-}
-
-
 // ── Mapeo de tickers ─────────────────────────────────────────────────────────
 // data912: bonos, ONs, CEDEARs, acciones AR — precios en vivo (2h cache)
 // Yahoo Finance (.BA): fallback para CEDEARs y acciones si data912 falla
@@ -712,37 +630,6 @@ async function fetchYahooPrices(activeTickers=[]) {
   }));
   return result;
 }
-
-// ── Yahoo Finance: consulta de splits historicos para verificacion ──────────
-async function fetchYahooSplitEvents(ticker) {
-  const results = [];
-  for (const sym of [ticker + '.BA', ticker]) {
-    try {
-      const url = YAHOO_PROXY + '?symbol=' + encodeURIComponent(sym) + '&range=2y&interval=1d&events=splits';
-      const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-      if (!res.ok) continue;
-      const d = await res.json();
-      const splitsObj = d?.chart?.result?.[0]?.events?.splits;
-      if (!splitsObj || typeof splitsObj !== 'object') continue;
-      for (const [tsKey, sp] of Object.entries(splitsObj)) {
-        const tsNum = parseInt(tsKey);
-        if (!tsNum || tsNum <= 0) continue;
-        const dateObj = new Date(tsNum * 1000);
-        const dateStr = dateObj.toISOString().slice(0, 10);
-        const num = parseFloat(sp.numerator || 0);
-        const den = parseFloat(sp.denominator || 0);
-        if (num > 0 && den > 0) {
-          const factor = num / den;
-          results.push({ date: dateStr, factor: parseFloat(factor.toFixed(6)), numerator: num, denominator: den, source: sym });
-        }
-      }
-    } catch (err) {
-      console.warn('fetchYahooSplitEvents error for', sym, err);
-    }
-  }
-  return results;
-}
-
 
 // ── FCIs: argentinadatos.com vía CAFCI ───────────────────────────────────────
 // Endpoint: /v1/finanzas/fci/mercadoDinero/ultimo → array con {fondo,clase,vCuotaparte,fecha}
@@ -5664,37 +5551,13 @@ function App(){
   const [bondFlows,setBondFlows] = useState(()=>{ try{ const s=localStorage.getItem("gal_bond_flows_v1"); if(s) return {...SEED_BOND_FLOWS,...JSON.parse(s)}; }catch{} return SEED_BOND_FLOWS; });
   const [storageReady,setStorageReady] = useState(false);
   const [syncChecked,setSyncChecked] = useState(false);
-  const [rawHistoricos, setRawHistoricos] = useState(null);
-  // ── Ajuste automatico de splits en series historicas ──────────────────────
-  const { historicos, detectedSplits } = useMemo(() => {
-    if (!rawHistoricos) return { historicos: rawHistoricos, detectedSplits: {} };
-    const result = { ...rawHistoricos };
-    const detected = {};
-    for (const ticker of Object.keys(rawHistoricos)) {
-      if (SKIP_SPLIT_TICKERS.has(ticker)) continue;
-      if (ticker.startsWith('FIMA') || ticker.startsWith('_')) continue;
-      if (SEED_BOND_META && SEED_BOND_META[ticker]) continue;
-      if (/\d/.test(ticker) && (ticker.endsWith('D') || /^(TZX|GD|AL|AE|AO|TLCU)/.test(ticker))) continue;
-      const bars = rawHistoricos[ticker];
-      if (!Array.isArray(bars) || bars.length < 5) continue;
-      const splits = detectSplitsFromBars(bars);
-      if (splits.length) {
-        result[ticker] = adjustBarsForSplits(bars, splits);
-        detected[ticker] = splits;
-      }
-    }
-    return { historicos: result, detectedSplits: detected };
-  }, [rawHistoricos]);
-
-  const tradesRef = React.useRef(trades);
-  useEffect(() => { tradesRef.current = trades; }, [trades]);
-
+  const [historicos,setHistoricos] = useState(null);
 
   // Cargar históricos desde JSON generado por GitHub Actions
   useEffect(()=>{
     fetch("/historicos.json")
       .then(r=>r.ok?r.json():null)
-      .then(d=>{ if(d && Object.keys(d).length>1) setRawHistoricos(d); })
+      .then(d=>{ if(d && Object.keys(d).length>1) setHistoricos(d); })
       .catch(()=>{});
   },[]);
   const isMobile = useIsMobile();
@@ -5818,134 +5681,6 @@ function App(){
       })
       .catch(()=>{ setSyncChecked(true); setSyncStatus("idle"); });
   },[]);
-
-
-  // ── Inicializar ratios CEDEAR en localStorage como baseline ──────────────
-  useEffect(() => {
-    try {
-      const key = 'gal_cedear_prev_ratios_v1';
-      const existing = localStorage.getItem(key);
-      if (!existing) {
-        localStorage.setItem(key, JSON.stringify(CEDEAR_RATIOS));
-        console.log('CEDEAR ratios baseline guardado en localStorage');
-      }
-    } catch {}
-  }, []);
-
-  // ── Detectar splits desde precio en vivo vs ultimo historico ────────────
-  const liveSplitChecked = React.useRef(false);
-  useEffect(() => {
-    if (!rawHistoricos || !livePrices || liveSplitChecked.current) return;
-    if (!Object.keys(livePrices).length) return;
-    for (const ticker of Object.keys(rawHistoricos)) {
-      if (SKIP_SPLIT_TICKERS.has(ticker) || ticker.startsWith('FIMA') || ticker.startsWith('_')) continue;
-      if (SEED_BOND_META && SEED_BOND_META[ticker]) continue;
-      if (/\d/.test(ticker) && (ticker.endsWith('D') || /^(TZX|GD|AL|AE|AO|TLCU)/.test(ticker))) continue;
-      const bars = rawHistoricos[ticker];
-      if (!Array.isArray(bars) || bars.length < 2) continue;
-      const lastBar = bars[bars.length - 1];
-      const live = livePrices[ticker];
-      if (!lastBar?.close || !live?.price || live.price <= 0 || lastBar.close <= 0) continue;
-      const ratio = lastBar.close / live.price;
-      if (ratio > 1.8) {
-        let bestF = null, bestD = Infinity;
-        for (const f of SPLIT_CANDIDATE_FACTORS) { const d = Math.abs(ratio - f) / f; if (d < bestD) { bestD = d; bestF = f; } }
-        if (bestD < 0.12) {
-          const today = todayAR();
-          const newBars = [...bars, { date: today, close: live.price, open: live.price, high: live.price, low: live.price }];
-          setRawHistoricos(prev => ({ ...prev, [ticker]: newBars }));
-          liveSplitChecked.current = true;
-          console.log('Split detectado via live price:', ticker, 'factor', bestF, 'fecha', today);
-          return;
-        }
-      }
-    }
-  }, [rawHistoricos, livePrices]);
-
-  // ── Aplicar splits a port y trades — verificacion Yahoo + CajaDeValores ─
-  const [splitVerifyStatus, setSplitVerifyStatus] = React.useState({});
-  useEffect(() => {
-    if (!detectedSplits || !Object.keys(detectedSplits).length || !storageReady) return;
-    let applied;
-    try { applied = JSON.parse(localStorage.getItem('gal_applied_splits_v1') || '{}'); } catch { applied = {}; }
-    const pendingSplits = {};
-    for (const [ticker, splits] of Object.entries(detectedSplits)) {
-      for (const sp of splits) {
-        const key = ticker + '_' + sp.date + '_' + sp.factor;
-        if (applied[key]) continue;
-        if (!pendingSplits[ticker]) pendingSplits[ticker] = [];
-        pendingSplits[ticker].push({ ...sp, key });
-      }
-    }
-    if (!Object.keys(pendingSplits).length) return;
-
-    (async () => {
-      const newApplied = { ...applied };
-      const portAdj = {};
-      const tradeAdj = {};
-      let hasNew = false;
-
-      for (const [ticker, splits] of Object.entries(pendingSplits)) {
-        let yahooSplits = [];
-        try { yahooSplits = await fetchYahooSplitEvents(ticker); } catch (err) { console.warn('Yahoo verify failed:', ticker, err); }
-
-        for (const sp of splits) {
-          let verified = false;
-          let verifySource = 'no_source';
-
-          if (yahooSplits.length > 0) {
-            // Capa 1: verificar con Yahoo
-            const spDate = new Date(sp.date + 'T12:00:00').getTime();
-            for (const ys of yahooSplits) {
-              const ysDate = new Date(ys.date + 'T12:00:00').getTime();
-              const daysDiff = Math.abs(spDate - ysDate) / (1000 * 60 * 60 * 24);
-              if (daysDiff <= 5) {
-                const factorMatch = Math.abs(ys.factor - sp.factor) / Math.max(sp.factor, 0.01) < 0.15;
-                if (factorMatch) {
-                  verified = true;
-                  verifySource = 'yahoo:' + ys.source + ' (' + ys.numerator + ':' + ys.denominator + ')';
-                  console.log('Split VERIFICADO por Yahoo:', ticker, sp.factor + ':1', 'fecha', sp.date, 'fuente', verifySource);
-                  break;
-                }
-              }
-            }
-            if (!verified) {
-              console.warn('Split detectado pero NO confirmado por Yahoo:', ticker, sp.factor + ':1', sp.date);
-              setSplitVerifyStatus(prev => ({ ...prev, [sp.key]: 'unverified' }));
-              continue;
-            }
-          } else {
-            // Capa 2: verificar con ratios de Caja de Valores
-            const cdvResult = verifySplitViaCedearRatios(ticker, sp.factor);
-            if (cdvResult.verified) {
-              verified = true;
-              verifySource = 'CajaDeValores (ratio ' + cdvResult.oldRatio + ':1 -> ' + cdvResult.newRatio + ':1)';
-              console.log('Split VERIFICADO por Caja de Valores:', ticker, sp.factor + ':1', verifySource);
-            } else {
-              // Capa 3: heuristica como ultimo recurso
-              console.warn('Sin datos de Yahoo ni Caja de Valores para verificar split de', ticker, '- aplicando por heuristica');
-              verifySource = 'heuristic_only';
-            }
-          }
-
-          hasNew = true;
-          for (const p of portRef.current) { if (p.ticker === ticker) portAdj[p.id] = sp.factor; }
-          for (const t of tradesRef.current) { if (t.ticker === ticker && t.date < sp.date) tradeAdj[t.id || t.ts] = sp.factor; }
-          newApplied[sp.key] = { factor: sp.factor, date: sp.date, type: sp.type, verifiedBy: verifySource, appliedAt: new Date().toISOString() };
-          setSplitVerifyStatus(prev => ({ ...prev, [sp.key]: 'verified:' + verifySource }));
-          console.log('Split aplicado:', ticker, sp.type, sp.factor + ':1', 'fecha', sp.date, 'verificado:', verifySource);
-        }
-      }
-      if (!hasNew) return;
-      if (Object.keys(portAdj).length) {
-        setPort(prev => prev.map(p => { const f = portAdj[p.id]; if (!f) return p; return { ...p, qty: Math.round(p.qty * f), buyPrice: p.buyPrice / f }; }));
-      }
-      if (Object.keys(tradeAdj).length) {
-        setTrades(prev => prev.map(t => { const f = tradeAdj[t.id || t.ts]; if (!f) return t; return { ...t, qty: Math.round(t.qty * f), price: t.price / f }; }));
-      }
-      try { localStorage.setItem('gal_applied_splits_v1', JSON.stringify(newApplied)); } catch {}
-    })();
-  }, [detectedSplits, storageReady]);
 
   // Guardar en localStorage + GitHub cuando cambian los datos
   const saveTimerRef = React.useRef(null);
@@ -6436,7 +6171,7 @@ function App(){
           if(!found) console.warn('No historical data found for '+ticker);
         }
         if(Object.keys(updated).length>Object.keys(historicos||{}).length){
-          setRawHistoricos(updated);
+          setHistoricos(updated);
         }
       })();
     }

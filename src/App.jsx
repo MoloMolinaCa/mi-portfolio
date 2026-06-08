@@ -5701,10 +5701,8 @@ function App(){
   const {historicos, detectedSplits} = useMemo(() => {
     if(!rawHistoricos) return { historicos: null, detectedSplits: [] };
     try {
-      const adjusted = {};
-      for(const [k,v] of Object.entries(rawHistoricos)) adjusted[k] = v;
+      // Phase 1: detectar splits (solo informativo, NO modifica barras)
       const allSplits = [];
-      // SOLO detectar splits en tickers CEDEAR con ratio conocido
       const cedearTickers = Object.keys(rawHistoricos).filter(t => !!CEDEAR_RATIOS[t]);
       for(const ticker of cedearTickers) {
         const bars = rawHistoricos[ticker];
@@ -5712,15 +5710,16 @@ function App(){
         const detected = detectSplitsFromBars(bars, ticker);
         if(detected.length) allSplits.push(...detected);
       }
-      // Phase 2: leer splits ya aplicados de localStorage
+      // Phase 2: SOLO aplicar splits verificados de localStorage
       let appliedSplits = [];
       try { appliedSplits = JSON.parse(localStorage.getItem('gal_applied_splits_v1') || '[]'); } catch {}
-      const splitsToApply = [...appliedSplits];
-      for(const s of allSplits) {
-        const already = splitsToApply.some(a => a.ticker === s.ticker && a.date === s.date);
-        if(!already && s.confidence > 0.85) splitsToApply.push(s);
+      const verified = appliedSplits.filter(s => s.source && s.ticker && s.date && s.ratio);
+      if(verified.length === 0) {
+        return { historicos: rawHistoricos, detectedSplits: allSplits };
       }
-      for(const split of splitsToApply) {
+      const adjusted = {};
+      for(const [k,v] of Object.entries(rawHistoricos)) adjusted[k] = v;
+      for(const split of verified) {
         if(!adjusted[split.ticker] || !Array.isArray(adjusted[split.ticker])) continue;
         adjusted[split.ticker] = adjustBarsForSplits(adjusted[split.ticker], [split]);
       }
@@ -5734,6 +5733,13 @@ function App(){
 
   // Cargar históricos desde JSON generado por GitHub Actions
   useEffect(()=>{
+    // Limpiar splits sin verificar de runs anteriores
+    try {
+      const saved = JSON.parse(localStorage.getItem('gal_applied_splits_v1') || '[]');
+      const clean = saved.filter(s => s.source && s.ticker && s.date && s.ratio);
+      if(clean.length !== saved.length) localStorage.setItem('gal_applied_splits_v1', JSON.stringify(clean));
+    } catch {}
+
     fetch("/historicos.json")
       .then(r=>r.ok?r.json():null)
       .then(d=>{ if(d && Object.keys(d).length>1) setRawHistoricos(d); })
@@ -5885,7 +5891,7 @@ function App(){
       if(!lastBar?.close || lastBar.close <= 0 || !liveData?.price || liveData.price <= 0) continue;
       const ratio = lastBar.close / liveData.price;
       const rounded = Math.round(ratio);
-      if(rounded >= 2 && rounded <= 20 && Math.abs(ratio - rounded)/rounded < 0.12) {
+      if(ratio >= 1.8 && rounded >= 2 && rounded <= 20 && Math.abs(ratio - rounded)/rounded < 0.10) {
         newPending.push({ ticker, date: todayAR(), ratio: rounded, lastClose: lastBar.close, livePrice: liveData.price, confidence: 1 - Math.abs(ratio-rounded)/rounded });
       }
     }
@@ -5917,7 +5923,7 @@ function App(){
           const check = verifySplitViaCedearRatios(split.ticker, split.lastClose, split.livePrice, cedearRatio);
           if(check.verified) { verified.push({...split, source: 'heuristic'}); continue; }
         }
-        if(split.confidence > 0.85) verified.push({...split, source: 'confidence'});
+        if(split.confidence > 0.90) verified.push({...split, source: 'confidence'});
       }
       if(verified.length) {
         let applied = [];
@@ -5929,14 +5935,9 @@ function App(){
           }
         }
         localStorage.setItem('gal_applied_splits_v1', JSON.stringify(newApplied));
-        // Forzar recálculo sin crear loop — solo incrementar versión
         setAppliedSplitsVer(v => v + 1);
-        setPendingSplits([]);
-        console.log('[Split] Applied splits:', verified.map(v => `${v.ticker} ${v.ratio}:1 (${v.source})`));
-      } else {
-        // Ningún split verificado, limpiar pendientes para no reintentar
-        setPendingSplits([]);
       }
+      setPendingSplits([]);
     })();
   }, [pendingSplits]);
 

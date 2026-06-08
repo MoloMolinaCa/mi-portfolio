@@ -1,32 +1,6 @@
 /* eslint-disable */
 import React, { useState, useEffect, useMemo, memo, useRef, useCallback } from "react";
 
-// ── Yahoo Finance Split Events ──────────────────────────────────────────────
-async function fetchYahooSplitEvents(ticker, period1, period2) {
-  try {
-    const p1 = period1 || Math.floor(Date.now()/1000) - 2*365*86400;
-    const p2 = period2 || Math.floor(Date.now()/1000);
-    for(const sym of [ticker+'.BA', ticker]) {
-      try {
-        const url = YAHOO_PROXY+"?symbol="+encodeURIComponent(sym)+"&range=2y&interval=1d&events=splits";
-        const res = await fetch(url, {signal: AbortSignal.timeout(8000)});
-        if(!res.ok) continue;
-        const d = await res.json();
-        const events = d?.chart?.result?.[0]?.events?.splits;
-        if(!events) continue;
-        return Object.entries(events).map(([ts, ev]) => ({
-          date: new Date(parseInt(ts)*1000).toISOString().slice(0,10),
-          numerator: ev.numerator || ev.newShares || 1,
-          denominator: ev.denominator || ev.oldShares || 1,
-          ratio: (ev.numerator||ev.newShares||1) / (ev.denominator||ev.oldShares||1),
-        }));
-      } catch {}
-    }
-    return [];
-  } catch { return []; }
-}
-
-
 // Componente de countdown — aislado para no re-renderizar el App entero
 function CountdownDisplay({lastRefresh, priceStatus, liveCount, portLen}){
   const [display, setDisplay] = useState(300);
@@ -714,6 +688,32 @@ async function fetchYahooPrices(activeTickers=[]) {
   }));
   return result;
 }
+
+// ── Yahoo Finance Split Events ──────────────────────────────────────────────
+async function fetchYahooSplitEvents(ticker, period1, period2) {
+  try {
+    const p1 = period1 || Math.floor(Date.now()/1000) - 2*365*86400;
+    const p2 = period2 || Math.floor(Date.now()/1000);
+    for(const sym of [ticker+'.BA', ticker]) {
+      try {
+        const url = YAHOO_PROXY+"?symbol="+encodeURIComponent(sym)+"&range=2y&interval=1d&events=splits";
+        const res = await fetch(url, {signal: AbortSignal.timeout(8000)});
+        if(!res.ok) continue;
+        const d = await res.json();
+        const events = d?.chart?.result?.[0]?.events?.splits;
+        if(!events) continue;
+        return Object.entries(events).map(([ts, ev]) => ({
+          date: new Date(parseInt(ts)*1000).toISOString().slice(0,10),
+          numerator: ev.numerator || ev.newShares || 1,
+          denominator: ev.denominator || ev.oldShares || 1,
+          ratio: (ev.numerator||ev.newShares||1) / (ev.denominator||ev.oldShares||1),
+        }));
+      } catch {}
+    }
+    return [];
+  } catch { return []; }
+}
+
 
 // ── FCIs: argentinadatos.com vía CAFCI ───────────────────────────────────────
 // Endpoint: /v1/finanzas/fci/mercadoDinero/ultimo → array con {fondo,clase,vCuotaparte,fecha}
@@ -5926,7 +5926,6 @@ function App(){
       }
     })();
   }, [pendingSplits]);
-
 
   // Guardar en localStorage + GitHub cuando cambian los datos
   const saveTimerRef = React.useRef(null);

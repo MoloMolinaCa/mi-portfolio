@@ -1,6 +1,32 @@
 /* eslint-disable */
 import React, { useState, useEffect, useMemo, memo, useRef, useCallback } from "react";
 
+// ── Yahoo Finance Split Events ──────────────────────────────────────────────
+async function fetchYahooSplitEvents(ticker, period1, period2) {
+  try {
+    const p1 = period1 || Math.floor(Date.now()/1000) - 2*365*86400;
+    const p2 = period2 || Math.floor(Date.now()/1000);
+    for(const sym of [ticker+'.BA', ticker]) {
+      try {
+        const url = YAHOO_PROXY+"?symbol="+encodeURIComponent(sym)+"&range=2y&interval=1d&events=splits";
+        const res = await fetch(url, {signal: AbortSignal.timeout(8000)});
+        if(!res.ok) continue;
+        const d = await res.json();
+        const events = d?.chart?.result?.[0]?.events?.splits;
+        if(!events) continue;
+        return Object.entries(events).map(([ts, ev]) => ({
+          date: new Date(parseInt(ts)*1000).toISOString().slice(0,10),
+          numerator: ev.numerator || ev.newShares || 1,
+          denominator: ev.denominator || ev.oldShares || 1,
+          ratio: (ev.numerator||ev.newShares||1) / (ev.denominator||ev.oldShares||1),
+        }));
+      } catch {}
+    }
+    return [];
+  } catch { return []; }
+}
+
+
 // Componente de countdown — aislado para no re-renderizar el App entero
 function CountdownDisplay({lastRefresh, priceStatus, liveCount, portLen}){
   const [display, setDisplay] = useState(300);
@@ -91,6 +117,64 @@ function isHabil(dateStr) {
   const dow = new Date(dateStr+'T12:00:00').getDay();
   return dow!==0 && dow!==6;
 }
+
+// ── CEDEAR Split Detection ──────────────────────────────────────────────────
+const CEDEAR_RATIOS = { SPY:60, META:30, MSFT:30, GLD:30, NU:15, VIST:5, MELI:30, AAPL:40, AMZN:36, GOOGL:14, TSLA:15, NVDA:20, BABA:9, KO:5, DIS:5, NFLX:8, BA:5, JPM:3, WMT:10, PG:5 };
+
+function detectSplitsFromBars(bars, ticker) {
+  if(!bars||bars.length<3) return [];
+  const splits = [];
+  for(let i=1; i<bars.length; i++){
+    const prev = bars[i-1].close;
+    const curr = bars[i].close;
+    if(!prev||!curr||prev<=0||curr<=0) continue;
+    const ratio = prev/curr;
+    if(ratio > 1.3) {
+      const rounded = Math.round(ratio);
+      if(rounded >= 2 && rounded <= 20 && Math.abs(ratio - rounded)/rounded < 0.15) {
+        splits.push({ date: bars[i].date, ratio: rounded, confidence: 1 - Math.abs(ratio-rounded)/rounded, ticker });
+      }
+    }
+    const revRatio = curr/prev;
+    if(revRatio > 1.3) {
+      const rounded = Math.round(revRatio);
+      if(rounded >= 2 && rounded <= 20 && Math.abs(revRatio - rounded)/rounded < 0.15) {
+        splits.push({ date: bars[i].date, ratio: 1/rounded, confidence: 1 - Math.abs(revRatio-rounded)/rounded, ticker, reverse: true });
+      }
+    }
+  }
+  return splits;
+}
+
+function adjustBarsForSplits(bars, splits) {
+  if(!bars||!splits||!splits.length) return bars;
+  const adjusted = bars.map(b=>({...b}));
+  for(const split of splits) {
+    const factor = split.ratio;
+    if(!factor||factor<=0) continue;
+    for(const bar of adjusted) {
+      if(bar.date < split.date) {
+        if(bar.open) bar.open = bar.open / factor;
+        if(bar.high) bar.high = bar.high / factor;
+        if(bar.low) bar.low = bar.low / factor;
+        if(bar.close) bar.close = bar.close / factor;
+        if(bar.volume) bar.volume = bar.volume * factor;
+      }
+    }
+  }
+  return adjusted;
+}
+
+function verifySplitViaCedearRatios(ticker, preSplitPrice, postSplitPrice, cedearRatio) {
+  if(!preSplitPrice||!postSplitPrice||preSplitPrice<=0||postSplitPrice<=0) return { verified: false, detectedRatio: null };
+  const priceRatio = preSplitPrice / postSplitPrice;
+  const rounded = Math.round(priceRatio);
+  if(rounded < 2 || rounded > 20) return { verified: false, detectedRatio: rounded };
+  const tolerance = 0.15;
+  const verified = Math.abs(priceRatio - rounded) / rounded < tolerance;
+  return { verified, detectedRatio: rounded };
+}
+
 
 // ── Mapeo de tickers ─────────────────────────────────────────────────────────
 // data912: bonos, ONs, CEDEARs, acciones AR — precios en vivo (2h cache)
@@ -952,27 +1036,72 @@ function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRa
   return twr;
 }
 
-// ── XIRR (Money-Weighted Return) ─────────────────────────────────────────────
+// ── XIRR (Money-Weighted Return) — Newton-Raphson + bisección ────────────────
 function calcXIRR(flows, guess=0.1) {
-  if(!Array.isArray(flows)||flows.length<2) return null;
-  const clean = flows.map(f=>({date:String(f?.date||""), amount:+f?.amount||0})).filter(f=>f.date&&isFinite(f.amount)&&f.amount!==0).sort((a,b)=>a.date.localeCompare(b.date));
-  if(clean.length<2) return null;
-  if(!clean.some(f=>f.amount>0)||!clean.some(f=>f.amount<0)) return null;
-  const d0=new Date(clean[0].date+"T12:00:00").getTime();
-  const yf=clean.map(f=>({a:f.amount,t:(new Date(f.date+"T12:00:00").getTime()-d0)/31557600000}));
-  const npvF=(r)=>{if(!isFinite(r)||r<=-1)return NaN;let v=0;for(const f of yf){const d=Math.pow(1+r,f.t);if(!isFinite(d)||d===0)return NaN;v+=f.a/d;}return v;};
-  const dnpvF=(r)=>{if(!isFinite(r)||r<=-1)return NaN;let v=0;for(const f of yf){const d=Math.pow(1+r,f.t);if(!isFinite(d)||d===0)return NaN;v-=(f.t*f.a)/(d*(1+r));}return v;};
-  const newton=(seed)=>{let r=seed;for(let i=0;i<100;i++){const f=npvF(r);if(!isFinite(f))return null;if(Math.abs(f)<1e-7)return r;const df=dnpvF(r);if(!isFinite(df)||Math.abs(df)<1e-12)return null;const n=r-(f/df);if(!isFinite(n)||n<=-1||n>1000)return null;if(Math.abs(n-r)<1e-12)return n;r=n;}return null;};
-  for(const seed of [guess,0.1,0,-0.1,0.25,-0.25,0.5,-0.5,1]){const o=newton(seed);if(o!=null&&isFinite(o)&&o>-1){const e=npvF(o);if(isFinite(e)&&Math.abs(e)<1e-5)return o;}}
-  const grid=[-0.9999,-0.99,-0.95,-0.9,-0.75,-0.5,-0.25,-0.1,0,0.05,0.1,0.25,0.5,1,2,3,5,10,25,50,100];let lo=null,hi=null,pR=null,pV=null;
-  for(const r of grid){const v=npvF(r);if(!isFinite(v))continue;if(pR!=null&&pV!=null&&pV*v<0){lo=pR;hi=r;break;}pR=r;pV=v;}
-  if(lo==null||hi==null)return null;let flo=npvF(lo),fhi=npvF(hi);
-  for(let i=0;i<200;i++){const mid=(lo+hi)/2;const fm=npvF(mid);if(!isFinite(fm))return null;if(Math.abs(fm)<1e-7||Math.abs(hi-lo)<1e-12)return mid;if(flo*fm<=0){hi=mid;fhi=fm;}else{lo=mid;flo=fm;}}
-  return (lo+hi)/2;
+  if(!flows||flows.length<2) return null;
+  const d0 = new Date(flows[0].date).getTime();
+  const yf = flows.map(f=>({a:f.amount, t:(new Date(f.date).getTime()-d0)/31557600000}));
+  const npvAt = (r) => { let s=0; for(const f of yf){ const d=Math.pow(1+r,f.t); if(!d||!isFinite(d)) return NaN; s+=f.a/d; } return s; };
+  const dnpvAt = (r) => { let s=0; for(const f of yf){ const d=Math.pow(1+r,f.t); if(!d||!isFinite(d)) return NaN; s-=f.t*f.a/(d*(1+r)); } return s; };
+  // Newton-Raphson
+  let r = guess;
+  for(let i=0;i<100;i++){
+    const npv=npvAt(r), dnpv=dnpvAt(r);
+    if(Math.abs(npv)<1e-7) return r;
+    if(!dnpv||!isFinite(dnpv)||isNaN(npv)) break;
+    const rNew = r - npv/dnpv;
+    if(Math.abs(rNew-r)<1e-10) return r;
+    r = rNew;
+    if(r<-0.99) r=-0.99;
+    if(r>10) r=10;
+  }
+  // Bisección fallback [-0.99, 10]
+  let lo=-0.99, hi=10;
+  let nLo=npvAt(lo), nHi=npvAt(hi);
+  if(isNaN(nLo)||isNaN(nHi)) return null;
+  if(nLo*nHi>0) return null;
+  for(let i=0;i<200;i++){
+    const mid=(lo+hi)/2;
+    const nMid=npvAt(mid);
+    if(isNaN(nMid)) return null;
+    if(Math.abs(nMid)<1e-7) return mid;
+    if(nMid*nLo<0){ hi=mid; nHi=nMid; }
+    else { lo=mid; nLo=nMid; }
+    if(hi-lo<1e-10) return (lo+hi)/2;
+  }
+  return null;
 }
-function deannualizeXIRR(rA,sD,eD){if(rA==null||!isFinite(rA)||rA<=-1)return null;const ms=new Date(sD+"T12:00:00").getTime(),me=new Date(eD+"T12:00:00").getTime();const d=Math.max(1,Math.round((me-ms)/86400000));const v=Math.pow(1+rA,d/365.25)-1;return isFinite(v)?v:null;}
-function calcModifiedDietzReturn(fl,sD,eD){if(!Array.isArray(fl)||fl.length<2)return null;const c=fl.map(f=>({date:String(f?.date||""),amount:+f?.amount||0})).filter(f=>f.date&&isFinite(f.amount)&&f.amount!==0).sort((a,b)=>a.date.localeCompare(b.date));if(c.length<2)return null;const sv=-(+c[0].amount||0),ev=+c[c.length-1].amount||0;const t0=new Date(sD+"T12:00:00").getTime(),t1=new Date(eD+"T12:00:00").getTime(),tot=t1-t0;if(!(tot>0))return null;let sC=0,wC=0;for(const f of c.slice(1,-1)){const x=-(+f.amount||0);const w=Math.max(0,Math.min(1,(t1-new Date(f.date+"T12:00:00").getTime())/tot));sC+=x;wC+=w*x;}const dn=sv+wC;if(!isFinite(dn)||Math.abs(dn)<1e-9)return null;const r=(ev-sv-sC)/dn;return isFinite(r)?r:null;}
-function calcSeriesPeriodReturn(s){if(!Array.isArray(s)||s.length<2)return null;const f=+s[0]?.val||0,l=+s[s.length-1]?.val||0;if(!(f>0))return null;const r=(l/f)-1;return isFinite(r)?r:null;}
+
+// De-anualizar XIRR: convierte tasa anual a retorno del período
+function deannualizeXIRR(xirrAnnual, days) {
+  if(xirrAnnual==null||!days||days<=0) return null;
+  return (Math.pow(1 + xirrAnnual, days/365) - 1);
+}
+
+// Modified Dietz Return como fallback
+function calcModifiedDietzReturn(startVal, endVal, cashFlows, totalDays) {
+  if(!startVal||startVal<=0||!totalDays||totalDays<=0) return null;
+  const sumCF = cashFlows.reduce((a,cf)=>a+cf.amount, 0);
+  const weightedCF = cashFlows.reduce((a,cf)=>a+cf.amount*((totalDays-cf.daysSinceStart)/totalDays), 0);
+  const denom = startVal + weightedCF;
+  if(Math.abs(denom)<0.01) return null;
+  return (endVal - startVal - sumCF) / denom;
+}
+
+// Retorno simple de una serie de barras entre dos fechas
+function calcSeriesPeriodReturn(bars, startDate, endDate) {
+  if(!bars||bars.length<2||!startDate||!endDate) return null;
+  const findClose = (d) => {
+    let lo=0,hi=bars.length-1,res=-1;
+    while(lo<=hi){ const mid=(lo+hi)>>1; if(bars[mid].date<=d){res=mid;lo=mid+1;}else hi=mid-1; }
+    return res>=0 ? bars[res].close : null;
+  };
+  const s = findClose(startDate);
+  const e = findClose(endDate);
+  if(!s||!e||s<=0) return null;
+  return (e/s - 1);
+}
+
 
 function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=false,livePricesAll={},onExpand=null}){
   const PERIODS=[{key:"mtd",label:"MTD",days:null,mtd:true},{key:"30d",label:"30d",days:30},{key:"90d",label:"90d",days:90},{key:"ytd",label:"YTD",days:null},{key:"1y",label:"1 año",days:365},{key:"3y",label:"3 años",days:1095}];
@@ -1238,28 +1367,39 @@ function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=
     if(!cd||!cd.startDate||!cd.endDate||!trades) return {portXIRR:null,spyXIRR:null,alpha:null};
     const s=cd.startDate,e=cd.endDate;
     try{
-      const _cB=historicos?.CCL||[];const _tX=todayAR();
-      const _gC=(ds)=>{if(!_cB.length)return liveFX?.CCL||fxRate||1;let lo=0,hi=_cB.length-1,r=-1;while(lo<=hi){const m=(lo+hi)>>1;if(_cB[m].date<=ds){r=m;lo=m+1;}else hi=m-1;}return r>=0?_cB[r].close:(liveFX?.CCL||fxRate||1);};
-      const _iB=(t)=>{const T=String(t||'').toUpperCase();if(SEED_BOND_META&&SEED_BOND_META[T])return true;if(/\d/.test(T)&&(T.endsWith('D')||/^(TZX|GD|AL|AE|AO|TLCU)/.test(T)))return true;return false;};
-      const cBT={};for(const t0 of(trades||[])){if(!t0?.ticker||!t0?.currency)continue;cBT[String(t0.ticker).toUpperCase()]=String(t0.currency).toUpperCase();}
-      const _fH=(tk,ds)=>{const b=(historicos?.[tk]||[]);if(!b.length)return 0;let lo=0,hi=b.length-1,r=-1;while(lo<=hi){const m=(lo+hi)>>1;if(b[m].date<=ds){r=m;lo=m+1;}else hi=m-1;}if(r>=0)return b[r].close||0;for(const x of b){if(x.date>=ds)return x.close||0;}return 0;};
-      const pAO=(ds,inc)=>{const p={};for(const t of(trades||[])){if(!t?.ticker)continue;if(inc?t.date>ds:t.date>=ds)continue;if(t.tipo==="compra")p[t.ticker]=(p[t.ticker]||0)+(+t.qty||0);if(t.tipo==="venta")p[t.ticker]=(p[t.ticker]||0)-(+t.qty||0);}return p;};
-      const vPU=(pm,ds)=>{const ccl=_gC(ds);let v=0;for(const[tk,qty]of Object.entries(pm||{})){if(!qty||qty<=0)continue;const T=String(tk).toUpperCase();let px=_fH(T,ds);if((!px||px<=0)&&ds===_tX){const lp=livePricesAll?.[T]?.price;if(lp&&lp>0)px=lp;}if(!px||px<=0){const lb=(trades||[]).filter(t=>String(t.ticker||'').toUpperCase()===T&&t.tipo==="compra"&&t.date<=ds).sort((a,b)=>(b.ts||0)-(a.ts||0))[0];px=lb?(+lb.price||0):0;}if(!px||px<=0)continue;const ib=_iB(T);const qf=ib?qty/100:qty;const cur=cBT[T]||(en.find(h=>h.ticker===T)?.buyCurrency||'ARS');v+=String(cur).toUpperCase()==="USD"?px*qf:(px*qf)/ccl;}return v;};
-      const fbP=calcSeriesPeriodReturn(cd?.port100);const fbS=calcSeriesPeriodReturn(cd?.spy100);
-      const ftd=(trades||[]).map(t=>t?.date).filter(Boolean).sort()[0];const iS=(s===ftd);
-      const pS=pAO(s,iS);const pE=pAO(e,true);const svU=vPU(pS,s);let evU=vPU(pE,e);
-      const evN=en.reduce((a,h)=>a+h.valUSD,0);if((e===_tX&&evN>0)||!evU||evU<=0)evU=evN||evU;
-      const pT=(trades||[]).filter(t=>((t.date>s)||(t.date===s&&!iS))&&t.date<e);
-      const flows=[];if(svU>0)flows.push({date:s,amount:-svU});
-      for(const t of pT){const T=String(t.ticker||'').toUpperCase();const ib=_iB(T);const ra=(+t.qty||0)*(+t.price||0)*(ib?0.01:1);const co=+t.comision||0;const am=t.tipo==="compra"?ra+co:ra-co;const tc=String(t.currency||cBT[T]||'ARS').toUpperCase();const fx=tc==="USD"?1:_gC(t.date);const u=fx>0?am/fx:0;if(isFinite(u)&&u!==0)flows.push({date:t.date,amount:t.tipo==="compra"?-u:u});}
-      if(evU>0)flows.push({date:e,amount:evU});flows.sort((a,b)=>a.date.localeCompare(b.date));
-      const cPP=(bf,fb)=>{const cl=(bf||[]).map(f=>({date:String(f?.date||''),amount:+f?.amount||0})).filter(f=>f.date&&isFinite(f.amount)&&f.amount!==0).sort((a,b)=>a.date.localeCompare(b.date));if(cl.length<2)return fb!=null&&isFinite(fb)?fb*100:null;let pr=null;const ra=calcXIRR(cl);if(ra!=null)pr=deannualizeXIRR(ra,s,e);if(pr==null)pr=calcModifiedDietzReturn(cl,s,e);if((pr==null||!isFinite(pr))&&fb!=null&&isFinite(fb))pr=fb;return pr!=null&&isFinite(pr)?pr*100:null;};
-      const portX=cPP(flows,fbP);let spyX=cPP([],fbS);
-      if(cd.spy100&&cd.spy100.length>=2){const s1=cd.spy100;const sA=(d)=>{let b=s1[0];for(const p of s1){if(p.date<=d)b=p;else break;}return b?.val||100;};const pef=flows.filter((_,i)=>i<Math.max(0,flows.length-1));const se=sA(e);let sfv=0;if(se>0){for(const fl of pef){const sa=sA(fl.date);sfv+=(-fl.amount)*(sa>0?se/sa:1);}const sf=[...pef];if(sfv>0)sf.push({date:e,amount:sfv});spyX=cPP(sf,fbS);}}
-      const safe=(v)=>v!=null&&isFinite(v)?parseFloat(v.toFixed(4)):null;const ps=safe(portX),ss=safe(spyX);
-      return {portXIRR:ps,spyXIRR:ss,alpha:(ps!=null&&ss!=null)?parseFloat((ps-ss).toFixed(4)):null};
+      const _cclBarsXIRR=historicos?.CCL||[];
+      const _getCCLForDate=(dateStr)=>{if(!_cclBarsXIRR.length)return liveFX?.CCL||fxRate||1;let lo=0,hi=_cclBarsXIRR.length-1,res=-1;while(lo<=hi){const mid=(lo+hi)>>1;if(_cclBarsXIRR[mid].date<=dateStr){res=mid;lo=mid+1;}else hi=mid-1;}return res>=0?_cclBarsXIRR[res].close:(liveFX?.CCL||fxRate||1);};
+      const isBondTicker=(tkr)=>{const T=String(tkr||'').toUpperCase();if(SEED_BOND_META&&SEED_BOND_META[T])return true;if(/\d/.test(T)&&(T.endsWith('D')||T.startsWith('TZX')||T.startsWith('GD')||T.startsWith('AL')||T.startsWith('AE')||T.startsWith('AO')||T.startsWith('TLCU')))return true;return false;};
+      const currencyByTicker={};for(const t0 of(trades||[])){if(!t0?.ticker||!t0?.currency)continue;currencyByTicker[String(t0.ticker).toUpperCase()]=String(t0.currency).toUpperCase();}
+      const _findHistPrice=(ticker,dateStr)=>{const bars=(historicos?.[ticker]||[]);if(!bars.length)return 0;let lo=0,hi=bars.length-1,res=-1;while(lo<=hi){const mid=(lo+hi)>>1;if(bars[mid].date<=dateStr){res=mid;lo=mid+1;}else hi=mid-1;}if(res>=0)return bars[res].close||0;for(const b of bars){if(b.date>=dateStr)return b.close||0;}return 0;};
+      const posAsOf=(dateStr,includeSameDay)=>{const pos={};for(const t of(trades||[])){if(!t?.ticker)continue;if(includeSameDay){if(t.date>dateStr)continue;}else{if(t.date>=dateStr)continue;}if(t.tipo==="compra")pos[t.ticker]=(pos[t.ticker]||0)+(+t.qty||0);if(t.tipo==="venta")pos[t.ticker]=(pos[t.ticker]||0)-(+t.qty||0);}return pos;};
+      const valuePosUSD=(posMap,dateStr)=>{const ccl=_getCCLForDate(dateStr);let v=0;for(const[tkr,qty]of Object.entries(posMap||{})){if(!qty||qty<=0)continue;const T=String(tkr).toUpperCase();let price=_findHistPrice(T,dateStr);if(!price||price<=0){const lastBuy=(trades||[]).filter(t=>String(t.ticker||'').toUpperCase()===T&&t.tipo==="compra"&&t.date<=dateStr).sort((a,b)=>(b.ts||0)-(a.ts||0))[0];price=lastBuy?(+lastBuy.price||0):0;}if(!price||price<=0)continue;const isBond=isBondTicker(T);const qtyF=isBond?qty/100:qty;const cur=currencyByTicker[T]||(en.find(h=>h.ticker===T)?.buyCurrency||'ARS');const isUSD=String(cur).toUpperCase()==="USD";v+=isUSD?price*qtyF:(price*qtyF)/ccl;}return v;};
+      const firstTradeDate=(trades||[]).map(t=>t?.date).filter(Boolean).sort()[0];
+      const includeStartDayAsPosition=(s===firstTradeDate);
+      const posStart=posAsOf(s,includeStartDayAsPosition);
+      const posEnd=posAsOf(e,true);
+      let startValUSD=valuePosUSD(posStart,s);
+      let endValUSD=valuePosUSD(posEnd,e);
+      const endValNow=en.reduce((a,h)=>a+h.valUSD,0);
+      if(!endValUSD||endValUSD<=0)endValUSD=endValNow;
+      const periodTrades=(trades||[]).filter(t=>((t.date>s)||(t.date===s&&!includeStartDayAsPosition))&&t.date<e);
+      const flows=[];
+      flows.push({date:s,amount:-startValUSD});
+      for(const t of periodTrades){const T=String(t.ticker||'').toUpperCase();const isBond=isBondTicker(T);const rawAmt=(+t.qty||0)*(+t.price||0)*(isBond?0.01:1);const com=+t.comision||0;const amt=t.tipo==="compra"?rawAmt+com:rawAmt-com;const isUSD=(t.currency||'ARS')==='USD';const fxT=isUSD?1:_getCCLForDate(t.date);const usd=amt/fxT;flows.push({date:t.date,amount:t.tipo==="compra"?-usd:usd});}
+      flows.push({date:e,amount:endValUSD});
+      flows.sort((a,b)=>a.date.localeCompare(b.date));
+      // Dias del periodo para des-anualizar
+      const days=Math.max(1,Math.round((new Date(e)-new Date(s))/(1000*60*60*24)));
+      // Portfolio XIRR: calcular anual y des-anualizar al periodo
+      let portXIRR=null;
+      if(flows.length>=2&&startValUSD>0&&endValUSD>0){const rAnual=calcXIRR(flows);if(rAnual!=null)portXIRR=deannualizeXIRR(rAnual,days)*100;}
+      // SPY XIRR: mismos cashflows, terminal crecido por SPY, des-anualizado
+      let spyXIRR=null;
+      if(cd.spy100&&cd.spy100.length>=2){const spy100=cd.spy100;const spyEnd=spy100[spy100.length-1].val;const spyAt=(dateStr)=>{let best=spy100[0];for(const p of spy100){if(p.date<=dateStr)best=p;else break;}return best.val||100;};if(spyEnd>0){const spyFlows=[];spyFlows.push({date:s,amount:-startValUSD});for(const fl of flows.slice(1,-1))spyFlows.push({...fl});let spyFinalVal=0;for(const fl of spyFlows){const spyAtFlow=spyAt(fl.date);const growth=spyAtFlow>0?spyEnd/spyAtFlow:1;spyFinalVal+=(-fl.amount)*growth;}spyFlows.push({date:e,amount:spyFinalVal});spyFlows.sort((a,b)=>a.date.localeCompare(b.date));if(spyFlows.length>=2&&startValUSD>0&&spyFinalVal>0){const rAnualSpy=calcXIRR(spyFlows);if(rAnualSpy!=null)spyXIRR=deannualizeXIRR(rAnualSpy,days)*100;}}}
+      const alpha=(portXIRR!=null&&spyXIRR!=null)?portXIRR-spyXIRR:null;
+      return {portXIRR,spyXIRR,alpha};
     }catch(err){console.warn('XIRR error:',err);return {portXIRR:null,spyXIRR:null,alpha:null};}
-  },[cd,trades,en,fxRate,liveFX,currency,_bT,historicos,livePricesAll]);
+  },[cd,trades,en,fxRate,liveFX,currency,_bT,historicos]);
 
   const series=cd?[
     {key:"port",data:cd.port100,color:"var(--green)",bold:true},
@@ -5551,13 +5691,43 @@ function App(){
   const [bondFlows,setBondFlows] = useState(()=>{ try{ const s=localStorage.getItem("gal_bond_flows_v1"); if(s) return {...SEED_BOND_FLOWS,...JSON.parse(s)}; }catch{} return SEED_BOND_FLOWS; });
   const [storageReady,setStorageReady] = useState(false);
   const [syncChecked,setSyncChecked] = useState(false);
-  const [historicos,setHistoricos] = useState(null);
+  const [rawHistoricos,setRawHistoricos] = useState(null);
+
+  // ── Split detection + adjusted historicos ────────────────────────────────
+  const [pendingSplits, setPendingSplits] = useState([]);
+  const cedearRatiosRef = React.useRef({...CEDEAR_RATIOS});
+
+  const {historicos, detectedSplits} = useMemo(() => {
+    if(!rawHistoricos) return { historicos: null, detectedSplits: [] };
+    const adjusted = {...rawHistoricos};
+    const allSplits = [];
+    const cedearTickers = Object.keys(rawHistoricos).filter(t => CEDEAR_RATIOS[t] || (rawHistoricos[t]?.length > 5 && !t.startsWith('FIMA') && t !== 'CCL' && t !== 'MEP' && t !== 'CER' && t !== 'sp500'));
+    for(const ticker of cedearTickers) {
+      const bars = rawHistoricos[ticker];
+      if(!bars || bars.length < 3) continue;
+      const detected = detectSplitsFromBars(bars, ticker);
+      if(detected.length) allSplits.push(...detected);
+    }
+    let appliedSplits = [];
+    try { appliedSplits = JSON.parse(localStorage.getItem('gal_applied_splits_v1') || '[]'); } catch {}
+    const splitsToApply = [...appliedSplits];
+    for(const s of allSplits) {
+      const already = splitsToApply.some(a => a.ticker === s.ticker && a.date === s.date);
+      if(!already && s.confidence > 0.7) splitsToApply.push(s);
+    }
+    for(const split of splitsToApply) {
+      if(!adjusted[split.ticker]) continue;
+      adjusted[split.ticker] = adjustBarsForSplits(adjusted[split.ticker], [split]);
+    }
+    return { historicos: adjusted, detectedSplits: allSplits };
+  }, [rawHistoricos]);
+
 
   // Cargar históricos desde JSON generado por GitHub Actions
   useEffect(()=>{
     fetch("/historicos.json")
       .then(r=>r.ok?r.json():null)
-      .then(d=>{ if(d && Object.keys(d).length>1) setHistoricos(d); })
+      .then(d=>{ if(d && Object.keys(d).length>1) setRawHistoricos(d); })
       .catch(()=>{});
   },[]);
   const isMobile = useIsMobile();
@@ -5681,6 +5851,82 @@ function App(){
       })
       .catch(()=>{ setSyncChecked(true); setSyncStatus("idle"); });
   },[]);
+
+
+  // ── CEDEAR Split Detection — useEffects ──────────────────────────────────
+  // 1. Init CEDEAR ratios al montar
+  useEffect(() => {
+    const portCedears = port.filter(h => CEDEAR_RATIOS[h.ticker]);
+    if(portCedears.length) {
+      const ratios = {};
+      for(const h of portCedears) ratios[h.ticker] = CEDEAR_RATIOS[h.ticker];
+      cedearRatiosRef.current = {...CEDEAR_RATIOS, ...ratios};
+    }
+  }, [port]);
+
+  // 2. Detección live vs last bar — detectar splits en tiempo real
+  useEffect(() => {
+    if(!livePrices || !historicos || Object.keys(livePrices).length === 0) return;
+    const newPending = [];
+    for(const [ticker, liveData] of Object.entries(livePrices)) {
+      if(!CEDEAR_RATIOS[ticker]) continue;
+      const bars = historicos?.[ticker];
+      if(!bars || bars.length < 2) continue;
+      const lastBar = bars[bars.length - 1];
+      if(!lastBar?.close || lastBar.close <= 0 || !liveData?.price || liveData.price <= 0) continue;
+      const ratio = lastBar.close / liveData.price;
+      const rounded = Math.round(ratio);
+      if(rounded >= 2 && rounded <= 20 && Math.abs(ratio - rounded)/rounded < 0.12) {
+        newPending.push({ ticker, date: todayAR(), ratio: rounded, lastClose: lastBar.close, livePrice: liveData.price, confidence: 1 - Math.abs(ratio-rounded)/rounded });
+      }
+    }
+    if(newPending.length > 0) {
+      setPendingSplits(prev => {
+        const merged = [...prev];
+        for(const ns of newPending) {
+          if(!merged.some(p => p.ticker === ns.ticker && p.date === ns.date)) merged.push(ns);
+        }
+        return merged;
+      });
+    }
+  }, [livePrices, historicos]);
+
+  // 3. Aplicación con verificación Yahoo → heurística
+  useEffect(() => {
+    if(!pendingSplits.length) return;
+    (async () => {
+      const verified = [];
+      for(const split of pendingSplits) {
+        const yahooSplits = await fetchYahooSplitEvents(split.ticker);
+        const yahooMatch = yahooSplits.find(ys => ys.date === split.date || (Math.abs(new Date(ys.date) - new Date(split.date)) < 3*86400000));
+        if(yahooMatch) {
+          verified.push({...split, ratio: yahooMatch.ratio > 1 ? Math.round(yahooMatch.ratio) : split.ratio, source: 'yahoo'});
+          continue;
+        }
+        const cedearRatio = CEDEAR_RATIOS[split.ticker];
+        if(cedearRatio) {
+          const check = verifySplitViaCedearRatios(split.ticker, split.lastClose, split.livePrice, cedearRatio);
+          if(check.verified) { verified.push({...split, source: 'heuristic'}); continue; }
+        }
+        if(split.confidence > 0.85) verified.push({...split, source: 'confidence'});
+      }
+      if(verified.length) {
+        let applied = [];
+        try { applied = JSON.parse(localStorage.getItem('gal_applied_splits_v1') || '[]'); } catch {}
+        const newApplied = [...applied];
+        for(const v of verified) {
+          if(!newApplied.some(a => a.ticker === v.ticker && a.date === v.date)) {
+            newApplied.push({ ticker: v.ticker, date: v.date, ratio: v.ratio, source: v.source, appliedAt: new Date().toISOString() });
+          }
+        }
+        localStorage.setItem('gal_applied_splits_v1', JSON.stringify(newApplied));
+        setRawHistoricos(prev => prev ? {...prev} : prev);
+        setPendingSplits([]);
+        console.log('[Split] Applied splits:', verified.map(v => `${v.ticker} ${v.ratio}:1 (${v.source})`));
+      }
+    })();
+  }, [pendingSplits]);
+
 
   // Guardar en localStorage + GitHub cuando cambian los datos
   const saveTimerRef = React.useRef(null);
@@ -6171,7 +6417,7 @@ function App(){
           if(!found) console.warn('No historical data found for '+ticker);
         }
         if(Object.keys(updated).length>Object.keys(historicos||{}).length){
-          setHistoricos(updated);
+          setRawHistoricos(updated);
         }
       })();
     }

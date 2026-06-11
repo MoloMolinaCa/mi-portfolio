@@ -450,25 +450,24 @@ function App(){
     setPriceStatus("loading");
     try {
       const activeTickers = activeTickers_ || [...new Set(portRef.current.map(h=>h.ticker))];
-      const {fx:newFX,prices:newPrices,t10y:newT10Y} = await fetchAllLivePrices(activeTickers);
+      const spFetch = fetch(YAHOO_PROXY+"?symbol=%5EGSPC&range=1d&interval=5m",{signal:AbortSignal.timeout(6000)})
+        .then(r=>r.ok?r.json():null).catch(()=>null);
+      const [{fx:newFX,prices:newPrices,t10y:newT10Y}, spData] = await Promise.all([
+        fetchAllLivePrices(activeTickers),
+        spFetch,
+      ]);
       setLiveFX(newFX);
       setLivePrices(newPrices);
       setLiveT10Y(newT10Y);
-      // S&P500 en vivo via Yahoo proxy — usar meta.regularMarketPrice que siempre es el precio actual
-      try{
-        const r=await fetch(YAHOO_PROXY+"?symbol=%5EGSPC&range=1d&interval=5m",{signal:AbortSignal.timeout(6000)});
-        if(r.ok){
-          const d=await r.json();
-          const meta=d?.chart?.result?.[0]?.meta;
-          // Preferir regularMarketPrice del meta — es el precio en tiempo real
-          const price=meta?.regularMarketPrice||meta?.chartPreviousClose||null;
-          if(price&&price>1000){
-            setLiveSP500(price);
-            const prev=meta?.chartPreviousClose||meta?.previousClose||null;
-            if(prev&&prev>1000)setLiveSP500DayPct(parseFloat(((price-prev)/prev*100).toFixed(2)));
-          }
+      if(spData){
+        const meta=spData?.chart?.result?.[0]?.meta;
+        const price=meta?.regularMarketPrice||meta?.chartPreviousClose||null;
+        if(price&&price>1000){
+          setLiveSP500(price);
+          const prev=meta?.chartPreviousClose||meta?.previousClose||null;
+          if(prev&&prev>1000)setLiveSP500DayPct(parseFloat(((price-prev)/prev*100).toFixed(2)));
         }
-      }catch{}
+      }
       setLastRefresh(new Date());
       setPriceStatus(Object.keys(newPrices).length>0?"live":"partial");
     } catch { setPriceStatus("error"); }

@@ -23,10 +23,19 @@ export default async function handler(req, res) {
       const r = await fetch(API, { headers });
       if (!r.ok) return res.status(r.status).json({ error: 'Error leyendo GitHub' });
       const data = await r.json();
-      // Limpiar el contenido base64 antes de decodificar
+
+      let decoded;
       const rawContent = (data.content || '').replace(/\s/g, '');
-      if (!rawContent) return res.status(200).json({ sha: data.sha, port: [], trades: [] });
-      const decoded = Buffer.from(rawContent, 'base64').toString('utf8');
+      if (!rawContent) {
+        // Archivo > 1MB: GitHub API no devuelve content inline, usar download_url
+        if (!data.download_url) return res.status(200).json({ sha: data.sha, port: [], trades: [] });
+        const r2 = await fetch(data.download_url);
+        if (!r2.ok) return res.status(200).json({ sha: data.sha, port: [], trades: [] });
+        decoded = await r2.text();
+      } else {
+        decoded = Buffer.from(rawContent, 'base64').toString('utf-8');
+      }
+
       const content = JSON.parse(decoded);
       return res.status(200).json({ ...content, sha: data.sha });
     } catch(e) {
@@ -37,7 +46,7 @@ export default async function handler(req, res) {
   // PUT — guardar datos
   if (req.method === 'PUT') {
     try {
-      const { port, trades, bondFlows, bondMeta, deviceId } = req.body;
+      const { port, trades, bondFlowsDelta, bondMeta, deviceId } = req.body;
       let { sha } = req.body;
 
       // Siempre obtener el SHA actual para evitar conflictos
@@ -45,11 +54,12 @@ export default async function handler(req, res) {
       if (rGet.ok) { const dGet = await rGet.json(); sha = dGet.sha; }
 
       const payload = {
-        version: 1,
+        version: 2,
         updatedAt: new Date().toISOString(),
         deviceId: deviceId || 'unknown',
-        port, trades,
-        bondFlows: bondFlows || {},
+        port,
+        trades,
+        bondFlowsDelta: bondFlowsDelta || {},
         bondMeta: bondMeta || {}
       };
 
@@ -63,8 +73,8 @@ export default async function handler(req, res) {
         return res.status(r.status).json({ error: err.message });
       }
 
-      const data = await r.json();
-      return res.status(200).json({ sha: data.content?.sha });
+      const d2 = await r.json();
+      return res.status(200).json({ sha: d2.content?.sha });
     } catch(e) {
       return res.status(500).json({ error: e.message });
     }

@@ -597,21 +597,40 @@ async function fetchFXLive() {
 // ── data912: precios en vivo de todos los instrumentos AR ────────────────────
 // Endpoints: /live/arg_bonds, /live/arg_cedears, /live/arg_stocks, /live/arg_corp
 // Sin key, ~2h de cache Cloudflare, CORS ok desde browser
+
+// Algunos tickers en el portfolio usan convenciones distintas a data912.
+// Ej: data912 devuelve "GD30" pero el portfolio usa "GD30D" (liquidación dólares BCBA).
+// Este mapa permite buscar bajo nombres alternativos y guardar el resultado con el ticker original.
+const D912_ALIASES = {
+  // bono → alias data912
+  "GD30D":"GD30D","GD35D":"GD35D","GD38D":"GD38D","GD41D":"GD41D",
+  "AL29D":"AL29D","AL30D":"AL30D","AO27D":"AO27D",
+  // por si data912 los sirve sin la D
+  "GD30":"GD30D","GD35":"GD35D","GD38":"GD38D","GD41":"GD41D",
+  "AL29":"AL29D","AL30":"AL30D","AO27":"AO27D",
+};
+
 async function fetchData912Prices(activeTickers=[]) {
   const result = {};
   const base = "https://data912.com/live";
+  // Set de tickers canónicos del portfolio para match rápido
+  const tickerSet = new Set(activeTickers);
 
-  // Parsea todos los items del endpoint y guarda los que matcheen con activeTickers
-  // Si activeTickers está vacío, guarda todos
   const parseD912 = (arr) => {
     if (!Array.isArray(arr)) return;
     for (const item of arr) {
       const sym = item.ticker || item.symbol || item.s || "";
       const price = item.price ?? item.last ?? item.c ?? item.close ?? item.px_ask ?? item.px_bid ?? null;
       const change = item.change_pct ?? item.dp ?? item.change ?? item.pct_change ?? 0;
-      const match = activeTickers.length===0 || activeTickers.includes(sym);
-      if (match && price != null && price > 0) {
+      if (price == null || price <= 0) continue;
+      // Match directo
+      if (activeTickers.length===0 || tickerSet.has(sym)) {
         result[sym] = { price: parseFloat(price), changePct: parseFloat(change)||0, source: "data912" };
+      }
+      // Match por alias: si data912 devuelve "GD30" y el portfolio tiene "GD30D"
+      const canonical = D912_ALIASES[sym];
+      if (canonical && tickerSet.has(canonical) && !result[canonical]) {
+        result[canonical] = { price: parseFloat(price), changePct: parseFloat(change)||0, source: "data912" };
       }
     }
   };
@@ -3216,8 +3235,10 @@ function OperacionesTab({trades,port,setTrades,setPort,card,livePrices,darkMode}
   const [editData,setEditData]=useState(null);
   const [confirmDelete,setConfirmDelete]=useState(null);
   const [filterTicker,setFilterTicker]=useState("");
+  const [filterTipo,setFilterTipo]=useState("");
   const [filterDesde,setFilterDesde]=useState("");
   const [filterHasta,setFilterHasta]=useState("");
+  const [viewMode,setViewMode]=useState("ops"); // "ops" | "resumen"
   const fmtA=(n)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:2}).format(n);
   const fmtU=(n,d=2)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"USD",maximumFractionDigits:d}).format(n);
   const inp={background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:6,padding:"6px 10px",color:"var(--text-primary)",fontSize:13,width:"100%"};
@@ -3227,11 +3248,33 @@ function OperacionesTab({trades,port,setTrades,setPort,card,livePrices,darkMode}
   const sorted=[...trades]
     .filter(t=>{
       if(filterTicker&&t.ticker!==filterTicker)return false;
+      if(filterTipo&&t.tipo!==filterTipo)return false;
       if(filterDesde&&t.date<filterDesde)return false;
       if(filterHasta&&t.date>filterHasta)return false;
       return true;
     })
     .sort((a,b)=>b.date.localeCompare(a.date)||b.ts-a.ts);
+
+  // Totales generales
+  const totalCompradoUSD = trades.filter(t=>t.tipo==="compra"&&t.currency==="USD").reduce((a,t)=>a+(+t.qty*+t.price+(+t.comision||0)),0);
+  const totalCompradoARS = trades.filter(t=>t.tipo==="compra"&&t.currency==="ARS").reduce((a,t)=>a+(+t.qty*+t.price+(+t.comision||0)),0);
+  const totalVendidoUSD  = trades.filter(t=>t.tipo==="venta"&&t.currency==="USD").reduce((a,t)=>a+(+t.qty*+t.price),0);
+  const totalComisiones  = trades.reduce((a,t)=>a+(+t.comision||0),0);
+
+  // Resumen por ticker
+  const tickerResumen = useMemo(()=>{
+    const map={};
+    for(const t of trades){
+      if(!map[t.ticker]) map[t.ticker]={ticker:t.ticker,name:t.name||t.ticker,compras:0,ventas:0,cantCompras:0,cantVentas:0,currency:t.currency||"ARS",comisiones:0};
+      const m=map[t.ticker];
+      const importe=+t.qty*+t.price;
+      const com=+t.comision||0;
+      if(t.tipo==="compra"){m.compras+=importe+com;m.cantCompras++;}
+      else{m.ventas+=importe;m.cantVentas++;}
+      m.comisiones+=com;
+    }
+    return Object.values(map).sort((a,b)=>b.compras-a.compras);
+  },[trades]);
 
   const startEdit=(t)=>{
     setEditId(t.id);
@@ -3301,35 +3344,103 @@ function OperacionesTab({trades,port,setTrades,setPort,card,livePrices,darkMode}
 
   return(
     <div className="fi" style={{display:"grid",gap:14}}>
-      {/* Filtros */}
-      <div style={{...card,padding:"14px 16px",display:"flex",gap:12,flexWrap:"wrap",alignItems:"flex-end"}}>
-        <div style={{display:"flex",flexDirection:"column",gap:4,minWidth:160}}>
-          <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Ticker</span>
-          <select value={filterTicker} onChange={e=>setFilterTicker(e.target.value)} style={{...inp,width:"auto"}}>
-            <option value="">Todos</option>
-            {allTickers.map(t=><option key={t} value={t}>{t}</option>)}
-          </select>
-        </div>
-        <div style={{display:"flex",flexDirection:"column",gap:4}}>
-          <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Desde</span>
-          <input type="date" value={filterDesde} onChange={e=>setFilterDesde(e.target.value)} style={inp}/>
-        </div>
-        <div style={{display:"flex",flexDirection:"column",gap:4}}>
-          <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Hasta</span>
-          <input type="date" value={filterHasta} onChange={e=>setFilterHasta(e.target.value)} style={inp}/>
-        </div>
-        {(filterTicker||filterDesde||filterHasta)&&(
-          <button onClick={()=>{setFilterTicker("");setFilterDesde("");setFilterHasta("");}}
-            style={{padding:"6px 14px",background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:6,color:"var(--text-muted)",cursor:"pointer",fontSize:12,alignSelf:"flex-end"}}>
-            ✕ Limpiar
-          </button>
-        )}
-        <span style={{fontSize:11,color:"var(--text-muted)",marginLeft:"auto",alignSelf:"flex-end"}}>
-          {sorted.length} de {trades.length} operación{trades.length!==1?"es":""}
-        </span>
+
+      {/* KPIs resumen */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:10}}>
+        {[
+          {lbl:"Comprado USD",val:fmtU(totalCompradoUSD),color:"var(--green)"},
+          {lbl:"Comprado ARS",val:fmtA(totalCompradoARS),color:"var(--green)"},
+          {lbl:"Vendido USD",val:fmtU(totalVendidoUSD),color:"var(--red)"},
+          {lbl:"Comisiones",val:fmtU(totalComisiones),color:"var(--yellow)"},
+          {lbl:"Operaciones",val:trades.length,color:"var(--text-primary)"},
+        ].map(k=>(
+          <div key={k.lbl} style={{...card,padding:"12px 16px"}}>
+            <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>{k.lbl}</div>
+            <div style={{fontSize:16,fontWeight:700,color:k.color,fontFamily:"'DM Mono',monospace"}}>{k.val}</div>
+          </div>
+        ))}
       </div>
 
-      <div style={{...card,overflow:"hidden"}}>
+      {/* Tabs ops/resumen + Filtros */}
+      <div style={{...card,padding:"14px 16px",display:"flex",gap:12,flexWrap:"wrap",alignItems:"flex-end"}}>
+        <div style={{display:"flex",gap:4,marginRight:8}}>
+          {[{v:"ops",l:"Operaciones"},{v:"resumen",l:"Por ticker"}].map(tab=>(
+            <button key={tab.v} onClick={()=>setViewMode(tab.v)}
+              style={{padding:"5px 14px",borderRadius:6,border:"1px solid var(--border)",cursor:"pointer",fontSize:12,fontWeight:viewMode===tab.v?700:400,
+                background:viewMode===tab.v?"var(--accent)":"var(--bg-input)",
+                color:viewMode===tab.v?"#fff":"var(--text-secondary)"}}>
+              {tab.l}
+            </button>
+          ))}
+        </div>
+        {viewMode==="ops"&&<>
+          <div style={{display:"flex",flexDirection:"column",gap:4,minWidth:130}}>
+            <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Ticker</span>
+            <select value={filterTicker} onChange={e=>setFilterTicker(e.target.value)} style={{...inp,width:"auto"}}>
+              <option value="">Todos</option>
+              {allTickers.map(t=><option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:4,minWidth:110}}>
+            <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Tipo</span>
+            <select value={filterTipo} onChange={e=>setFilterTipo(e.target.value)} style={{...inp,width:"auto"}}>
+              <option value="">Todos</option>
+              <option value="compra">Compras</option>
+              <option value="venta">Ventas</option>
+            </select>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:4}}>
+            <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Desde</span>
+            <input type="date" value={filterDesde} onChange={e=>setFilterDesde(e.target.value)} style={inp}/>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:4}}>
+            <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Hasta</span>
+            <input type="date" value={filterHasta} onChange={e=>setFilterHasta(e.target.value)} style={inp}/>
+          </div>
+          {(filterTicker||filterTipo||filterDesde||filterHasta)&&(
+            <button onClick={()=>{setFilterTicker("");setFilterTipo("");setFilterDesde("");setFilterHasta("");}}
+              style={{padding:"6px 14px",background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:6,color:"var(--text-muted)",cursor:"pointer",fontSize:12,alignSelf:"flex-end"}}>
+              ✕ Limpiar
+            </button>
+          )}
+          <span style={{fontSize:11,color:"var(--text-muted)",marginLeft:"auto",alignSelf:"flex-end"}}>
+            {sorted.length} de {trades.length} operación{trades.length!==1?"es":""}
+          </span>
+        </>}
+      </div>
+
+      {/* Vista por ticker */}
+      {viewMode==="resumen"&&(
+        <div style={{...card,overflow:"hidden"}}>
+          <div style={{padding:"12px 16px",borderBottom:"1px solid var(--border)",fontSize:13,fontWeight:600}}>Resumen por ticker</div>
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13,minWidth:600}}>
+              <thead>
+                <tr>
+                  {["Ticker","Nombre","Compras","Total comprado","Ventas","Total vendido","Comisiones"].map(h=>(
+                    <th key={h} style={{padding:"8px 12px",textAlign:h==="Ticker"||h==="Nombre"?"left":"right",fontSize:10,color:"var(--text-muted)",fontWeight:500,textTransform:"uppercase",letterSpacing:0.8,borderBottom:"1px solid var(--border)",whiteSpace:"nowrap"}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {tickerResumen.map(r=>(
+                  <tr key={r.ticker} style={{borderTop:"1px solid var(--border)"}}>
+                    <td style={{padding:"10px 12px",fontWeight:700,fontFamily:"monospace",color:"var(--accent)",fontSize:13}}>{r.ticker}</td>
+                    <td style={{padding:"10px 12px",fontSize:12,color:"var(--text-secondary)",maxWidth:180,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.name}</td>
+                    <td style={{padding:"10px 12px",textAlign:"right",fontSize:12,color:"var(--text-muted)"}}>{r.cantCompras}</td>
+                    <td style={{padding:"10px 12px",textAlign:"right",fontWeight:600,color:"var(--green)",fontFamily:"'DM Mono',monospace"}}>{r.currency==="USD"?fmtU(r.compras):fmtA(r.compras)}</td>
+                    <td style={{padding:"10px 12px",textAlign:"right",fontSize:12,color:"var(--text-muted)"}}>{r.cantVentas||"—"}</td>
+                    <td style={{padding:"10px 12px",textAlign:"right",fontWeight:600,color:r.ventas>0?"var(--red)":"var(--text-muted)",fontFamily:"'DM Mono',monospace"}}>{r.ventas>0?(r.currency==="USD"?fmtU(r.ventas):fmtA(r.ventas)):"—"}</td>
+                    <td style={{padding:"10px 12px",textAlign:"right",fontSize:12,color:r.comisiones>0?"var(--yellow)":"var(--text-muted)"}}>{r.comisiones>0?(r.currency==="USD"?fmtU(r.comisiones):fmtA(r.comisiones)):"—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {viewMode==="ops"&&<div style={{...card,overflow:"hidden"}}>
         <div style={{padding:"12px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{fontSize:13,fontWeight:600}}>Historial de operaciones</div>
           <div style={{fontSize:11,color:"var(--text-muted)"}}>{sorted.length} resultado{sorted.length!==1?"s":""}</div>
@@ -3419,7 +3530,7 @@ function OperacionesTab({trades,port,setTrades,setPort,card,livePrices,darkMode}
             </tbody>
           </table>
         </div>
-      </div>
+      </div>}
 
       {/* Modal confirmación eliminar */}
       {confirmDelete&&(

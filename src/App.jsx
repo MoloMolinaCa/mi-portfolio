@@ -510,7 +510,7 @@ function App(){
     const currentPrice=livePrice??lastHistClose??h.currentPrice;
     const ppc=ppcByTicker[h.ticker]||h.buyPrice;
     let liveChangePct = live?.changePct ?? null;
-    if(livePrice && historicos){
+    if(livePrice && (liveChangePct === null || liveChangePct === 0) && historicos){
       const bars = historicos[h.ticker];
       if(bars && bars.length>=1){
         const prevClose = bars[bars.length-1].close;

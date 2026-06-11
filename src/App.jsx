@@ -1178,8 +1178,16 @@ function App(){
                   baseValUSD+=vAyer;
                 }
                 const dayPct=baseValUSD>0?(dayPnlUSD/baseValUSD)*100:0;
-                // Usar cambio real del ^GSPC (USD) si disponible, sino SPY CEDEAR como fallback
-                const spyDayPct = liveSP500DayPct ?? en.find(x=>x.ticker==="SPY")?.liveChangePct ?? null;
+                // Variación USD del SPY desde el CEDEAR: (SPY_ARS_hoy/CCL_hoy) / (SPY_ARS_ayer/CCL_ayer) - 1
+                // Más rápido que Yahoo ^GSPC porque usa data912 en tiempo real
+                const spyCedear = en.find(x=>x.ticker==="SPY");
+                const spyArsHoy = spyCedear?.isLive ? livePrices["SPY"]?.price : null;
+                const spyArsAyer = historicos?.["SPY"]?.slice(-1)[0]?.close ?? null;
+                const cclAyer = historicos?.["CCL"]?.slice(-1)[0]?.close ?? null;
+                const cclHoy = fxRate;
+                const spyDayPct = (spyArsHoy && spyArsAyer && cclAyer && cclHoy)
+                  ? parseFloat(((spyArsHoy/cclHoy)/(spyArsAyer/cclAyer)-1)*100)
+                  : liveSP500DayPct ?? spyCedear?.liveChangePct ?? null;
 
                 const kpis=[
                   {

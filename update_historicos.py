@@ -13,7 +13,7 @@ v2: Deteccion automatica de splits en CEDEARs.
     Si al mergear barras detecta discontinuidad en un CEDEAR,
     re-descarga el ticker completo desde Yahoo (split-adjusted).
 """
-import json, os, time
+import json, os, time, math
 from datetime import datetime, timedelta
 import requests
 import urllib3
@@ -388,6 +388,16 @@ def main():
     print(f"\n[7] Guardando {OUTPUT_FILE}...")
     # Limpiar entries vacias
     data = {k: v for k, v in data.items() if v and isinstance(v, list) and len(v) > 0}
+    # Limpiar NaN/Inf que no son JSON valido (fix: NaN rompe el parser del browser)
+    def clean_nans(obj):
+        if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+            return None
+        if isinstance(obj, dict):
+            return {k: clean_nans(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [clean_nans(x) for x in obj]
+        return obj
+    data = clean_nans(data)
     with open(OUTPUT_FILE, "w") as f:
         json.dump(data, f, separators=(",", ":"))
     size_kb = os.path.getsize(OUTPUT_FILE) / 1024

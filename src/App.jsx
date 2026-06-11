@@ -5755,7 +5755,6 @@ function App(){
 
   // Sync a GitHub con debounce de 2s — solo si hubo cambio local reciente
   const isLoadingFromGH = React.useRef(false); // true mientras se cargan datos de GitHub
-  const _loadTs = React.useRef(Date.now());
   const lastSyncRef = React.useRef(0); // timestamp del último sync exitoso
   useEffect(()=>{
     if(!storageReady || !syncChecked) return;
@@ -5764,7 +5763,6 @@ function App(){
     saveTimerRef.current = setTimeout(()=>{
       // No guardar si estamos cargando datos desde GitHub
       if(isLoadingFromGH.current) return;
-      if(Date.now() - _loadTs.current < 5000) return;
       // No sobreescribir GitHub si tenemos menos datos
       if(port.length===0 && trades.length===0) return;
       // Solo guardar si este save es más nuevo que el último sync
@@ -5775,21 +5773,6 @@ function App(){
     }, 800);
     return ()=>{ if(saveTimerRef.current) clearTimeout(saveTimerRef.current); };
   },[port, trades, bondFlows, storageReady, syncChecked]);
-
-  // Save inicial: cuando syncChecked pasa a true, guardar en GitHub si hay datos locales.
-  // Esto asegura que GitHub siempre tenga los datos más recientes al abrir la app.
-  const hasInitialSaved = React.useRef(false);
-  useEffect(()=>{
-    if(!syncChecked || !storageReady || hasInitialSaved.current) return;
-    if(port.length===0 && trades.length===0) return;
-    hasInitialSaved.current = true;
-    const t = setTimeout(()=>{
-      if(isLoadingFromGH.current) return;
-      const meta=(()=>{try{return JSON.parse(localStorage.getItem('gal_bond_meta_v1')||'{}')}catch{return{}}})();
-      saveToGitHub(port, trades, computeBondFlowsDelta(bondFlows), meta);
-    }, 2000);
-    return ()=>clearTimeout(t);
-  },[syncChecked, storageReady]);
 
   // ── Live prices ───────────────────────────────────────────────────────────
   const fxRate = liveFX[fx] || FX_FALLBACK[fx];

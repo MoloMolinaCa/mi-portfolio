@@ -368,3 +368,20 @@ export const SEED_BOND_FLOWS = {
     {id:2310,date:"2036-07-09",tipo:"amortizacion", monto:5.0,    cobrado:false,fechaCobro:null,fuente:"auto",nota:"Cuota 20/20"},
   ],
 };
+
+export const SEED_BOND_META = {
+  "TZXD6": {adjustsBy:"CER", emisionDate:"2022-03-15", cerBase:null, desc:"BONTES a Descuento CER V15/12/26 · Cupón 0% + ajuste CER · Ley Argentina"},
+  "TZX27": {adjustsBy:"CER", emisionDate:"2022-12-30", cerBase:null, desc:"BONO CER V30/06/27 · Cupón 2% s/VN ajustado · Ley Argentina"},
+  "AO27D": {adjustsBy:null,  desc:"Bono Tesoro 6% V29/10/27 · Cupón mensual 6% anual base 30/360 · Bullet al vencimiento · Ley Nueva York"},
+  "GD38D": {adjustsBy:null,  desc:"Global 2038 · Tasa escalonada hasta 5% anual · 22 cuotas de amort. (4.5455% c/u) desde jul/2027 · Ley Nueva York"},
+  "TLCUD": {adjustsBy:null,  desc:"ON Telecom Argentina C28 05/03/29 · Cupón 7% anual (3.5% semestral) · Ley Argentina"},
+  "GD29D": {adjustsBy:null, desc:"Global 2029 · 2% hasta ene/28, 2.5% hasta ene/30 · 8 cuotas amort. 12.5% desde jul/2026 · Ley Nueva York"},
+  "GD30D": {adjustsBy:null, desc:"Global 2030 · 4.125% · 16 cuotas amort. 6.25% desde ene/2024 · Ley Nueva York"},
+  "GD35D": {adjustsBy:null, desc:"Global 2035 · 3.625% bullet · Ley Nueva York"},
+  "GD41D": {adjustsBy:null, desc:"Global 2041 · 4.875% · 20 cuotas amort. 5% desde ene/2027 · Ley Nueva York"},
+  "AE38D": {adjustsBy:null, desc:"Argentina 2038 · 4.625% bullet · Ley Nueva York"},
+  "AL29D": {adjustsBy:null, desc:"Bonar 2029 · 2% hasta ene/28, 2.5% hasta ene/30 · 8 cuotas amort. 12.5% desde jul/2026 · Ley Argentina"},
+  "AL30D": {adjustsBy:null, desc:"Bonar 2030 · 4.125% · 16 cuotas amort. 6.25% desde ene/2024 · Ley Argentina"},
+  "AL35D": {adjustsBy:null, desc:"Bonar 2035 · 3.625% bullet · Ley Argentina"},
+  "AL41D": {adjustsBy:null, desc:"Bonar 2041 · 4.875% · 20 cuotas amort. 5% desde ene/2027 · Ley Argentina"},
+};

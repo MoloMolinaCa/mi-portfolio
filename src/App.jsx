@@ -1,4 +1,5 @@
 /* eslint-disable */
+// v2.1 - sync fix 2026-06-11
 import React, { useState, useEffect, useMemo, memo, useRef, useCallback } from "react";
 
 // Componente de countdown — aislado para no re-renderizar el App entero

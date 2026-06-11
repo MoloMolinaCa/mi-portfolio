@@ -5689,6 +5689,7 @@ function App(){
   const [livePrices,setLivePrices] = useState({});
   const [liveT10Y,setLiveT10Y] = useState(TASA10Y_FALLBACK);
   const [liveSP500,setLiveSP500] = useState(null);
+  const [liveSP500DayPct,setLiveSP500DayPct] = useState(null);
   const [priceStatus,setPriceStatus] = useState("idle");
   const [lastRefresh,setLastRefresh] = useState(null);
   const [countdown,setCountdown]   = useState(300);
@@ -5878,7 +5879,11 @@ function App(){
           const meta=d?.chart?.result?.[0]?.meta;
           // Preferir regularMarketPrice del meta — es el precio en tiempo real
           const price=meta?.regularMarketPrice||meta?.chartPreviousClose||null;
-          if(price&&price>1000)setLiveSP500(price);
+          if(price&&price>1000){
+            setLiveSP500(price);
+            const prev=meta?.chartPreviousClose||meta?.previousClose||null;
+            if(prev&&prev>1000)setLiveSP500DayPct(parseFloat(((price-prev)/prev*100).toFixed(2)));
+          }
         }
       }catch{}
       setLastRefresh(new Date());
@@ -6590,7 +6595,8 @@ function App(){
                   baseValUSD+=vAyer;
                 }
                 const dayPct=baseValUSD>0?(dayPnlUSD/baseValUSD)*100:0;
-                const spyDayPct = en.find(x=>x.ticker==="SPY")?.liveChangePct ?? null;
+                // Usar cambio real del ^GSPC (USD) si disponible, sino SPY CEDEAR como fallback
+                const spyDayPct = liveSP500DayPct ?? en.find(x=>x.ticker==="SPY")?.liveChangePct ?? null;
 
                 const kpis=[
                   {

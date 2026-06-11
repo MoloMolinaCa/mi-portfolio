@@ -19,7 +19,7 @@ import PortfolioTab from './components/PortfolioTab';
 import { ASSET_TYPES, todayAR } from './utils/shared';
 
 // Componente de countdown — aislado para no re-renderizar el App entero
-function CountdownDisplay({lastRefresh, priceStatus, liveCount, portLen}){
+function CountdownDisplay({lastRefresh, priceStatus, liveCount, portLen, marketOpen}){
   const [display, setDisplay] = useState(300);
   useEffect(()=>{
     if(!lastRefresh) return;
@@ -27,6 +27,7 @@ function CountdownDisplay({lastRefresh, priceStatus, liveCount, portLen}){
     const iv = setInterval(()=>setDisplay(d=>d<=1?300:d-1), 1000);
     return()=>clearInterval(iv);
   },[lastRefresh]);
+  if(!marketOpen && priceStatus==="live") return <span style={{color:"var(--text-muted)"}}>● Mercado cerrado · cierre {lastRefresh?.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})}</span>;
   if(priceStatus==="live") return <span style={{color:"var(--green)"}}>● {liveCount}/{portLen} activos · actualizado {lastRefresh?.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})} · próx. {Math.floor(display/60)}:{String(display%60).padStart(2,"0")}</span>;
   if(priceStatus==="partial") return <span style={{color:"var(--yellow)"}}>◐ Parcial</span>;
   if(priceStatus==="loading") return <span style={{color:"var(--text-muted)"}}>⟳ Actualizando...</span>;
@@ -95,6 +96,15 @@ function lastHabil(dateStr) {
 function isHabil(dateStr) {
   const dow = new Date(dateStr+'T12:00:00').getDay();
   return dow!==0 && dow!==6;
+}
+// Detecta si BYMA está operando ahora (lunes-viernes 10:00-17:00 hora Argentina UTC-3)
+function isMarketOpen() {
+  const now = new Date();
+  const ar = new Date(now.toLocaleString("en-US", {timeZone:"America/Argentina/Buenos_Aires"}));
+  const dow = ar.getDay();
+  const h = ar.getHours(), m = ar.getMinutes();
+  const mins = h*60+m;
+  return dow>=1 && dow<=5 && mins>=600 && mins<1020; // 10:00=600, 17:00=1020
 }
 
 // ── Mapeo de tickers ─────────────────────────────────────────────────────────
@@ -265,6 +275,7 @@ function App(){
   const [priceStatus,setPriceStatus] = useState("idle");
   const [lastRefresh,setLastRefresh] = useState(null);
   const [countdown,setCountdown]   = useState(300);
+  const [marketOpen,setMarketOpen]  = useState(isMarketOpen());
 
   // countdown movido a CountdownDisplay component — no re-renderiza el App
 
@@ -467,6 +478,7 @@ function App(){
   useEffect(()=>{ if(storageReady){
       refreshPrices();
       const iv=setInterval(refreshPrices,5*60*1000);
+      const ivMarket=setInterval(()=>setMarketOpen(isMarketOpen()),60*1000);
       // Auto-sync cuando el usuario vuelve a la app (ej: cel)
       const onVisible=()=>{
         if(document.visibilityState==='visible'){if(isLoadingFromGH.current)return;
@@ -487,7 +499,7 @@ function App(){
         }
       };
       document.addEventListener('visibilitychange',onVisible);
-      return()=>{clearInterval(iv);document.removeEventListener('visibilitychange',onVisible);};
+      return()=>{clearInterval(iv);clearInterval(ivMarket);document.removeEventListener('visibilitychange',onVisible);};
     } },[storageReady]);
 
   // ── Portfolio calcs ───────────────────────────────────────────────────────
@@ -510,7 +522,7 @@ function App(){
     const currentPrice=livePrice??lastHistClose??h.currentPrice;
     const ppc=ppcByTicker[h.ticker]||h.buyPrice;
     let liveChangePct = live?.changePct ?? null;
-    if(livePrice && (liveChangePct === null || liveChangePct === 0) && historicos){
+    if(livePrice && historicos){
       const bars = historicos[h.ticker];
       if(bars && bars.length>=1){
         const prevClose = bars[bars.length-1].close;
@@ -1040,7 +1052,7 @@ function App(){
               <div style={{minWidth:0}}>
                 <div style={{fontWeight:700,fontSize:isMobile?13:15,color:"var(--title-color)",letterSpacing:"-0.3px"}}>Mi Portfolio</div>
                 {!isMobile&&<div style={{fontSize:11,color:"var(--text-muted)",display:"flex",alignItems:"center",gap:8}}>
-                  <CountdownDisplay lastRefresh={lastRefresh} priceStatus={priceStatus} liveCount={liveCount} portLen={port.length}/>
+                  <CountdownDisplay lastRefresh={lastRefresh} priceStatus={priceStatus} liveCount={liveCount} portLen={port.length} marketOpen={marketOpen}/>
                   {syncStatus==="saving"&&<span style={{color:"var(--yellow)"}}>↑ guardando...</span>}
                   {syncStatus==="error"&&<span style={{color:"var(--red)"}}>⚠ error de sync</span>}
                   {syncStatus==="loading"&&<span style={{color:"var(--text-muted)"}}>↓ cargando datos...</span>}
@@ -1076,7 +1088,7 @@ function App(){
               <option value="oficial">Oficial {fmtA(liveFX.oficial)}</option>
             </select>
             <span style={{fontSize:10,display:"flex",alignItems:"center",gap:6}}>
-              <CountdownDisplay lastRefresh={lastRefresh} priceStatus={priceStatus} liveCount={liveCount} portLen={port.length}/>
+              <CountdownDisplay lastRefresh={lastRefresh} priceStatus={priceStatus} liveCount={liveCount} portLen={port.length} marketOpen={marketOpen}/>
               {syncStatus==="saving"&&<span style={{color:"var(--yellow)",fontSize:9}}>↑ sync</span>}
               {syncStatus==="error"&&<span style={{color:"var(--red)",fontSize:9}}>⚠ sync</span>}
               {syncStatus==="loading"&&<span style={{color:"var(--text-muted)",fontSize:9}}>↓ cargando</span>}

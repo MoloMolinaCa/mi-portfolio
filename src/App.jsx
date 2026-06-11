@@ -3654,7 +3654,7 @@ function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAm
 
   // Calcular max drawdown y max rally correctamente
   const calcExtremes = (bars, start, end) => {
-    const f = bars.filter(b=>b.date>=start&&b.date<=end);
+    const f = bars.filter(b=>b.date>=start&&b.date<=end&&b.close!=null&&b.close>0);
     if(f.length < 2) return null;
 
     // Max Drawdown: caída desde un pico hasta el valle subsiguiente

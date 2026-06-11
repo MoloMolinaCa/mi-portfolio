@@ -5642,7 +5642,7 @@ function App(){
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
           port: newPort, trades: newTrades,
-          bondFlows: newFlows||{}, bondMeta: newMeta||{},
+          bondFlowsDelta: newFlows||{}, bondMeta: newMeta||{},
           sha: ghSha, deviceId
         })
       });
@@ -5714,8 +5714,10 @@ function App(){
           isLoadingFromGH.current = true;
           if(data.port?.length)   setPort(data.port);
           if(data.trades?.length) setTrades(data.trades);
-          if(data.bondFlows && Object.keys(data.bondFlows).length){
-            setBondFlows({...SEED_BOND_FLOWS,...data.bondFlows});
+          if(data.bondFlowsDelta && Object.keys(data.bondFlowsDelta).length){
+            setBondFlows(expandBondFlowsDelta(data.bondFlowsDelta));
+          } else if(data.bondFlows && Object.keys(data.bondFlows).length){
+            setBondFlows(expandBondFlowsDelta(computeBondFlowsDelta({...SEED_BOND_FLOWS,...data.bondFlows})));
           }
           localStorage.setItem('gal_last_save', ghTs.toString());
           setTimeout(()=>{ isLoadingFromGH.current = false; }, 500);
@@ -5768,7 +5770,7 @@ function App(){
       if(saveTs < lastSyncRef.current) return;
       const meta = (() => { try{ return JSON.parse(localStorage.getItem('gal_bond_meta_v1')||'{}'); }catch{ return {}; } })();
       lastSyncRef.current = saveTs;
-      saveToGitHub(port, trades, bondFlows, meta);
+      saveToGitHub(port, trades, computeBondFlowsDelta(bondFlows), meta);
     }, 800);
     return ()=>{ if(saveTimerRef.current) clearTimeout(saveTimerRef.current); };
   },[port, trades, bondFlows, storageReady, syncChecked]);
@@ -5819,7 +5821,7 @@ function App(){
               isLoadingFromGH.current=true;
               if(data.port?.length) setPort(data.port);
               if(data.trades?.length) setTrades(data.trades);
-              if(data.bondFlows&&Object.keys(data.bondFlows).length) setBondFlows(prev=>({...SEED_BOND_FLOWS,...data.bondFlows}));
+              if(data.bondFlowsDelta&&Object.keys(data.bondFlowsDelta).length) setBondFlows(expandBondFlowsDelta(data.bondFlowsDelta)); else if(data.bondFlows&&Object.keys(data.bondFlows).length) setBondFlows(expandBondFlowsDelta(computeBondFlowsDelta({...SEED_BOND_FLOWS,...data.bondFlows})));
               localStorage.setItem('gal_last_save',ghTs.toString());
               setTimeout(()=>{isLoadingFromGH.current=false;},500);
             }

@@ -5725,7 +5725,18 @@ function App(){
         }
         setSyncChecked(true);
         setSyncStatus("idle");
-        setTimeout(()=>{  }, 3000);
+        // Si GitHub no tiene datos pero hay datos locales -> guardar inmediatamente
+        if(!data.port?.length && !data.trades?.length) {
+          try {
+            const lp=JSON.parse(localStorage.getItem("gal_port_v1")||"[]");
+            const lt=JSON.parse(localStorage.getItem("gal_trades_v3")||"[]");
+            const lf=JSON.parse(localStorage.getItem("gal_bond_flows_v1")||"{}");
+            const lm=JSON.parse(localStorage.getItem("gal_bond_meta_v1")||"{}");
+            if(lp.length>0||lt.length>0) {
+              saveToGitHub(lp, lt, computeBondFlowsDelta({...SEED_BOND_FLOWS,...lf}), lm);
+            }
+          } catch{}
+        }
       })
       .catch(()=>{ setSyncChecked(true); setSyncStatus("idle"); });
   },[]);

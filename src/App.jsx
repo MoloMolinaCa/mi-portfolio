@@ -5600,9 +5600,10 @@ function App(){
   // Cargar históricos desde JSON generado por GitHub Actions
   useEffect(()=>{
     fetch("/historicos.json")
-      .then(r=>r.ok?r.json():null)
+      .then(r=>r.ok?r.text():null)
+      .then(t=>{if(!t)return null;try{return JSON.parse(t.replace(/\bNaN\b/g,"null"));}catch(e){console.error("historicos.json parse error:",e);return null;}})
       .then(d=>{ if(d && Object.keys(d).length>1) setHistoricos(d); })
-      .catch(()=>{});
+      .catch(e=>{console.error("historicos.json fetch error:",e);});
   },[]);
   const isMobile = useIsMobile();
   const [tab,setTab]           = useState(()=>{try{return localStorage.getItem("gal_tab")||"dashboard";}catch{return "dashboard";}});

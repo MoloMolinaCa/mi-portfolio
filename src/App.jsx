@@ -5775,6 +5775,21 @@ function App(){
     return ()=>{ if(saveTimerRef.current) clearTimeout(saveTimerRef.current); };
   },[port, trades, bondFlows, storageReady, syncChecked]);
 
+  // Save inicial: cuando syncChecked pasa a true, guardar en GitHub si hay datos locales.
+  // Esto asegura que GitHub siempre tenga los datos más recientes al abrir la app.
+  const hasInitialSaved = React.useRef(false);
+  useEffect(()=>{
+    if(!syncChecked || !storageReady || hasInitialSaved.current) return;
+    if(port.length===0 && trades.length===0) return;
+    hasInitialSaved.current = true;
+    const t = setTimeout(()=>{
+      if(isLoadingFromGH.current) return;
+      const meta=(()=>{try{return JSON.parse(localStorage.getItem('gal_bond_meta_v1')||'{}')}catch{return{}}})();
+      saveToGitHub(port, trades, computeBondFlowsDelta(bondFlows), meta);
+    }, 2000);
+    return ()=>clearTimeout(t);
+  },[syncChecked, storageReady]);
+
   // ── Live prices ───────────────────────────────────────────────────────────
   const fxRate = liveFX[fx] || FX_FALLBACK[fx];
 

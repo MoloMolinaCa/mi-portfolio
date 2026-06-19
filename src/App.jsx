@@ -757,8 +757,8 @@ function App(){
       const twrFin    = puntos[puntos.length-1].val;
 
       // Mismo criterio que EvoMini: XIRR de-anualizado al período del año
-      const portValStart = calcPortValAtDate(yStartDate, trades, en, tickerBars, cclBars, fxRate);
-      const portValEnd   = calcPortValAtDate(yEndDate,   trades, en, tickerBars, cclBars, fxRate);
+      const portValStart = calcPortValAtDate(yStartDate, trades, tickerBars, cclBars, fxRate);
+      const portValEnd   = calcPortValAtDate(yEndDate,   trades, tickerBars, cclBars, fxRate);
       const diasAnio = Math.max(1, Math.round((new Date(yEndDate)-new Date(yStartDate))/(1000*60*60*24)));
 
       const xirrFlows = [{date:yStartDate, amount:-(portValStart||0)}];

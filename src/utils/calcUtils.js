@@ -118,26 +118,26 @@ export function calcXIRR(flows, guess=0.1) {
   return null;
 }
 
-export function calcPortValAtDate(dateStr, trades, en, tickerBars, cclBars, fxRate) {
+export function calcPortValAtDate(dateStr, trades, tickerBars, cclBars, fxRate) {
   const dateT = new Date(dateStr).getTime();
   const tbt = {};
   for(const t of trades){ if(!tbt[t.ticker]) tbt[t.ticker]=[]; tbt[t.ticker].push({...t,_ts:new Date(t.date).getTime()}); }
   function fp(bars,d){ if(!bars?.length)return null; let lo=0,hi=bars.length-1,res=-1; while(lo<=hi){const mid=(lo+hi)>>1;if(bars[mid].date<=d){res=mid;lo=mid+1;}else hi=mid-1;} return res>=0?bars[res].close||null:bars[0].close||null; }
+  const isBond=(tkr)=>{const T=String(tkr||'').toUpperCase();return T.endsWith('D')||T.startsWith('TZX')||T.startsWith('GD')||T.startsWith('AL')||T.startsWith('AE')||T.startsWith('AO')||T.startsWith('TLCU');};
   let total=0;
-  for(const h of en){
-    const ticks=tbt[h.ticker]||[];
+  for(const ticker of Object.keys(tickerBars)){
+    const ticks=tbt[ticker]||[];
     const buys=ticks.filter(t=>t.tipo==="compra"&&t._ts<=dateT);
     const sells=ticks.filter(t=>t.tipo==="venta"&&t._ts<=dateT);
     const qty=Math.max(0,buys.reduce((a,t)=>a+t.qty,0)-sells.reduce((a,t)=>a+t.qty,0));
     if(qty<=0)continue;
-    const isBond=h.type==="bono_usd"||h.type==="bono_ars";
-    const qtyF=isBond?qty/100:qty;
-    const bars=tickerBars[h.ticker];
-    let price;
-    if(bars&&bars.length){ if(dateStr<bars[0].date)continue; const rawP=fp(bars,dateStr); if(!rawP)continue; price=rawP; }
-    else{ const fb=buys.slice().sort((a,b)=>a.date.localeCompare(b.date))[0]; if(!fb||dateStr<fb.date)continue; const tc=buys.reduce((a,t)=>a+t.qty*t.price,0),tq=buys.reduce((a,t)=>a+t.qty,0); price=tq>0?tc/tq:h.currentPrice; }
+    const qtyF=isBond(ticker)?qty/100:qty;
+    const bars=tickerBars[ticker];
+    if(!bars||!bars.length||dateStr<bars[0].date)continue;
+    const rawP=fp(bars,dateStr);
+    if(!rawP)continue;
     const cclDay=cclBars.length?fp(cclBars,dateStr)||fxRate:fxRate;
-    total+=price*qtyF/cclDay;
+    total+=rawP*qtyF/cclDay;
   }
   return total;
 }

@@ -1240,7 +1240,7 @@ function App(){
                     bigSub:true,
                   },
                   {
-                    icon:"📈", lbl:"Retorno total",
+                    icon:"📈", lbl:"Retorno anualizado",
                     main:xirrFull?fmtP(xirrFull.xirrAnual):fmtP(totPct),
                     sub:xirrFull?fmtP(xirrFull.xirrTotal)+" acum · "+xirrFull.dias+"d":(hideAmounts?"••••":fmtU(totPnl)),
                     subLabel:xirrFull?"Retorno acumulado":"No realizado",

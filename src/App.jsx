@@ -7,7 +7,7 @@ import BondWizard from './components/BondWizard';
 import FlujoTab from './components/FlujoTab';
 import { fetchFXLive, fetchAllLivePrices, fetchTreasury10Y } from './utils/priceUtils';
 import Chart100 from './components/Chart100';
-import { calcTWR, calcXIRR, deannualizeXIRR, calcModifiedDietzReturn, calcSeriesPeriodReturn } from './utils/calcUtils';
+import { calcTWR, calcXIRR, deannualizeXIRR, calcModifiedDietzReturn, calcSeriesPeriodReturn, calcPortValAtDate } from './utils/calcUtils';
 import OperacionesTab from './components/OperacionesTab';
 import RankingWidget from './components/RankingWidget';
 import DayMoversWidget from './components/DayMoversWidget';
@@ -748,21 +748,38 @@ function App(){
     });
 
     years.forEach(y=>{
-      const yStart = y+"-01-01";
-      const yEnd   = y+"-12-31" < today ? y+"-12-31" : today;
+      const yStartDate = (y === firstDate.slice(0,4)) ? firstDate : `${y}-01-01`;
+      const yEndDate   = `${y}-12-31` < today ? `${y}-12-31` : today;
 
-      const puntos = serie.filter(p=>p.date>=yStart&&p.date<=yEnd);
+      const puntos = serie.filter(p=>p.date>=yStartDate&&p.date<=yEndDate);
       if(!puntos.length) return;
       const twrInicio = puntos[0].val;
       const twrFin    = puntos[puntos.length-1].val;
-      const rendAnio  = ((twrFin/twrInicio)-1)*100;
 
-      // P&L USD del año: realizado en el año + no realizado (solo año en curso)
-      // Para años cerrados solo se muestra el P&L realizado — el no realizado
-      // requeriría valorizar la cartera al 31/12 de cada año, que no tenemos.
-      const esAnioActual = y === today.slice(0,4);
-      const realizadoAnio = pnlRealizadoPorAnio[y]||0;
-      const pnlAnio = esAnioActual ? realizadoAnio + totPnl : realizadoAnio;
+      // Mismo criterio que EvoMini: XIRR de-anualizado al período del año
+      const portValStart = calcPortValAtDate(yStartDate, trades, en, tickerBars, cclBars, fxRate);
+      const portValEnd   = calcPortValAtDate(yEndDate,   trades, en, tickerBars, cclBars, fxRate);
+      const diasAnio = Math.max(1, Math.round((new Date(yEndDate)-new Date(yStartDate))/(1000*60*60*24)));
+
+      const xirrFlows = [{date:yStartDate, amount:-(portValStart||0)}];
+      trades.filter(t=>t.date>yStartDate&&t.date<=yEndDate).forEach(t=>{
+        const isBondT2=/[0-9]/.test(t.ticker);
+        const qty2=t.qty||0;
+        const qtyF2=isBondT2?qty2/100:qty2;
+        const amt=toUSD((t.price||0)*qtyF2, t.currency||"ARS", t.date);
+        xirrFlows.push({date:t.date, amount:t.tipo==='compra'?-amt:amt});
+      });
+      xirrFlows.push({date:yEndDate, amount:portValEnd||0});
+
+      let rendAnio = ((twrFin/twrInicio)-1)*100; // fallback TWR
+      if(portValStart>0&&portValEnd>0){
+        const rA=calcXIRR(xirrFlows);
+        if(rA!=null) rendAnio=deannualizeXIRR(rA,diasAnio)*100;
+      }
+
+      // P&L: mismo criterio que EvoMini — endVal - startVal + middleFlows
+      const middleFlowsSum = xirrFlows.slice(1,-1).reduce((a,f)=>a+f.amount,0);
+      const pnlAnio = portValStart>0 ? portValEnd - portValStart + middleFlowsSum : (pnlRealizadoPorAnio[y]||0);
 
       byYear[y] = { rend: rendAnio, pnl: pnlAnio, twrInicio, twrFin };
     });

@@ -5,7 +5,7 @@ import { todayAR } from '../utils/shared';
 import { SEED_BOND_META } from '../constants/bondFlows';
 import Chart100 from './Chart100';
 
-export default function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=false,livePricesAll={},onExpand=null}){
+export default function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=false,livePricesAll={},onExpand=null,xirrFull=null,totPnlTotal=null}){
   const PERIODS=[{key:"mtd",label:"MTD",days:null,mtd:true},{key:"30d",label:"30d",days:30},{key:"90d",label:"90d",days:90},{key:"ytd",label:"YTD",days:null},{key:"1y",label:"1 año",days:365},{key:"3y",label:"3 años",days:1095}];
   // Persistir preferencias del gráfico en localStorage
   const _chartPrefs = ()=>{ try{ return JSON.parse(localStorage.getItem('gal_chart_prefs_v1')||'{}'); }catch{ return {}; } };
@@ -304,7 +304,11 @@ export default function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,hist
       let spDollarPnL=null;
       if(cd.spy100&&cd.spy100.length>=2){const spy100=cd.spy100;const spyEnd=spy100[spy100.length-1].val;const spyAt=(dateStr)=>{let best=spy100[0];for(const p of spy100){if(p.date<=dateStr)best=p;else break;}return best.val||100;};if(spyEnd>0){const spyFlows=[];spyFlows.push({date:s,amount:-startValUSD});for(const fl of flows.slice(1,-1))spyFlows.push({...fl});let spyFinalVal=0;for(const fl of spyFlows){const spyAtFlow=spyAt(fl.date);const growth=spyAtFlow>0?spyEnd/spyAtFlow:1;spyFinalVal+=(-fl.amount)*growth;}spDollarPnL=spyFinalVal-startValUSD+middleFlowsSum;spyFlows.push({date:e,amount:spyFinalVal});spyFlows.sort((a,b)=>a.date.localeCompare(b.date));if(spyFlows.length>=2&&startValUSD>0&&spyFinalVal>0){const rAnualSpy=calcXIRR(spyFlows);if(rAnualSpy!=null)spyXIRR=deannualizeXIRR(rAnualSpy,days)*100;}}}
       const alpha=(portXIRR!=null&&spyXIRR!=null)?portXIRR-spyXIRR:null;
-      return {portXIRR,spyXIRR,alpha,portDollarPnL,spDollarPnL};
+      // Si el período cubre todo el historial, usar xirrFull/totPnlTotal para consistencia con tarjeta KPI y gráfico anual
+      const isFullPeriod = firstTradeDate && s<=firstTradeDate && xirrFull;
+      const finalPortXIRR = isFullPeriod&&xirrFull.xirrTotal!=null ? xirrFull.xirrTotal : portXIRR;
+      const finalPortDollarPnL = isFullPeriod&&totPnlTotal!=null ? totPnlTotal : portDollarPnL;
+      return {portXIRR:finalPortXIRR,spyXIRR,alpha,portDollarPnL:finalPortDollarPnL,spDollarPnL};
     }catch(err){console.warn('XIRR error:',err);return {portXIRR:null,spyXIRR:null,alpha:null};}
   },[cd,trades,en,fxRate,liveFX,currency,_bT,historicos]);
 

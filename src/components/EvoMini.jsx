@@ -292,14 +292,19 @@ export default function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,hist
       flows.sort((a,b)=>a.date.localeCompare(b.date));
       // Dias del periodo para des-anualizar
       const days=Math.max(1,Math.round((new Date(e)-new Date(s))/(1000*60*60*24)));
+      // P&L en dólares real: Modified Dietz numerator = endVal - startVal - flujos netos invertidos
+      // flows intermedios: compras = negativo (plata que sale), ventas = positivo (plata que entra)
+      const middleFlowsSum=flows.slice(1,-1).reduce((a,f)=>a+f.amount,0);
+      const portDollarPnL=endValUSD-startValUSD+middleFlowsSum;
       // Portfolio XIRR: calcular anual y des-anualizar al periodo
       let portXIRR=null;
       if(flows.length>=2&&startValUSD>0&&endValUSD>0){const rAnual=calcXIRR(flows);if(rAnual!=null)portXIRR=deannualizeXIRR(rAnual,days)*100;}
       // SPY XIRR: mismos cashflows, terminal crecido por SPY, des-anualizado
       let spyXIRR=null;
-      if(cd.spy100&&cd.spy100.length>=2){const spy100=cd.spy100;const spyEnd=spy100[spy100.length-1].val;const spyAt=(dateStr)=>{let best=spy100[0];for(const p of spy100){if(p.date<=dateStr)best=p;else break;}return best.val||100;};if(spyEnd>0){const spyFlows=[];spyFlows.push({date:s,amount:-startValUSD});for(const fl of flows.slice(1,-1))spyFlows.push({...fl});let spyFinalVal=0;for(const fl of spyFlows){const spyAtFlow=spyAt(fl.date);const growth=spyAtFlow>0?spyEnd/spyAtFlow:1;spyFinalVal+=(-fl.amount)*growth;}spyFlows.push({date:e,amount:spyFinalVal});spyFlows.sort((a,b)=>a.date.localeCompare(b.date));if(spyFlows.length>=2&&startValUSD>0&&spyFinalVal>0){const rAnualSpy=calcXIRR(spyFlows);if(rAnualSpy!=null)spyXIRR=deannualizeXIRR(rAnualSpy,days)*100;}}}
+      let spDollarPnL=null;
+      if(cd.spy100&&cd.spy100.length>=2){const spy100=cd.spy100;const spyEnd=spy100[spy100.length-1].val;const spyAt=(dateStr)=>{let best=spy100[0];for(const p of spy100){if(p.date<=dateStr)best=p;else break;}return best.val||100;};if(spyEnd>0){const spyFlows=[];spyFlows.push({date:s,amount:-startValUSD});for(const fl of flows.slice(1,-1))spyFlows.push({...fl});let spyFinalVal=0;for(const fl of spyFlows){const spyAtFlow=spyAt(fl.date);const growth=spyAtFlow>0?spyEnd/spyAtFlow:1;spyFinalVal+=(-fl.amount)*growth;}spDollarPnL=spyFinalVal-startValUSD+middleFlowsSum;spyFlows.push({date:e,amount:spyFinalVal});spyFlows.sort((a,b)=>a.date.localeCompare(b.date));if(spyFlows.length>=2&&startValUSD>0&&spyFinalVal>0){const rAnualSpy=calcXIRR(spyFlows);if(rAnualSpy!=null)spyXIRR=deannualizeXIRR(rAnualSpy,days)*100;}}}
       const alpha=(portXIRR!=null&&spyXIRR!=null)?portXIRR-spyXIRR:null;
-      return {portXIRR,spyXIRR,alpha};
+      return {portXIRR,spyXIRR,alpha,portDollarPnL,spDollarPnL};
     }catch(err){console.warn('XIRR error:',err);return {portXIRR:null,spyXIRR:null,alpha:null};}
   },[cd,trades,en,fxRate,liveFX,currency,_bT,historicos]);
 
@@ -521,11 +526,20 @@ export default function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,hist
             {portXIRR!=null&&pillX("Portfolio",portXIRR,pcX(portXIRR),portXIRR>=0?"rgba(16,185,129,0.1)":"rgba(239,68,68,0.1)",portXIRR>=0?"rgba(16,185,129,0.25)":"rgba(239,68,68,0.25)")}
             {spyXIRR!=null&&pillX("S&P 500",spyXIRR,"#60A5FA","rgba(96,165,250,0.1)","rgba(96,165,250,0.25)")}
             {alpha!=null&&pillX("Alpha",alpha,pcX(alpha),alpha>=0?"rgba(16,185,129,0.1)":"rgba(239,68,68,0.1)",alpha>=0?"rgba(16,185,129,0.25)":"rgba(239,68,68,0.25)")}
-            <span style={{fontSize:isModal?9:7,color:"var(--text-muted)",marginLeft:"auto"}}>anualizado</span>
+            <span style={{fontSize:isModal?9:7,color:"var(--text-muted)",marginLeft:"auto"}}>efectivo en el período</span>
           </div>
         );
       })()}
-      {periodPnL&&(()=>{const{portPnL,spPnL,sym}=periodPnL;const fN=n=>{const a=Math.abs(n);return(n>=0?"+":"\u2212")+sym+(a>=1e6?(a/1e6).toFixed(1)+"M":a>=1e3?Math.round(a).toLocaleString("es-AR"):a.toFixed(0));};const pcc=n=>n>=0?"var(--green)":"var(--red)";const pill=(l,v,col)=>{const bg=col==="#60A5FA"?"rgba(96,165,250,0.1)":v>=0?"rgba(16,185,129,0.1)":"rgba(239,68,68,0.1)";const bd=col==="#60A5FA"?"rgba(96,165,250,0.25)":v>=0?"rgba(16,185,129,0.25)":"rgba(239,68,68,0.25)";return(<div key={l} style={{display:"inline-flex",alignItems:"center",gap:isModal?8:5,background:bg,padding:isModal?"5px 14px":"3px 10px",borderRadius:8,border:"1px solid "+bd}}><span style={{fontSize:isModal?11:9,color:"var(--text-muted)",fontWeight:500}}>{l}</span><span style={{fontSize:isModal?16:12,fontWeight:700,color:col,fontFamily:"monospace"}}>{fN(v)}</span></div>);};return(<div style={{display:"flex",alignItems:"center",gap:isModal?14:8,marginTop:isModal?10:6,paddingTop:isModal?10:6,borderTop:"1px solid var(--border)",flexWrap:"wrap"}}><span style={{fontSize:isModal?10:8,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1.5,fontWeight:700}}>P&L</span>{pill("Portfolio",portPnL,pcc(portPnL))}{spPnL!=null&&pill("S&P 500",spPnL,"#60A5FA")}</div>);})()}
+      {xirrData&&(xirrData.portDollarPnL!=null)&&(()=>{
+        const{portDollarPnL,spDollarPnL}=xirrData;
+        // Convertir USD a moneda seleccionada
+        const sym=currency==="ARS"?"$ ":"US$ ";
+        const toDisplay=v=>currency==="ARS"?v*fxRate:v;
+        const fN=n=>{const d=toDisplay(n);const a=Math.abs(d);return(d>=0?"+":"\u2212")+sym+(a>=1e6?(a/1e6).toFixed(1)+"M":a>=1e3?Math.round(a).toLocaleString("es-AR"):a.toFixed(0));};
+        const pcc=n=>n>=0?"var(--green)":"var(--red)";
+        const pill=(l,v,col)=>{const bg=col==="#60A5FA"?"rgba(96,165,250,0.1)":v>=0?"rgba(16,185,129,0.1)":"rgba(239,68,68,0.1)";const bd=col==="#60A5FA"?"rgba(96,165,250,0.25)":v>=0?"rgba(16,185,129,0.25)":"rgba(239,68,68,0.25)";return(<div key={l} style={{display:"inline-flex",alignItems:"center",gap:isModal?8:5,background:bg,padding:isModal?"5px 14px":"3px 10px",borderRadius:8,border:"1px solid "+bd}}><span style={{fontSize:isModal?11:9,color:"var(--text-muted)",fontWeight:500}}>{l}</span><span style={{fontSize:isModal?16:12,fontWeight:700,color:col,fontFamily:"monospace"}}>{fN(v)}</span></div>);};
+        return(<div style={{display:"flex",alignItems:"center",gap:isModal?14:8,marginTop:isModal?10:6,paddingTop:isModal?10:6,borderTop:"1px solid var(--border)",flexWrap:"wrap"}}><span style={{fontSize:isModal?10:8,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1.5,fontWeight:700}}>P&L</span>{pill("Portfolio",portDollarPnL,pcc(portDollarPnL))}{spDollarPnL!=null&&pill("S&P 500",spDollarPnL,"#60A5FA")}<span style={{fontSize:isModal?9:7,color:"var(--text-muted)",marginLeft:"auto"}}>en el per\u00edodo</span></div>);
+      })()}
 
     </div>
   );

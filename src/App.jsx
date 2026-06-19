@@ -1242,8 +1242,8 @@ function App(){
                   {
                     icon:"📈", lbl:"Retorno anualizado",
                     main:xirrFull?fmtP(xirrFull.xirrAnual):fmtP(totPct),
-                    sub:xirrFull?fmtP(xirrFull.xirrTotal)+" acum · "+xirrFull.dias+"d":(hideAmounts?"••••":fmtU(totPnl)),
-                    subLabel:xirrFull?"Retorno acumulado":"No realizado",
+                    sub:xirrFull?(hideAmounts?"••••":fmtU(totPnlTotal))+" · "+xirrFull.dias+"d":(hideAmounts?"••••":fmtU(totPnl)),
+                    subLabel:xirrFull?"P&L total del período":"No realizado",
                     mainColor:xirrFull?pc(xirrFull.xirrAnual):pc(totPct),
                     trend:xirrFull?xirrFull.xirrAnual:totPct,
                   },

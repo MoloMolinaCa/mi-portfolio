@@ -107,6 +107,14 @@ function isMarketOpen() {
   return dow>=1 && dow<=5 && mins>=600 && mins<1020; // 10:00=600, 17:00=1020
 }
 
+// Búsqueda binaria de precio más cercano <= dateStr en un array de barras
+function findPrice(bars, dateStr) {
+  if(!bars?.length) return null;
+  let lo=0, hi=bars.length-1, res=-1;
+  while(lo<=hi){ const mid=(lo+hi)>>1; if(bars[mid].date<=dateStr){res=mid;lo=mid+1;}else hi=mid-1; }
+  return res>=0 ? bars[res].close : null;
+}
+
 // ── Mapeo de tickers ─────────────────────────────────────────────────────────
 // data912: bonos, ONs, CEDEARs, acciones AR — precios en vivo (2h cache)
 // Yahoo Finance (.BA): fallback para CEDEARs y acciones si data912 falla
@@ -274,7 +282,7 @@ function App(){
   const [liveSP500DayPct,setLiveSP500DayPct] = useState(null);
   const [priceStatus,setPriceStatus] = useState("idle");
   const [lastRefresh,setLastRefresh] = useState(null);
-  const [countdown,setCountdown]   = useState(300);
+  // countdown movido a CountdownDisplay
   const [marketOpen,setMarketOpen]  = useState(isMarketOpen());
 
   // countdown movido a CountdownDisplay component — no re-renderiza el App
@@ -632,7 +640,8 @@ function App(){
       const qty    = venta.qty||0;
       const qtyF   = isBond ? qty/100 : qty;
       // Proceeds en USD
-      const proceedsUSD = toUSDamt((venta.price||0)*qtyF, venta.currency||"ARS", venta.date);
+      const comVenta = venta.comision ? +venta.comision : 0;
+      const proceedsUSD = toUSDamt((venta.price||0)*qtyF - comVenta, venta.currency||"ARS", venta.date);
       // Costo FIFO en USD: buscar lotes de compra anteriores
       const buyLots = trades
         .filter(t=>t.ticker===venta.ticker&&t.tipo==="compra"&&t.ts<venta.ts)
@@ -748,13 +757,12 @@ function App(){
       const twrFin    = puntos[puntos.length-1].val;
       const rendAnio  = ((twrFin/twrInicio)-1)*100;
 
-      // P&L USD del año = realizado en el año + cambio en valor de cartera
-      // Para el año en curso: no realizado = totPnl (ya calculado fuera)
-      // Para años cerrados: no realizado = 0 (todo fue realizado o rolado)
+      // P&L USD del año: realizado en el año + no realizado (solo año en curso)
+      // Para años cerrados solo se muestra el P&L realizado — el no realizado
+      // requeriría valorizar la cartera al 31/12 de cada año, que no tenemos.
       const esAnioActual = y === today.slice(0,4);
       const realizadoAnio = pnlRealizadoPorAnio[y]||0;
-      const noRealizadoAnio = esAnioActual ? totPnl : 0;
-      const pnlAnio = realizadoAnio + noRealizadoAnio;
+      const pnlAnio = esAnioActual ? realizadoAnio + totPnl : realizadoAnio;
 
       byYear[y] = { rend: rendAnio, pnl: pnlAnio, twrInicio, twrFin };
     });
@@ -763,8 +771,10 @@ function App(){
     }catch(e){ console.error("twrStats error:",e); return null; }
   },[trades, en, historicos, fxRate]); // sin livePrices — no recalcular por cada precio
 
-  const benchPct=(Math.pow(1+liveT10Y/100,90/365)-1)*100;
-  const alpha=totPct-benchPct;
+  const benchPct = twrStats
+    ? (Math.pow(1+liveT10Y/100, twrStats.dias/365)-1)*100
+    : (Math.pow(1+liveT10Y/100, 90/365)-1)*100;
+  const alpha = twrStats ? twrStats.twrTotal - benchPct : totPct - benchPct;
   const liveCount=en.filter(h=>h.isLive).length;
 
   const byType=Object.entries(ASSET_TYPES).map(([key,meta])=>{
@@ -1249,7 +1259,7 @@ function App(){
                         <div style={{display:"flex",alignItems:"baseline",gap:4,flexWrap:"wrap"}}>
                           <span style={{fontSize:k.bigSub?(isMobile?12:15):(isMobile?10:12),color:k.trend!=null?pc(k.trend):"var(--text-secondary)",fontWeight:k.bigSub?600:k.trend!=null?600:400}}>{k.sub}</span>
                           {k.subLabel&&!isMobile&&<span style={{fontSize:8,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8,marginLeft:3}}>{k.subLabel}</span>}
-                          {k.spyBadge!=null&&<span style={{background:"#2563eb",color:"#fff",borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:600,marginLeft:6}}>S&P {k.spyBadge>=0?"+":""}{k.spyBadge.toFixed(2)}%</span>}
+                          {k.spyBadge!=null&&<span style={{background:k.spyBadge>=0?"#15803d":"#b91c1c",color:"#fff",borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:600,marginLeft:6}}>{k.spyBadge>=0?"▲":"▼"} S&P {k.spyBadge>=0?"+":""}{k.spyBadge.toFixed(2)}%</span>}
                         </div>
                       </div>
                     ))}

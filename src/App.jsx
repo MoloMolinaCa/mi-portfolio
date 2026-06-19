@@ -776,9 +776,11 @@ function App(){
         ? trades.filter(t=>t.date<=yEndDate)
         : trades.filter(t=>t.date>prevDec31&&t.date<=yEndDate);
       yearTrades.forEach(t=>{
-        const isBondT2=/[0-9]/.test(t.ticker);
+        const T2=String(t.ticker||'').toUpperCase();
+        const isBondT2=T2.endsWith('D')||T2.startsWith('TZX')||T2.startsWith('GD')||T2.startsWith('AL')||T2.startsWith('AE')||T2.startsWith('AO')||T2.startsWith('TLCU');
         const qty2=t.qty||0; const qtyF2=isBondT2?qty2/100:qty2;
-        const amt=toUSD((t.price||0)*qtyF2, t.currency||"ARS", t.date);
+        const com2=t.comision?+t.comision:0;
+        const amt=toUSD((t.price||0)*qtyF2+(t.tipo==='compra'?com2:-com2), t.currency||"ARS", t.date);
         xirrFlows.push({date:t.date, amount:t.tipo==='compra'?-amt:amt});
       });
       xirrFlows.push({date:yEndDate, amount:portValEnd});

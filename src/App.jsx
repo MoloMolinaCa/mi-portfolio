@@ -1411,18 +1411,21 @@ function App(){
                     <div style={{flex:1}}>
                       <div style={{display:"flex",gap:0,alignItems:"flex-end",borderBottom:"1px solid var(--border)"}}>
                         {entries.map(([year,data],i)=>{
-                          const isPos = data.rend>=0;
-                          const barH  = Math.max(3, Math.abs(data.rend)/maxAbs*BAR_MAX);
+                          const isCurrentY = year===todayAR().slice(0,4);
+                          const rend = isCurrentY&&xirrFull?.xirrTotal!=null ? xirrFull.xirrTotal : data.rend;
+                          const pnlY = isCurrentY ? totPnlTotal : data.pnl;
+                          const isPos = rend>=0;
+                          const barH  = Math.max(3, Math.abs(rend)/maxAbs*BAR_MAX);
                           const color = isPos?"var(--green)":"var(--red)";
                           const isLast = i===entries.length-1;
                           return(
                             <div key={year} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",
                               borderRight:isLast?"none":"1px solid rgba(255,255,255,0.04)",padding:"0 16px 0"}}>
                               <div style={{fontSize:14,fontWeight:700,color,marginBottom:3,fontFamily:"'DM Mono',monospace"}}>
-                                {isPos?"+":""}{data.rend.toFixed(1)}%
+                                {isPos?"+":""}{rend.toFixed(1)}%
                               </div>
-                              <div style={{fontSize:11,fontWeight:600,color:data.pnl>=0?"var(--green)":"var(--red)",marginBottom:10,fontFamily:"'DM Mono',monospace"}}>
-                                {hideAmounts?"••••":(data.pnl>=0?"+":"")+fmtU(data.pnl,0)}
+                              <div style={{fontSize:11,fontWeight:600,color:pnlY>=0?"var(--green)":"var(--red)",marginBottom:10,fontFamily:"'DM Mono',monospace"}}>
+                                {hideAmounts?"••••":(pnlY>=0?"+":"")+fmtU(pnlY,0)}
                               </div>
                               <div style={{width:28,height:barH,background:color,borderRadius:"3px 3px 0 0",opacity:0.8,transition:"height 0.5s ease"}}/>
                             </div>

@@ -747,39 +747,49 @@ function App(){
       pnlRealizadoPorAnio[y] = (pnlRealizadoPorAnio[y]||0) + proceedsUSD - costUSD;
     });
 
-    years.forEach(y=>{
-      const yStartDate = (y === firstDate.slice(0,4)) ? firstDate : `${y}-01-01`;
-      const yEndDate   = `${y}-12-31` < today ? `${y}-12-31` : today;
+    // Valor del portfolio al 31/12 de cada año — para usar como inicio del siguiente
+    const portValCache = {};
+    const getPortValCached = (dateStr) => {
+      if(portValCache[dateStr]!=null) return portValCache[dateStr];
+      const v = calcPortValAtDate(dateStr, trades, tickerBars, cclBars, fxRate);
+      portValCache[dateStr] = v; return v;
+    };
+    const totUSDnow = en.reduce((a,h)=>a+h.valUSD,0);
 
-      const puntos = serie.filter(p=>p.date>=yStartDate&&p.date<=yEndDate);
+    years.forEach(y=>{
+      const isFirstYear = y === firstDate.slice(0,4);
+      const isCurrentYear = y === today.slice(0,4);
+      const prevDec31 = `${+y-1}-12-31`;
+      const yEndDate  = isCurrentYear ? today : `${y}-12-31`;
+      const yStartRef = isFirstYear ? firstDate : `${y}-01-01`;
+
+      const puntos = serie.filter(p=>p.date>=yStartRef&&p.date<=yEndDate);
       if(!puntos.length) return;
       const twrInicio = puntos[0].val;
       const twrFin    = puntos[puntos.length-1].val;
 
-      // Mismo criterio que EvoMini: XIRR de-anualizado al período del año
-      const portValStart = calcPortValAtDate(yStartDate, trades, tickerBars, cclBars, fxRate);
-      const portValEnd   = calcPortValAtDate(yEndDate,   trades, tickerBars, cclBars, fxRate);
-      const diasAnio = Math.max(1, Math.round((new Date(yEndDate)-new Date(yStartDate))/(1000*60*60*24)));
+      const portValStart = isFirstYear ? 0 : getPortValCached(prevDec31);
+      const portValEnd   = isCurrentYear ? totUSDnow : getPortValCached(yEndDate);
 
-      const xirrFlows = [{date:yStartDate, amount:-(portValStart||0)}];
-      trades.filter(t=>t.date>yStartDate&&t.date<=yEndDate).forEach(t=>{
+      const xirrFlows = portValStart > 0 ? [{date:yStartRef, amount:-portValStart}] : [];
+      const yearTrades = isFirstYear
+        ? trades.filter(t=>t.date<=yEndDate)
+        : trades.filter(t=>t.date>prevDec31&&t.date<=yEndDate);
+      yearTrades.forEach(t=>{
         const isBondT2=/[0-9]/.test(t.ticker);
-        const qty2=t.qty||0;
-        const qtyF2=isBondT2?qty2/100:qty2;
+        const qty2=t.qty||0; const qtyF2=isBondT2?qty2/100:qty2;
         const amt=toUSD((t.price||0)*qtyF2, t.currency||"ARS", t.date);
         xirrFlows.push({date:t.date, amount:t.tipo==='compra'?-amt:amt});
       });
-      xirrFlows.push({date:yEndDate, amount:portValEnd||0});
+      xirrFlows.push({date:yEndDate, amount:portValEnd});
+      xirrFlows.sort((a,b)=>a.date.localeCompare(b.date));
 
-      let rendAnio = ((twrFin/twrInicio)-1)*100; // fallback TWR
-      if(portValStart>0&&portValEnd>0){
-        const rA=calcXIRR(xirrFlows);
-        if(rA!=null) rendAnio=deannualizeXIRR(rA,diasAnio)*100;
-      }
+      const diasAnio = Math.max(1, Math.round((new Date(yEndDate)-new Date(xirrFlows[0].date))/(1000*60*60*24)));
+      let rendAnio = ((twrFin/twrInicio)-1)*100;
+      if(xirrFlows.length>=2){const rA=calcXIRR(xirrFlows);if(rA!=null)rendAnio=deannualizeXIRR(rA,diasAnio)*100;}
 
-      // P&L: mismo criterio que EvoMini — endVal - startVal + middleFlows
       const middleFlowsSum = xirrFlows.slice(1,-1).reduce((a,f)=>a+f.amount,0);
-      const pnlAnio = portValStart>0 ? portValEnd - portValStart + middleFlowsSum : (pnlRealizadoPorAnio[y]||0);
+      const pnlAnio = portValEnd - portValStart + middleFlowsSum;
 
       byYear[y] = { rend: rendAnio, pnl: pnlAnio, twrInicio, twrFin };
     });

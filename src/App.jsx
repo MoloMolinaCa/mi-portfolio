@@ -771,6 +771,36 @@ function App(){
     }catch(e){ console.error("twrStats error:",e); return null; }
   },[trades, en, historicos, fxRate]); // sin livePrices — no recalcular por cada precio
 
+  // XIRR full-period: tasa real del inversor (money-weighted)
+  const xirrFull = useMemo(()=>{
+    try{
+      if(!trades.length||!en.length) return null;
+      const cclBars=historicos?.CCL||[];
+      const getCCL=(date)=>{let lo=0,hi=cclBars.length-1,res=-1;while(lo<=hi){const mid=(lo+hi)>>1;if(cclBars[mid].date<=date){res=mid;lo=mid+1;}else hi=mid-1;}return res>=0?cclBars[res].close:(fxRate||1);};
+      const isBondT=(tkr)=>{const T=String(tkr||'').toUpperCase();return T.endsWith('D')||T.startsWith('TZX')||T.startsWith('GD')||T.startsWith('AL')||T.startsWith('AE')||T.startsWith('AO')||T.startsWith('TLCU');};
+      const flows=[];
+      for(const t of trades){
+        const isBond=isBondT(t.ticker);
+        const qty=t.qty||0;
+        const qtyF=isBond?qty/100:qty;
+        const com=t.comision?+t.comision:0;
+        const amt=(t.price||0)*qtyF+(t.tipo==='compra'?com:-com);
+        const isUSD=(t.currency||'ARS')==='USD';
+        const usd=isUSD?amt:amt/getCCL(t.date);
+        flows.push({date:t.date, amount:t.tipo==='compra'?-usd:usd});
+      }
+      const today=todayAR();
+      const endVal=en.reduce((a,h)=>a+h.valUSD,0);
+      flows.push({date:today, amount:endVal});
+      flows.sort((a,b)=>a.date.localeCompare(b.date));
+      const rAnual=calcXIRR(flows);
+      if(rAnual==null) return null;
+      const firstDate=flows[0].date;
+      const dias=Math.max(1,Math.round((new Date(today)-new Date(firstDate))/(1000*60*60*24)));
+      return {xirrAnual:rAnual*100, xirrTotal:deannualizeXIRR(rAnual,dias)*100, dias};
+    }catch(e){console.error("xirrFull error:",e);return null;}
+  },[trades,en,historicos,fxRate]);
+
   const benchPct = twrStats
     ? (Math.pow(1+liveT10Y/100, twrStats.dias/365)-1)*100
     : (Math.pow(1+liveT10Y/100, 90/365)-1)*100;
@@ -1210,12 +1240,12 @@ function App(){
                     bigSub:true,
                   },
                   {
-                    icon:"📈", lbl:"TWR anualizado",
-                    main:twrStats?fmtP(twrStats.twrAnual):fmtP(totPct),
-                    sub:twrStats?fmtP(twrStats.twrTotal)+" total · "+twrStats.dias+"d":(hideAmounts?"••••":fmtU(totPnl)),
-                    subLabel:twrStats?"Rendimiento acumulado":"No realizado",
-                    mainColor:twrStats?pc(twrStats.twrAnual):pc(totPct),
-                    trend:twrStats?twrStats.twrAnual:totPct,
+                    icon:"📈", lbl:"Retorno total",
+                    main:xirrFull?fmtP(xirrFull.xirrAnual):fmtP(totPct),
+                    sub:xirrFull?fmtP(xirrFull.xirrTotal)+" acum · "+xirrFull.dias+"d":(hideAmounts?"••••":fmtU(totPnl)),
+                    subLabel:xirrFull?"Retorno acumulado":"No realizado",
+                    mainColor:xirrFull?pc(xirrFull.xirrAnual):pc(totPct),
+                    trend:xirrFull?xirrFull.xirrAnual:totPct,
                   },
 
                   {
@@ -1326,20 +1356,20 @@ function App(){
                   {/* Header */}
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
                     <div>
-                      <div style={{fontSize:11,fontWeight:600,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Rendimiento anual · TWR</div>
+                      <div style={{fontSize:11,fontWeight:600,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>Rendimiento anual</div>
                       <div style={{fontSize:10,color:"var(--text-muted)",marginTop:2,opacity:0.7}}>Incluye activos ya vendidos · punta a punta por año calendario</div>
                     </div>
                     <div style={{display:"flex",gap:20,alignItems:"center"}}>
                       <div style={{textAlign:"right"}}>
-                        <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8}}>TWR anualizado</div>
-                        <div style={{fontSize:18,fontWeight:700,color:pc(twrStats.twrAnual),fontFamily:"'DM Mono',monospace"}}>
-                          {twrStats.twrAnual>=0?"+":""}{twrStats.twrAnual.toFixed(1)}%<span style={{fontSize:11,fontWeight:400,opacity:0.6}}>/año</span>
+                        <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8}}>Retorno anualizado</div>
+                        <div style={{fontSize:18,fontWeight:700,color:pc(xirrFull?.xirrAnual??twrStats.twrAnual),fontFamily:"'DM Mono',monospace"}}>
+                          {(xirrFull?.xirrAnual??twrStats.twrAnual)>=0?"+":""}{(xirrFull?.xirrAnual??twrStats.twrAnual).toFixed(1)}%<span style={{fontSize:11,fontWeight:400,opacity:0.6}}>/año</span>
                         </div>
                       </div>
                       <div style={{textAlign:"right"}}>
                         <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8}}>Acumulado</div>
-                        <div style={{fontSize:18,fontWeight:700,color:pc(twrStats.twrTotal),fontFamily:"'DM Mono',monospace"}}>
-                          {twrStats.twrTotal>=0?"+":""}{twrStats.twrTotal.toFixed(1)}%
+                        <div style={{fontSize:18,fontWeight:700,color:pc(xirrFull?.xirrTotal??twrStats.twrTotal),fontFamily:"'DM Mono',monospace"}}>
+                          {(xirrFull?.xirrTotal??twrStats.twrTotal)>=0?"+":""}{(xirrFull?.xirrTotal??twrStats.twrTotal).toFixed(1)}%
                         </div>
                       </div>
                     </div>

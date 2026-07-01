@@ -2,6 +2,10 @@
 import React, { useState } from "react";
 import { ASSET_TYPES, todayAR } from '../utils/shared';
 
+const fmtU = (n,d=0) => new Intl.NumberFormat("es-AR",{style:"currency",currency:"USD",maximumFractionDigits:d}).format(n);
+const fmtA = (n) => new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:0}).format(n);
+const YAHOO_PROXY = "https://yahoo-proxy-blue.vercel.app/api/yahoo";
+
 // ── Base de tickers conocidos del mercado argentino (fallback offline) ────────
 const AR_TICKERS = {
   // Acciones líderes BCBA

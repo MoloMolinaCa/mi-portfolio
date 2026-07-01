@@ -659,7 +659,28 @@ function App(){
     }, 0);
   },[trades, historicos]);
 
-  const totPnlTotal = totPnl + pnlRealizado; // no realizado + realizado
+  // Flujos cobrados de bonos (cupones + amortizaciones confirmadas) — ingreso real de caja
+  const flujosCobradosTotal = useMemo(()=>{
+    const cclBars=historicos?.CCL||[];
+    const getCCL=(date)=>{let lo=0,hi=cclBars.length-1,res=-1;while(lo<=hi){const mid=(lo+hi)>>1;if(cclBars[mid].date<=date){res=mid;lo=mid+1;}else hi=mid-1;}return res>=0?cclBars[res].close:(fxRate||1);};
+    let total=0;
+    for(const [ticker, bFlows] of Object.entries(bondFlows||{})){
+      const pos=en.find(h=>h.ticker===ticker);
+      const buyCurrency=pos?.buyCurrency||(String(ticker).toUpperCase().endsWith('D')?'USD':'ARS');
+      for(const f of (bFlows||[])){
+        if(!f.cobrado||!f.fechaCobro) continue;
+        const buysBefore=trades.filter(t=>t.ticker===ticker&&t.tipo==='compra'&&t.date<=f.fechaCobro);
+        const sellsBefore=trades.filter(t=>t.ticker===ticker&&t.tipo==='venta'&&t.date<=f.fechaCobro);
+        const qtyAt=Math.max(0,buysBefore.reduce((a,t)=>a+t.qty,0)-sellsBefore.reduce((a,t)=>a+t.qty,0));
+        if(qtyAt<=0) continue;
+        const cashLocal=f.monto*qtyAt/100;
+        total+=buyCurrency==='USD'?cashLocal:cashLocal/getCCL(f.fechaCobro);
+      }
+    }
+    return total;
+  },[bondFlows,trades,en,historicos,fxRate]);
+
+  const totPnlTotal = totPnl + pnlRealizado + flujosCobradosTotal; // no realizado + realizado + cobros de bonos
 
   // TWR anualizado + P&L real por año
   const twrStats = useMemo(()=>{
@@ -819,6 +840,21 @@ function App(){
         const usd=isUSD?amt:amt/getCCL(t.date);
         flows.push({date:t.date, amount:t.tipo==='compra'?-usd:usd});
       }
+      // Agregar flujos cobrados de bonos (cupones + amortizaciones confirmadas)
+      for(const [ticker, bFlows] of Object.entries(bondFlows||{})){
+        const pos=en.find(h=>h.ticker===ticker);
+        const buyCurrency=pos?.buyCurrency||(String(ticker).toUpperCase().endsWith('D')?'USD':'ARS');
+        for(const f of (bFlows||[])){
+          if(!f.cobrado||!f.fechaCobro) continue;
+          const buysBefore=trades.filter(t=>t.ticker===ticker&&t.tipo==='compra'&&t.date<=f.fechaCobro);
+          const sellsBefore=trades.filter(t=>t.ticker===ticker&&t.tipo==='venta'&&t.date<=f.fechaCobro);
+          const qtyAt=Math.max(0,buysBefore.reduce((a,t)=>a+t.qty,0)-sellsBefore.reduce((a,t)=>a+t.qty,0));
+          if(qtyAt<=0) continue;
+          const cashLocal=f.monto*qtyAt/100;
+          const cashUSD=buyCurrency==='USD'?cashLocal:cashLocal/getCCL(f.fechaCobro);
+          flows.push({date:f.fechaCobro, amount:cashUSD});
+        }
+      }
       const today=todayAR();
       const endVal=en.reduce((a,h)=>a+h.valUSD,0);
       flows.push({date:today, amount:endVal});
@@ -829,7 +865,7 @@ function App(){
       const dias=Math.max(1,Math.round((new Date(today)-new Date(firstDate))/(1000*60*60*24)));
       return {xirrAnual:rAnual*100, xirrTotal:deannualizeXIRR(rAnual,dias)*100, dias};
     }catch(e){console.error("xirrFull error:",e);return null;}
-  },[trades,en,historicos,fxRate]);
+  },[trades,en,historicos,fxRate,bondFlows]);
 
   const benchPct = twrStats
     ? (Math.pow(1+liveT10Y/100, twrStats.dias/365)-1)*100
@@ -1494,7 +1530,7 @@ function App(){
 
           {/* ANÁLISIS */}
           {tab==="analisis"&&visitedTabs.has("analisis")&&(
-            <AnalisisTab en={enGrouped} historicos={historicos} fxRate={fxRate} currency={fx} card={card} livePrices={livePrices} hideAmounts={hideAmounts} trades={trades} isMobile={isMobile}/>
+            <AnalisisTab en={enGrouped} historicos={historicos} fxRate={fxRate} currency={fx} card={card} livePrices={livePrices} hideAmounts={hideAmounts} trades={trades} isMobile={isMobile} bondFlows={bondFlows}/>
           )}
 
           {/* OPERACIONES */}

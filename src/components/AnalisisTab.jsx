@@ -3,7 +3,7 @@ import React, { useState, useMemo } from "react";
 import { calcTWR } from '../utils/calcUtils';
 import { ASSET_TYPES, todayAR } from '../utils/shared';
 
-export default function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAmounts=false, trades=[], isMobile=false}) {
+export default function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAmounts=false, trades=[], isMobile=false, bondFlows={}}) {
   const PERIODS_AN = [
     {key:"todo",  label:"Todo el período", days:null, start:"2026-01-01"},
     {key:"ytd",   label:"YTD",             days:null, ytd:true},
@@ -266,7 +266,7 @@ export default function AnalisisTab({en, historicos, fxRate, currency, card, liv
       const retPct = ((adjClose - adjBase)/adjBase)*100;
 
       // P&L real del período usando flujos de caja:
-      // P&L = valor_final - valor_inicial - compras_del_período + ventas_del_período
+      // P&L = valor_final - valor_inicial - compras_del_período + ventas_del_período + flujos_cobrados
       const qtyFactor = (qty) => isBond ? qty/100 : qty;
       const toCCL     = (price, date) => {
         if(h.buyCurrency==="USD") return price;
@@ -296,9 +296,19 @@ export default function AnalisisTab({en, historicos, fxRate, currency, card, liv
         return a + toCCL(t.price, t.date) * f;
       }, 0);
 
+      // Flujos cobrados de bonos dentro del período (cupones + amortizaciones confirmadas)
+      const cashFlujoCobrado = isBond ? (bondFlows[h.ticker]||[]).reduce((a, f)=>{
+        if(!f.cobrado||!f.fechaCobro||f.fechaCobro<startDate||f.fechaCobro>endDate) return a;
+        const buysBefore = trades.filter(t=>t.ticker===h.ticker&&t.tipo==='compra'&&t.date<=f.fechaCobro);
+        const sellsBefore = trades.filter(t=>t.ticker===h.ticker&&t.tipo==='venta'&&t.date<=f.fechaCobro);
+        const qtyAt = Math.max(0, buysBefore.reduce((s,t)=>s+t.qty,0)-sellsBefore.reduce((s,t)=>s+t.qty,0));
+        if(qtyAt<=0) return a;
+        return a + toCCL(f.monto*qtyAt/100, f.fechaCobro);
+      }, 0) : 0;
+
       // Para posiciones cerradas (qty=0): P&L = -cashCompras + cashVentas + valInicio_vendido
       // (valFinal = 0 porque ya no lo tenemos)
-      const pnlUSD = valFinal - valInicio - cashCompras + cashVentas;
+      const pnlUSD = valFinal - valInicio - cashCompras + cashVentas + cashFlujoCobrado;
       const valEnd = valFinal;
 
       // Rend % para cerrados: usar precio de venta vs precio base
@@ -321,7 +331,7 @@ export default function AnalisisTab({en, historicos, fxRate, currency, card, liv
       return {...h, retPct:retPctFinal, pnlUSD, valBuy:valInicio, valEnd, basePrice:adjBase, adjClose,
                usedBuyPrice, baseDate, qtyStart, buyPrice:h.buyPrice||0, cerrado:h.cerrado||false};
     }).filter(Boolean);
-  },[en,historicos,trades,startDate,endDate,fxRate,period]);
+  },[en,historicos,trades,startDate,endDate,fxRate,period,bondFlows]);
 
   const contributionsSorted = useMemo(()=>{
     const arr = [...contributions];

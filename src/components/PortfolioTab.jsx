@@ -103,7 +103,7 @@ export default function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxR
           {h.ticker}
           {h.isLive&&<span style={{display:"block",fontSize:9,color:"var(--green)",fontFamily:"sans-serif",fontWeight:400}}>● live</span>}
         </td>
-        <td style={{...tdL,color:"var(--text-secondary)",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.name}</td>
+        <td style={{...tdL,color:"var(--text-secondary)",minWidth:180,maxWidth:320,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.name}</td>
         <td style={tdR}>{Number(h.qty).toLocaleString("es-AR",{maximumFractionDigits:4})}</td>
         <td style={{...tdR,color:"var(--text-muted)",fontSize:11}}>
           {(()=>{
@@ -252,11 +252,11 @@ export default function PortfolioTab({byType,en,totUSD,totCost,totPnl,totPct,fxR
               </div>
             ):(
             <div style={{overflowX:"auto"}}>
-              <table style={{width:"100%",borderCollapse:"collapse",fontSize:isMobile?11:13,minWidth:isMobile?0:600,tableLayout:"fixed"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:isMobile?11:13,minWidth:isMobile?0:700}}>
                 <thead>
                   <tr>
                     <th style={{...thS,width:isMobile?65:70}}>Ticker</th>
-                    {!isMobile&&<th style={{...thS}}>Nombre</th>}
+                    {!isMobile&&<th style={{...thS,minWidth:220}}>Nombre</th>}
                     {!isMobile&&<th style={{...thR,width:100}}>Nominales</th>}
                     {!isMobile&&<th style={{...thR,width:130}}>PPC</th>}
                     <th style={{...thR,width:isMobile?90:150}}>Precio actual</th>

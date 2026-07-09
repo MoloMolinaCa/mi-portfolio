@@ -1372,21 +1372,52 @@ function App(){
               })()}
 
               <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"220px 1fr",gap:14,alignItems:"stretch"}}>
+                {(()=>{
+                  const [donutView,setDonutView]=React.useState("tipo");
+                  // Paleta de colores para activos individuales (ciclo si hay muchos)
+                  const PALETTE=["#60A5FA","#34D399","#FBBF24","#F87171","#A78BFA","#FB923C","#38BDF8","#4ADE80","#E879F9","#FDE68A","#86EFAC","#FCA5A5"];
+                  const byActivo=enGrouped.map((h,i)=>({
+                    k:h.ticker,
+                    v:h.valUSD,
+                    color:PALETTE[i%PALETTE.length],
+                    label:h.ticker,
+                  })).filter(s=>s.v>0).sort((a,b)=>b.v-a.v);
+                  const segsDonut=donutView==="tipo"
+                    ? byType.map(t=>({k:t.key,v:t.val,color:t.color,label:t.label}))
+                    : byActivo;
+                  const legendItems=donutView==="tipo"
+                    ? byType.map(t=>({k:t.key,color:t.color,label:`${t.icon} ${t.label}`,pct:t.pct}))
+                    : byActivo.map(s=>({k:s.k,color:s.color,label:s.label,pct:totUSD>0?(s.v/totUSD)*100:0}));
+                  return(
                 <div style={{...card,padding:"18px 16px",display:"flex",flexDirection:"column"}}>
-                  <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1.2,marginBottom:12,fontWeight:600}}>Asignación por tipo</div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                    <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1.2,fontWeight:600}}>Asignación</div>
+                    <div style={{display:"flex",background:"var(--bg-input)",borderRadius:6,padding:2,border:"1px solid var(--border)"}}>
+                      {[["tipo","Por tipo"],["activo","Por activo"]].map(([v,lbl])=>(
+                        <button key={v} onClick={()=>setDonutView(v)}
+                          style={{padding:"3px 9px",border:"none",borderRadius:4,fontSize:9,fontWeight:600,cursor:"pointer",
+                            background:donutView===v?"var(--accent)":"transparent",
+                            color:donutView===v?"#fff":"var(--text-muted)"}}>
+                          {lbl}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
-                    <Donut segs={byType.map(t=>({k:t.key,v:t.val,color:t.color,label:t.label}))} size={170}/>
-                    <div style={{width:"100%",display:"grid",gap:8}}>
-                      {byType.map(t=>(
-                        <div key={t.key} style={{display:"flex",alignItems:"center",gap:7}}>
+                    <Donut segs={segsDonut} size={170}/>
+                    <div style={{width:"100%",display:"grid",gap:6,maxHeight:180,overflowY:"auto"}}>
+                      {legendItems.map(t=>(
+                        <div key={t.k} style={{display:"flex",alignItems:"center",gap:7}}>
                           <div style={{width:7,height:7,borderRadius:"50%",background:t.color,flexShrink:0}}/>
-                          <div style={{flex:1,fontSize:11,color:"var(--text-secondary)",whiteSpace:"nowrap"}}>{t.icon} {t.label}</div>
+                          <div style={{flex:1,fontSize:11,color:"var(--text-secondary)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.label}</div>
                           <div style={{fontSize:11,fontWeight:700,color:"var(--text-primary)"}}>{t.pct.toFixed(1)}%</div>
                         </div>
                       ))}
                     </div>
                   </div>
                 </div>
+                  );
+                })()}
                 <div style={{...card,padding:"10px 18px 18px",display:"flex",flexDirection:"column"}}>
                   <div style={{height:window.innerWidth<768?340:410}}>
                     <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} livePricesAll={livePrices} onExpand={()=>setChartModal(true)} xirrFull={xirrFull} totPnlTotal={totPnlTotal}/>

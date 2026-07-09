@@ -272,6 +272,7 @@ function App(){
   const handleTabChange = (t) => { setTab(t); setVisitedTabs(prev=>new Set([...prev,t])); };
   React.useEffect(()=>{try{localStorage.setItem("gal_tab",tab);}catch{};},[tab]);
   const [modal,setModal]       = useState(null);
+  const [donutView,setDonutView] = useState("tipo");
   const [bondWizard,setBondWizard] = useState(null); // {ticker, onConfirm}
   const [ventaResult,setVentaResult] = useState(null);
   const [fx,setFx]             = useState("CCL");
@@ -1373,21 +1374,12 @@ function App(){
 
               <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"220px 1fr",gap:14,alignItems:"stretch"}}>
                 {(()=>{
-                  const [donutView,setDonutView]=React.useState("tipo");
-                  // Paleta de colores para activos individuales (ciclo si hay muchos)
                   const PALETTE=["#60A5FA","#34D399","#FBBF24","#F87171","#A78BFA","#FB923C","#38BDF8","#4ADE80","#E879F9","#FDE68A","#86EFAC","#FCA5A5"];
-                  const byActivo=enGrouped.map((h,i)=>({
-                    k:h.ticker,
-                    v:h.valUSD,
-                    color:PALETTE[i%PALETTE.length],
-                    label:h.ticker,
-                  })).filter(s=>s.v>0).sort((a,b)=>b.v-a.v);
-                  const segsDonut=donutView==="tipo"
-                    ? byType.map(t=>({k:t.key,v:t.val,color:t.color,label:t.label}))
-                    : byActivo;
+                  const byActivo=enGrouped.map((h,i)=>({k:h.ticker,v:h.valUSD,color:PALETTE[i%PALETTE.length],label:h.ticker})).filter(s=>s.v>0).sort((a,b)=>b.v-a.v);
+                  const segsDonut=donutView==="tipo"?byType.map(t=>({k:t.key,v:t.val,color:t.color,label:t.label})):byActivo;
                   const legendItems=donutView==="tipo"
-                    ? byType.map(t=>({k:t.key,color:t.color,label:`${t.icon} ${t.label}`,pct:t.pct}))
-                    : byActivo.map(s=>({k:s.k,color:s.color,label:s.label,pct:totUSD>0?(s.v/totUSD)*100:0}));
+                    ?byType.map(t=>({k:t.key,color:t.color,label:`${t.icon} ${t.label}`,pct:t.pct}))
+                    :byActivo.map(s=>({k:s.k,color:s.color,label:s.label,pct:totUSD>0?(s.v/totUSD)*100:0}));
                   return(
                 <div style={{...card,padding:"18px 16px",display:"flex",flexDirection:"column"}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>

@@ -41,10 +41,18 @@ export function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currenc
       if(isToday&&liveMap[h.ticker]){
         price=liveMap[h.ticker];
       } else if(bars&&bars.length){
-        if(dateStr<bars[0].date)continue;
-        const rawP=findPrice2(bars,dateStr);
-        if(!rawP)continue;
-        price=rawP;
+        if(dateStr<bars[0].date){
+          // No historicos yet — fall back to average buy price so we don't phantom-gain later
+          const firstBuy=buys.slice().sort((a,b)=>a.date.localeCompare(b.date))[0];
+          if(!firstBuy||dateStr<firstBuy.date)continue;
+          const totalCost=buys.reduce((a,t)=>a+t.qty*t.price,0);
+          const totalQty=buys.reduce((a,t)=>a+t.qty,0);
+          price=totalQty>0?totalCost/totalQty:h.currentPrice;
+        } else {
+          const rawP=findPrice2(bars,dateStr);
+          if(!rawP)continue;
+          price=rawP;
+        }
       } else {
         const firstBuy=buys.slice().sort((a,b)=>a.date.localeCompare(b.date))[0];
         if(!firstBuy||dateStr<firstBuy.date)continue;

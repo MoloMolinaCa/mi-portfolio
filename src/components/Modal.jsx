@@ -464,11 +464,11 @@ export default function Modal({h,port=[],onSave,onClose,darkMode=true}){
                       <span style={{color:"var(--text-muted)",fontSize:12}}>↔</span>
                       {/* Porcentaje */}
                       <div style={{display:"flex",alignItems:"center",gap:4,flex:1}}>
-                        <input type="number" min="0" step="0.001" value={f.comisionPct===0?"0":f.comisionPct||""}
+                        <input type="number" min="0" step="0.001" value={f.comisionPct??""}
                           onChange={e=>{
-                            const pct=parseFloat(e.target.value)||0;
-                            const com=brutoComision>0?+(brutoComision*pct/100).toFixed(2):0;
-                            setF(p=>({...p,comisionPct:e.target.value,comision:com,netoManual:""}));
+                            const pct=parseFloat(e.target.value);
+                            const com=(!isNaN(pct)&&brutoComision>0)?+(brutoComision*pct/100).toFixed(2):0;
+                            setF(p=>({...p,comisionPct:e.target.value,comision:isNaN(pct)?p.comision:com,netoManual:""}));
                           }}
                           placeholder="0.00"
                           style={{...inp,padding:"4px 8px",fontSize:13,textAlign:"right"}}/>

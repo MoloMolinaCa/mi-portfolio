@@ -13,6 +13,7 @@ export default function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,hist
   const [currency,setCurrencyRaw]=useState(()=>_chartPrefs().currency||"USD_CCL");
   const [showUVA,setShowUVARaw]=useState(()=>_chartPrefs().showUVA??true);
   const [uvaTasa,setUvaTasaRaw]=useState(()=>_chartPrefs().uvaTasa??2.5);
+  const [uvaTasaStr,setUvaTasaStr]=useState(()=>String(_chartPrefs().uvaTasa??2.5));
   const uvaTasaRef = React.useRef(uvaTasa);
   useEffect(()=>{ uvaTasaRef.current = uvaTasa; },[uvaTasa]);
   const [showCER,setShowCERRaw]=useState(()=>_chartPrefs().showCER??false);
@@ -30,7 +31,7 @@ export default function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,hist
   const setPeriod = v => { setPeriodRaw(v); savePrefs({period:v}); };
   const setCurrency = v => { setCurrencyRaw(v); savePrefs({currency:v}); };
   const setShowUVA = fn => setShowUVARaw(prev=>{ const v=typeof fn==='function'?fn(prev):fn; savePrefs({showUVA:v}); return v; });
-  const setUvaTasa = v => { setUvaTasaRaw(v); savePrefs({uvaTasa:v}); };
+  const setUvaTasa = v => { setUvaTasaRaw(v); setUvaTasaStr(String(v)); savePrefs({uvaTasa:v}); };
   const setShowCER = fn => setShowCERRaw(prev=>{ const v=typeof fn==='function'?fn(prev):fn; savePrefs({showCER:v}); return v; });
   const setShowSP  = fn => setShowSPRaw(prev=>{ const v=typeof fn==='function'?fn(prev):fn; savePrefs({showSP:v}); return v; });
   const setShowCCL = fn => setShowCCLRaw(prev=>{ const v=typeof fn==='function'?fn(prev):fn; savePrefs({showCCL:v}); return v; });
@@ -364,8 +365,13 @@ export default function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,hist
               </button>
               {showUVA&&<>
                 <span style={{fontSize:10,color:"#FB923C"}}>+</span>
-                <input type="number" min="0" max="20" step="0.1" value={uvaTasa}
-                  onChange={e=>{setUvaTasa(parseFloat(e.target.value)||0); const p=PERIODS.find(x=>x.key===period); if(p)setTimeout(()=>load(p,historicos,scrubStart,scrubEnd),50);}}
+                <input type="number" min="0" max="20" step="0.1" value={uvaTasaStr}
+                  onChange={e=>{
+                    setUvaTasaStr(e.target.value);
+                    const n=parseFloat(e.target.value);
+                    if(!isNaN(n)&&n>=0){ setUvaTasaRaw(n); uvaTasaRef.current=n; savePrefs({uvaTasa:n}); const p=PERIODS.find(x=>x.key===period); if(p)setTimeout(()=>load(p,historicos,scrubStart,scrubEnd),50); }
+                  }}
+                  onBlur={e=>{ const n=parseFloat(e.target.value); setUvaTasaStr(isNaN(n)?String(uvaTasa):String(n)); }}
                   style={{width:42,background:"var(--bg-input)",border:"1px solid rgba(251,146,60,0.4)",borderRadius:4,padding:"1px 4px",color:"#FB923C",fontSize:10,textAlign:"center"}}/>
                 <span style={{fontSize:10,color:"#FB923C"}}>% anual</span>
               </>}

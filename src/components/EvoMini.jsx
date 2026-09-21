@@ -207,8 +207,9 @@ export default function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,hist
       let uva100 = null;
       if(currency==="ARS" && hist?.uva?.length){
         const uvaBars = hist.uva;
-        const startIdx = uvaBars.findIndex(x=>x.date>=datesWithToday[0]);
-        const uvaStart = startIdx>=0 ? uvaBars[startIdx] : uvaBars[0];
+        // Último bar en o antes del inicio del período (no el primero de la historia)
+        const uvaBefore = uvaBars.filter(x=>x.date<=datesWithToday[0]);
+        const uvaStart = uvaBefore.length ? uvaBefore[uvaBefore.length-1] : uvaBars[0];
         if(uvaStart){
           uva100 = datesWithToday.map(d=>{
             const uvaBar = uvaBars.filter(x=>x.date<=d);

@@ -1,7 +1,7 @@
 /* eslint-disable */
 
 // ── Time-Weighted Return (TWR) ────────────────────────────────────────────────
-export function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRate, livePricesMap, customEnd=null, realTodayStr=null){
+export function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRate, livePricesMap, customEnd=null, realTodayStr=null, bondFlows={}){
   if(!dates||dates.length<2) return [];
   if(!realTodayStr){const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset()-180);realTodayStr=d.toISOString().slice(0,10);}
   const todayStr=customEnd&&customEnd<realTodayStr?null:realTodayStr;
@@ -70,6 +70,39 @@ export function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currenc
     return total;
   };
 
+  // Pre-index confirmed coupons/amorts by fechaCobro for fast lookup
+  const couponsByDate={};
+  for(const [ticker, flows] of Object.entries(bondFlows||{})){
+    const isUSD=en.find(h=>h.ticker===ticker)?.buyCurrency==="USD"||String(ticker).toUpperCase().endsWith('D');
+    for(const f of (flows||[])){
+      if(!f.cobrado||!f.fechaCobro||!f.monto) continue;
+      if(!couponsByDate[f.fechaCobro]) couponsByDate[f.fechaCobro]=[];
+      couponsByDate[f.fechaCobro].push({ticker, monto:f.monto, isUSD});
+    }
+  }
+
+  const getCouponValueOnDate=(dateStr)=>{
+    const list=couponsByDate[dateStr];
+    if(!list?.length) return 0;
+    const cclDay=cclBars.length?findPrice2(cclBars,dateStr)||fxRate:fxRate;
+    const mepDay=mepBars.length?findPrice2(mepBars,dateStr)||fxRate:fxRate;
+    const dateT=new Date(dateStr).getTime();
+    let total=0;
+    for(const {ticker,monto,isUSD} of list){
+      const ticks=tradesByTicker[ticker]||[];
+      const buys=ticks.filter(t=>t.tipo==="compra"&&t._ts<=dateT);
+      const sells=ticks.filter(t=>t.tipo==="venta"&&t._ts<=dateT);
+      const qty=Math.max(0,buys.reduce((a,t)=>a+t.qty,0)-sells.reduce((a,t)=>a+t.qty,0));
+      if(qty<=0) continue;
+      const cash=monto*qty/100; // monto per 100 face
+      const cashConverted=isUSD
+        ? (currency==="ARS"?cash*cclDay:cash)
+        : (currency==="ARS"?cash:cash/(currency==="USD_CCL"?cclDay:mepDay));
+      total+=cashConverted;
+    }
+    return total;
+  };
+
   const twr=[{date:dates[0],val:100}];
   let cumulative=1;
 
@@ -82,12 +115,13 @@ export function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currenc
     const valPrevClose=getPortVal(prevDateStr, prevDateT);
     const dateT_before=dateT-1;
     const valTodayBeforeFlow=getPortVal(dateStr, dateT_before);
+    const couponsToday=getCouponValueOnDate(dateStr);
 
     let dayReturn;
     if(valPrevClose<=0){
       dayReturn=1;
     } else {
-      dayReturn=valTodayBeforeFlow/valPrevClose;
+      dayReturn=(valTodayBeforeFlow+couponsToday)/valPrevClose;
     }
 
     if(!isFinite(dayReturn)||dayReturn<=0||dayReturn>3)dayReturn=1;

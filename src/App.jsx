@@ -1065,7 +1065,25 @@ function App(){
       const pnlP=t.tipo==="venta"&&t.pnlPct!=null?fmtNum(t.pnlPct,2)+"%":"";
       return[t.date,t.ticker,`"${(t.name||"").replace(/"/g,'""')}"`,t.tipo,qty,fmtNum(t.price,4),t.currency||"ARS",fmtNum(bruto,2),com?fmtNum(com,2):"",fmtNum(neto,2),pnlA,pnlP].join(sep);
     });
-    const csv="\uFEFF"+header+"\n"+rows.join("\n");
+    // Cupones y amortizaciones cobrados
+    const couponRows=[];
+    for(const [ticker, bFlows] of Object.entries(bondFlows||{})){
+      const pos=en.find(h=>h.ticker===ticker);
+      const cur=pos?.buyCurrency||(String(ticker).toUpperCase().endsWith('D')?'USD':'ARS');
+      const name=pos?.name||ticker;
+      for(const f of (bFlows||[])){
+        if(!f.cobrado||!f.fechaCobro||!f.monto) continue;
+        const buysBefore=trades.filter(t=>t.ticker===ticker&&t.tipo==='compra'&&t.date<=f.fechaCobro);
+        const sellsBefore=trades.filter(t=>t.ticker===ticker&&t.tipo==='venta'&&t.date<=f.fechaCobro);
+        const qtyAt=Math.max(0,buysBefore.reduce((a,t)=>a+t.qty,0)-sellsBefore.reduce((a,t)=>a+t.qty,0));
+        if(qtyAt<=0) continue;
+        const monto=f.monto*qtyAt/100;
+        const tipoLabel=f.tipo==='amortizacion'?'amortizacion':'cupon';
+        couponRows.push([f.fechaCobro,ticker,`"${name.replace(/"/g,'""')}"`,tipoLabel,fmtNum(qtyAt,2),fmtNum(f.monto,6),cur,fmtNum(monto,2),"",fmtNum(monto,2),"",""].join(sep));
+      }
+    }
+    const allRows=[...rows,...couponRows].sort((a,b)=>a.localeCompare(b));
+    const csv="\uFEFF"+header+"\n"+allRows.join("\n");
     const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
     const url=URL.createObjectURL(blob);
     const a=document.createElement("a"); a.href=url;
@@ -1433,7 +1451,7 @@ function App(){
                 })()}
                 <div style={{...card,padding:"10px 18px 18px",display:"flex",flexDirection:"column"}}>
                   <div style={{height:window.innerWidth<768?340:410}}>
-                    <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} livePricesAll={livePrices} onExpand={()=>setChartModal(true)} xirrFull={xirrFull} totPnlTotal={totPnlTotal}/>
+                    <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} livePricesAll={livePrices} onExpand={()=>setChartModal(true)} xirrFull={xirrFull} totPnlTotal={totPnlTotal} bondFlows={bondFlows}/>
                   </div>
                 </div>
                 {chartModal&&(
@@ -1447,7 +1465,7 @@ function App(){
                       </button>
                     </div>
                     <div style={{flex:1,padding:"24px",minHeight:0}}>
-                      <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} isModal={true} livePricesAll={livePrices} xirrFull={xirrFull} totPnlTotal={totPnlTotal}/>
+                      <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} isModal={true} livePricesAll={livePrices} xirrFull={xirrFull} totPnlTotal={totPnlTotal} bondFlows={bondFlows}/>
                     </div>
                   </div>
                 )}
@@ -1579,7 +1597,7 @@ function App(){
 
           {/* OPERACIONES */}
           {tab==="operaciones"&&visitedTabs.has("operaciones")&&(
-            <OperacionesTab trades={trades} port={port} setTrades={setTrades} setPort={setPort} card={card} livePrices={livePrices} darkMode={darkMode}/>
+            <OperacionesTab trades={trades} port={port} setTrades={setTrades} setPort={setPort} card={card} livePrices={livePrices} darkMode={darkMode} bondFlows={bondFlows} en={en}/>
           )}
           {tab==="flujos"&&visitedTabs.has("flujos")&&(
             <FlujoTab port={port} trades={trades} bondFlows={bondFlows} setBondFlows={setBondFlows} card={card} fxRate={fxRate} historicos={historicos} isMobile={isMobile}/>

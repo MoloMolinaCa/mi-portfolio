@@ -1,7 +1,7 @@
 /* eslint-disable */
 import React, { useState, useMemo } from "react";
 
-export default function OperacionesTab({trades,port,setTrades,setPort,card,livePrices,darkMode}){
+export default function OperacionesTab({trades,port,setTrades,setPort,card,livePrices,darkMode,bondFlows={},en=[]}){
   const [editId,setEditId]=useState(null);
   const [editData,setEditData]=useState(null);
   const [confirmDelete,setConfirmDelete]=useState(null);
@@ -14,9 +14,37 @@ export default function OperacionesTab({trades,port,setTrades,setPort,card,liveP
   const fmtU=(n,d=2)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"USD",maximumFractionDigits:d}).format(n);
   const inp={background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:6,padding:"6px 10px",color:"var(--text-primary)",fontSize:13,width:"100%"};
 
-  const allTickers=[...new Set(trades.map(t=>t.ticker))].sort();
+  // Build coupon rows from confirmed bondFlows
+  const couponRows = useMemo(()=>{
+    const rows=[];
+    for(const [ticker, flows] of Object.entries(bondFlows||{})){
+      const pos=en.find(h=>h.ticker===ticker)||port.find(h=>h.ticker===ticker);
+      const currency=pos?.buyCurrency||(String(ticker).toUpperCase().endsWith('D')?'USD':'ARS');
+      const name=pos?.name||ticker;
+      for(const f of (flows||[])){
+        if(!f.cobrado||!f.fechaCobro||!f.monto) continue;
+        const buysBefore=trades.filter(t=>t.ticker===ticker&&t.tipo==='compra'&&t.date<=f.fechaCobro);
+        const sellsBefore=trades.filter(t=>t.ticker===ticker&&t.tipo==='venta'&&t.date<=f.fechaCobro);
+        const qtyAt=Math.max(0,buysBefore.reduce((a,t)=>a+t.qty,0)-sellsBefore.reduce((a,t)=>a+t.qty,0));
+        if(qtyAt<=0) continue;
+        const neto=f.monto*qtyAt/100;
+        rows.push({
+          id:`coupon-${ticker}-${f.id}`,
+          date:f.fechaCobro, ticker, name, currency,
+          tipo: f.tipo==='amortizacion'?'amortizacion':'cupon',
+          qty:qtyAt, price:f.monto, neto,
+          isCoupon:true,
+        });
+      }
+    }
+    return rows;
+  },[bondFlows,trades,en,port]);
 
-  const sorted=[...trades]
+  const allTickers=[...new Set([...trades.map(t=>t.ticker),...couponRows.map(r=>r.ticker)])].sort();
+
+  const allOps=[...trades,...couponRows];
+
+  const sorted=allOps
     .filter(t=>{
       if(filterTicker&&t.ticker!==filterTicker)return false;
       if(filterTipo&&t.tipo!==filterTipo)return false;
@@ -24,7 +52,7 @@ export default function OperacionesTab({trades,port,setTrades,setPort,card,liveP
       if(filterHasta&&t.date>filterHasta)return false;
       return true;
     })
-    .sort((a,b)=>b.date.localeCompare(a.date)||b.ts-a.ts);
+    .sort((a,b)=>b.date.localeCompare(a.date)||(b.ts||0)-(a.ts||0));
 
   const totalCompradoUSD = trades.filter(t=>t.tipo==="compra"&&t.currency==="USD").reduce((a,t)=>a+(+t.qty*+t.price+(+t.comision||0)),0);
   const totalCompradoARS = trades.filter(t=>t.tipo==="compra"&&t.currency==="ARS").reduce((a,t)=>a+(+t.qty*+t.price+(+t.comision||0)),0);
@@ -139,6 +167,8 @@ export default function OperacionesTab({trades,port,setTrades,setPort,card,liveP
               <option value="">Todos</option>
               <option value="compra">Compras</option>
               <option value="venta">Ventas</option>
+              <option value="cupon">Cupones</option>
+              <option value="amortizacion">Amortizaciones</option>
             </select>
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:4}}>
@@ -156,7 +186,7 @@ export default function OperacionesTab({trades,port,setTrades,setPort,card,liveP
             </button>
           )}
           <span style={{fontSize:11,color:"var(--text-muted)",marginLeft:"auto",alignSelf:"flex-end"}}>
-            {sorted.length} de {trades.length} operación{trades.length!==1?"es":""}
+            {sorted.length} de {allOps.length} operación{allOps.length!==1?"es":""}
           </span>
         </>}
       </div>
@@ -210,6 +240,30 @@ export default function OperacionesTab({trades,port,setTrades,setPort,card,liveP
             </thead>
             <tbody>
               {sorted.map(t=>{
+                if(t.isCoupon){
+                  const tipoColor=t.tipo==='amortizacion'?"rgba(139,92,246,0.15)":"rgba(251,191,36,0.12)";
+                  const tipoTextColor=t.tipo==='amortizacion'?"#a78bfa":"var(--yellow)";
+                  const tipoLabel=t.tipo==='amortizacion'?'Amort.':'Cupón';
+                  return(
+                    <tr key={t.id} style={{borderTop:"1px solid var(--border)",background:"rgba(251,191,36,0.03)"}}>
+                      <td style={tdL}>{t.date}</td>
+                      <td style={{...tdL,fontWeight:700,fontFamily:"monospace",color:"var(--accent)"}}>{t.ticker}</td>
+                      <td style={{...tdL,maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"var(--text-secondary)"}}>{t.name}</td>
+                      <td style={tdL}>
+                        <span style={{padding:"2px 8px",borderRadius:4,fontSize:11,fontWeight:600,background:tipoColor,color:tipoTextColor}}>
+                          {tipoLabel}
+                        </span>
+                      </td>
+                      <td style={{...tdR,color:"var(--text-muted)",fontSize:12}}>{Number(t.qty).toLocaleString("es-AR",{maximumFractionDigits:2})}</td>
+                      <td style={tdR}><span style={{fontSize:12}}>{Number(t.price).toFixed(6)}<span style={{display:"block",fontSize:9,color:"var(--text-muted)"}}>por 100VN</span></span></td>
+                      <td style={tdR}><span style={{color:"var(--text-muted)",fontSize:11}}>—</span></td>
+                      <td style={tdR}><span style={{color:"var(--text-muted)",fontSize:11}}>—</span></td>
+                      <td style={tdR}><span style={{color:"var(--text-muted)",fontSize:11}}>—</span></td>
+                      <td style={{...tdR,fontWeight:700,color:"var(--yellow)"}}>{t.currency==="USD"?fmtU(t.neto,2):fmtA(t.neto)}</td>
+                      <td style={{padding:"8px"}}></td>
+                    </tr>
+                  );
+                }
                 const isEditing=editId===t.id;
                 const bruto=+t.qty*+t.price;
                 const com=t.comision?+t.comision:0;

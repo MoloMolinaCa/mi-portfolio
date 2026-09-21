@@ -5,7 +5,7 @@ import { todayAR } from '../utils/shared';
 import { SEED_BOND_META } from '../constants/bondFlows';
 import Chart100 from './Chart100';
 
-export default function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=false,livePricesAll={},onExpand=null,xirrFull=null,totPnlTotal=null}){
+export default function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=false,livePricesAll={},onExpand=null,xirrFull=null,totPnlTotal=null,bondFlows={}}){
   const PERIODS=[{key:"mtd",label:"MTD",days:null,mtd:true},{key:"30d",label:"30d",days:30},{key:"90d",label:"90d",days:90},{key:"ytd",label:"YTD",days:null},{key:"1y",label:"1 año",days:365},{key:"3y",label:"3 años",days:1095}];
   // Persistir preferencias del gráfico en localStorage
   const _chartPrefs = ()=>{ try{ return JSON.parse(localStorage.getItem('gal_chart_prefs_v1')||'{}'); }catch{ return {}; } };
@@ -202,7 +202,7 @@ export default function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,hist
         if(datesWithToday[datesWithToday.length-1]!==realToday2)datesWithToday.push(realToday2);
       }
 
-      const port100=calcTWR(datesWithToday,trades,en,tickerBars,cclBars,mepBars,currency,fxRate,livePricesMap,customEnd,realToday2);
+      const port100=calcTWR(datesWithToday,trades,en,tickerBars,cclBars,mepBars,currency,fxRate,livePricesMap,customEnd,realToday2,bondFlows);
 
       // UVA benchmark — solo en modo ARS
       let uva100 = null;

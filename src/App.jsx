@@ -535,7 +535,7 @@ function App(){
   const ppcByTicker = useMemo(()=>port.reduce((acc,t)=>{
     const buys = trades.filter(tr=>tr.ticker===t.ticker&&tr.tipo==="compra");
     if(!buys.length){ acc[t.ticker]=t.buyPrice; return acc; }
-    const totalCost=buys.reduce((a,tr)=>a+tr.qty*tr.price,0);
+    const totalCost=buys.reduce((a,tr)=>a+tr.qty*tr.price+(tr.comision||0),0);
     const totalQty =buys.reduce((a,tr)=>a+tr.qty,0);
     acc[t.ticker]=totalQty>0?totalCost/totalQty:t.buyPrice;
     return acc;

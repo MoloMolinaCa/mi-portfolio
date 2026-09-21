@@ -54,9 +54,10 @@ export function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currenc
       }
       const cclDay=cclBars.length?findPrice2(cclBars,dateStr)||fxRate:fxRate;
       const mepDay=mepBars.length?findPrice2(mepBars,dateStr)||fxRate:fxRate;
-      if(currency==="ARS")total+=price*qtyFactor;
-      else if(currency==="USD_CCL")total+=price*qtyFactor/cclDay;
-      else total+=price*qtyFactor/mepDay;
+      const isUSD=h.buyCurrency==="USD";
+      if(currency==="ARS")total+=isUSD?price*qtyFactor*cclDay:price*qtyFactor;
+      else if(currency==="USD_CCL")total+=isUSD?price*qtyFactor:price*qtyFactor/cclDay;
+      else total+=isUSD?price*qtyFactor:price*qtyFactor/mepDay;
     }
     return total;
   };
@@ -124,6 +125,13 @@ export function calcPortValAtDate(dateStr, trades, tickerBars, cclBars, fxRate) 
   for(const t of trades){ if(!tbt[t.ticker]) tbt[t.ticker]=[]; tbt[t.ticker].push({...t,_ts:new Date(t.date).getTime()}); }
   function fp(bars,d){ if(!bars?.length)return null; let lo=0,hi=bars.length-1,res=-1; while(lo<=hi){const mid=(lo+hi)>>1;if(bars[mid].date<=d){res=mid;lo=mid+1;}else hi=mid-1;} return res>=0?bars[res].close||null:bars[0].close||null; }
   const isBond=(tkr)=>{const T=String(tkr||'').toUpperCase();return T.endsWith('D')||T.startsWith('TZX')||T.startsWith('GD')||T.startsWith('AL')||T.startsWith('AE')||T.startsWith('AO')||T.startsWith('TLCU');};
+  // USD-denominated instruments: bonds ending in D, and trades with currency=USD
+  const isUSDTicker=(tkr)=>{
+    const T=String(tkr||'').toUpperCase();
+    if(T.endsWith('D')&&isBond(tkr)) return true;
+    const allBuyTrades=(tbt[tkr]||[]).filter(t=>t.tipo==="compra");
+    return allBuyTrades.length>0&&allBuyTrades[0].currency==="USD";
+  };
   let total=0;
   for(const ticker of Object.keys(tickerBars)){
     const ticks=tbt[ticker]||[];
@@ -137,7 +145,7 @@ export function calcPortValAtDate(dateStr, trades, tickerBars, cclBars, fxRate) 
     const rawP=fp(bars,dateStr);
     if(!rawP)continue;
     const cclDay=cclBars.length?fp(cclBars,dateStr)||fxRate:fxRate;
-    total+=rawP*qtyF/cclDay;
+    total+=isUSDTicker(ticker)?rawP*qtyF:rawP*qtyF/cclDay;
   }
   return total;
 }

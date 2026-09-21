@@ -652,7 +652,8 @@ function App(){
         if(remaining<=0) break;
         const used = Math.min(lot.qty, remaining);
         const lotQtyF = isBond ? used/100 : used;
-        costUSD += toUSDamt((lot.price||0)*lotQtyF, lot.currency||"ARS", lot.date);
+        const lotCom = lot.comision ? (+lot.comision * used / lot.qty) : 0;
+        costUSD += toUSDamt((lot.price||0)*lotQtyF + lotCom, lot.currency||"ARS", lot.date);
         remaining -= used;
       }
       return acc + proceedsUSD - costUSD;

@@ -85,23 +85,25 @@ const fmtP = (n) => `${n>=0?"+":""}${n.toFixed(2)}%`;
 const pc   = (n) => n>=0?"var(--green)":"var(--red)";
 // todayAR importado desde ./utils/shared
 
-// Repara double-encoding UTF-8 repetido ("ó" → "Ã³" → "Ã\x83Â³" → ...)
-// Cada guardado con encoding malo duplicaba la corrupción → necesitamos iterar hasta estabilizar
-function fixUtf8(s) {
-  if(typeof s !== 'string') return s;
-  let cur = s;
-  for(let i = 0; i < 30; i++) {
-    try {
-      const next = decodeURIComponent(escape(cur));
-      if(next === cur) break;
-      cur = next;
-    } catch { break; }
-  }
-  return cur;
+// Nombres canónicos por ticker — fallback cuando el nombre en storage está corrupto
+const CANONICAL_NAMES = {
+  "FIMA-PREMD": "FIMA Premium Dólares Cl A",
+  "FIMA-PREM":  "FIMA Premium Cl A",
+};
+// Detecta corrupción: chars Ã/Â en combinación, o nombre excesivamente largo
+function isCorrupted(s) {
+  if(typeof s !== 'string') return false;
+  return s.length > 60 || /[ÃÂ]{2}/.test(s);
 }
 function fixNames(arr) {
   if(!Array.isArray(arr)) return arr;
-  return arr.map(x => x && typeof x === 'object' && x.name ? {...x, name: fixUtf8(x.name)} : x);
+  return arr.map(x => {
+    if(!x || typeof x !== 'object') return x;
+    if(!x.name) return x;
+    if(isCorrupted(x.name) && x.ticker && CANONICAL_NAMES[x.ticker])
+      return {...x, name: CANONICAL_NAMES[x.ticker]};
+    return x;
+  });
 }
 
 // Último día hábil (lunes-viernes) <= fecha dada

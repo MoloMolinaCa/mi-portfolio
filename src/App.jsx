@@ -85,6 +85,16 @@ const fmtP = (n) => `${n>=0?"+":""}${n.toFixed(2)}%`;
 const pc   = (n) => n>=0?"var(--green)":"var(--red)";
 // todayAR importado desde ./utils/shared
 
+// Repara double-encoding UTF-8 ("ó" guardado mal como "ãÂ" o "Ã³")
+function fixUtf8(s) {
+  if(typeof s !== 'string') return s;
+  try { return decodeURIComponent(escape(s)); } catch { return s; }
+}
+function fixNames(arr) {
+  if(!Array.isArray(arr)) return arr;
+  return arr.map(x => x && typeof x === 'object' && x.name ? {...x, name: fixUtf8(x.name)} : x);
+}
+
 // Último día hábil (lunes-viernes) <= fecha dada
 function lastHabil(dateStr) {
   const d = new Date(dateStr+'T12:00:00');
@@ -251,8 +261,8 @@ function App(){
     {id:127,ticker:"TZX27",tipo:"compra",qty:112815,price:356.0,currency:"ARS",date:"2026-04-06",ts:127000,name:"BONO REP ARG CER V30/06/27",comision:1200.99},
   ];
 
-    const [port,setPort]         = useState(()=>{ try{ const s=localStorage.getItem("gal_port_v1"); if(s) return JSON.parse(s); }catch{} return GALICIA_PORTFOLIO; });
-  const [trades,setTrades]     = useState(()=>{ try{ const s=localStorage.getItem("gal_trades_v3"); if(s) return JSON.parse(s); }catch{} return SEED_TRADES; });
+    const [port,setPort]         = useState(()=>{ try{ const s=localStorage.getItem("gal_port_v1"); if(s) return fixNames(JSON.parse(s)); }catch{} return GALICIA_PORTFOLIO; });
+  const [trades,setTrades]     = useState(()=>{ try{ const s=localStorage.getItem("gal_trades_v3"); if(s) return fixNames(JSON.parse(s)); }catch{} return SEED_TRADES; });
   const [bondFlows,setBondFlows] = useState(()=>{ try{ const s=localStorage.getItem("gal_bond_flows_v1"); if(s) return {...SEED_BOND_FLOWS,...JSON.parse(s)}; }catch{} return SEED_BOND_FLOWS; });
   const [storageReady,setStorageReady] = useState(false);
   const [syncChecked,setSyncChecked] = useState(false);
@@ -345,8 +355,8 @@ function App(){
     try{
       const sp=localStorage.getItem("gal_port_v1");
       const st=localStorage.getItem("gal_trades_v3");
-      if(sp) setPort(JSON.parse(sp));
-      if(st) setTrades(JSON.parse(st));
+      if(sp) setPort(fixNames(JSON.parse(sp)));
+      if(st) setTrades(fixNames(JSON.parse(st)));
       const bf=localStorage.getItem('gal_bond_flows_v1');
       if(bf){
         const saved=JSON.parse(bf);
@@ -376,8 +386,8 @@ function App(){
         const shouldApply = !localHasData || ghTs > localTs;
         if(shouldApply){
           isLoadingFromGH.current = true;
-          if(data.port?.length)   setPort(data.port);
-          if(data.trades?.length) setTrades(data.trades);
+          if(data.port?.length)   setPort(fixNames(data.port));
+          if(data.trades?.length) setTrades(fixNames(data.trades));
           if(data.bondFlowsDelta && Object.keys(data.bondFlowsDelta).length){
             setBondFlows(expandBondFlowsDelta(data.bondFlowsDelta));
           } else if(data.bondFlows && Object.keys(data.bondFlows).length){

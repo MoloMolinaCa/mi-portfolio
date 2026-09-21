@@ -205,8 +205,9 @@ export default function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,hist
 
       // UVA benchmark — solo en modo ARS
       let uva100 = null;
-      if(currency==="ARS" && hist?.uva?.length){
-        const uvaBars = hist.uva;
+      const _uvaBars = hist?.UVA || hist?.uva;
+      if(currency==="ARS" && _uvaBars?.length){
+        const uvaBars = _uvaBars;
         // Último bar en o antes del inicio del período (no el primero de la historia)
         const uvaBefore = uvaBars.filter(x=>x.date<=datesWithToday[0]);
         const uvaStart = uvaBefore.length ? uvaBefore[uvaBefore.length-1] : uvaBars[0];

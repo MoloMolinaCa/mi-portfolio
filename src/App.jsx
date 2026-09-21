@@ -85,10 +85,19 @@ const fmtP = (n) => `${n>=0?"+":""}${n.toFixed(2)}%`;
 const pc   = (n) => n>=0?"var(--green)":"var(--red)";
 // todayAR importado desde ./utils/shared
 
-// Repara double-encoding UTF-8 ("ó" guardado mal como "ãÂ" o "Ã³")
+// Repara double-encoding UTF-8 repetido ("ó" → "Ã³" → "Ã\x83Â³" → ...)
+// Cada guardado con encoding malo duplicaba la corrupción → necesitamos iterar hasta estabilizar
 function fixUtf8(s) {
   if(typeof s !== 'string') return s;
-  try { return decodeURIComponent(escape(s)); } catch { return s; }
+  let cur = s;
+  for(let i = 0; i < 30; i++) {
+    try {
+      const next = decodeURIComponent(escape(cur));
+      if(next === cur) break;
+      cur = next;
+    } catch { break; }
+  }
+  return cur;
 }
 function fixNames(arr) {
   if(!Array.isArray(arr)) return arr;

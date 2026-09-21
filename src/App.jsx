@@ -384,7 +384,7 @@ function App(){
             setBondFlows(expandBondFlowsDelta(computeBondFlowsDelta({...SEED_BOND_FLOWS,...data.bondFlows})));
           }
           localStorage.setItem('gal_last_save', ghTs.toString());
-          setTimeout(()=>{ isLoadingFromGH.current = false; }, 500);
+          setTimeout(()=>{ isLoadingFromGH.current = false; }, 3000);
         }
         setSyncChecked(true);
         setSyncStatus("idle");
@@ -424,7 +424,6 @@ function App(){
     if(!storageReady) return;
     try{
       localStorage.setItem("gal_bond_flows_v1",JSON.stringify(bondFlows));
-      localStorage.setItem('gal_last_save', Date.now().toString());
     }catch{}
   },[bondFlows,storageReady]);
 
@@ -501,7 +500,7 @@ function App(){
               if(data.trades?.length) setTrades(data.trades);
               if(data.bondFlowsDelta&&Object.keys(data.bondFlowsDelta).length) setBondFlows(expandBondFlowsDelta(data.bondFlowsDelta)); else if(data.bondFlows&&Object.keys(data.bondFlows).length) setBondFlows(expandBondFlowsDelta(computeBondFlowsDelta({...SEED_BOND_FLOWS,...data.bondFlows})));
               localStorage.setItem('gal_last_save',ghTs.toString());
-              setTimeout(()=>{isLoadingFromGH.current=false;},500);
+              setTimeout(()=>{isLoadingFromGH.current=false;},3000);
             }
           }).catch(()=>{});
           refreshPrices();

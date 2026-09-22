@@ -1,4 +1,6 @@
 /* eslint-disable */
+import { calcVNR } from './shared';
+import { SEED_BOND_META } from '../constants/bondFlows';
 
 // ── Time-Weighted Return (TWR) ────────────────────────────────────────────────
 export function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRate, livePricesMap, customEnd=null, realTodayStr=null, bondFlows={}){
@@ -77,7 +79,7 @@ export function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currenc
     for(const f of (flows||[])){
       if(!f.cobrado||!f.fechaCobro||!f.monto) continue;
       if(!couponsByDate[f.fechaCobro]) couponsByDate[f.fechaCobro]=[];
-      couponsByDate[f.fechaCobro].push({ticker, monto:f.monto, isUSD});
+      couponsByDate[f.fechaCobro].push({ticker, monto:f.monto, isUSD, tipo:f.tipo, fechaCobro:f.fechaCobro});
     }
   }
 
@@ -88,13 +90,21 @@ export function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currenc
     const mepDay=mepBars.length?findPrice2(mepBars,dateStr)||fxRate:fxRate;
     const dateT=new Date(dateStr).getTime();
     let total=0;
-    for(const {ticker,monto,isUSD} of list){
+    for(const {ticker,monto,isUSD,tipo,fechaCobro} of list){
       const ticks=tradesByTicker[ticker]||[];
       const buys=ticks.filter(t=>t.tipo==="compra"&&t._ts<=dateT);
       const sells=ticks.filter(t=>t.tipo==="venta"&&t._ts<=dateT);
       const qty=Math.max(0,buys.reduce((a,t)=>a+t.qty,0)-sells.reduce((a,t)=>a+t.qty,0));
       if(qty<=0) continue;
-      const cash=monto*qty/100; // monto per 100 face
+      // Amortizaciones siempre sobre VN original; cupones sobre VNR residual
+      let cash;
+      if(tipo==='amortizacion'){
+        cash=monto*qty/100;
+      } else {
+        const vnrInicial=(SEED_BOND_META?.[ticker]?.vnrInicial)??100;
+        const vnr=calcVNR(bondFlows[ticker]||[], fechaCobro, vnrInicial);
+        cash=monto*qty*vnr/10000; // monto per 100 VNR × (vnr/100) × qty/100
+      }
       const cashConverted=isUSD
         ? (currency==="ARS"?cash*cclDay:cash)
         : (currency==="ARS"?cash:cash/(currency==="USD_CCL"?cclDay:mepDay));

@@ -1,5 +1,7 @@
 /* eslint-disable */
 import React, { useState, useMemo } from "react";
+import { calcVNR } from '../utils/shared';
+import { SEED_BOND_META } from '../constants/bondFlows';
 
 export default function OperacionesTab({trades,port,setTrades,setPort,card,livePrices,darkMode,bondFlows={},en=[]}){
   const [editId,setEditId]=useState(null);
@@ -27,7 +29,15 @@ export default function OperacionesTab({trades,port,setTrades,setPort,card,liveP
         const sellsBefore=trades.filter(t=>t.ticker===ticker&&t.tipo==='venta'&&t.date<=f.fechaCobro);
         const qtyAt=Math.max(0,buysBefore.reduce((a,t)=>a+t.qty,0)-sellsBefore.reduce((a,t)=>a+t.qty,0));
         if(qtyAt<=0) continue;
-        const neto=f.monto*qtyAt/100;
+        const isAmortFlow=f.tipo==='amortizacion';
+        let neto;
+        if(isAmortFlow){
+          neto=f.monto*qtyAt/100;
+        } else {
+          const vnrIni=(SEED_BOND_META?.[ticker]?.vnrInicial)??100;
+          const vnrAt=calcVNR(flows, f.fechaCobro, vnrIni);
+          neto=f.monto*qtyAt*vnrAt/10000;
+        }
         rows.push({
           id:`coupon-${ticker}-${f.id}`,
           date:f.fechaCobro, ticker, name, currency,

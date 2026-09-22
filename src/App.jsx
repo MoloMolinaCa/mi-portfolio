@@ -16,7 +16,7 @@ import EvoMini from './components/EvoMini';
 import Modal from './components/Modal';
 import EvoTab from './components/EvoTab';
 import PortfolioTab from './components/PortfolioTab';
-import { ASSET_TYPES, todayAR } from './utils/shared';
+import { ASSET_TYPES, todayAR, calcVNR } from './utils/shared';
 
 // Componente de countdown — aislado para no re-renderizar el App entero
 function CountdownDisplay({lastRefresh, priceStatus, liveCount, portLen, marketOpen}){
@@ -696,7 +696,14 @@ function App(){
         const sellsBefore=trades.filter(t=>t.ticker===ticker&&t.tipo==='venta'&&t.date<=f.fechaCobro);
         const qtyAt=Math.max(0,buysBefore.reduce((a,t)=>a+t.qty,0)-sellsBefore.reduce((a,t)=>a+t.qty,0));
         if(qtyAt<=0) continue;
-        const cashLocal=f.monto*qtyAt/100;
+        let cashLocal;
+        if(f.tipo==='amortizacion'){
+          cashLocal=f.monto*qtyAt/100;
+        } else {
+          const vnrIni=(SEED_BOND_META?.[ticker]?.vnrInicial)??100;
+          const vnrAt=calcVNR(bFlows, f.fechaCobro, vnrIni);
+          cashLocal=f.monto*qtyAt*vnrAt/10000;
+        }
         total+=buyCurrency==='USD'?cashLocal:cashLocal/getCCL(f.fechaCobro);
       }
     }
@@ -873,7 +880,14 @@ function App(){
           const sellsBefore=trades.filter(t=>t.ticker===ticker&&t.tipo==='venta'&&t.date<=f.fechaCobro);
           const qtyAt=Math.max(0,buysBefore.reduce((a,t)=>a+t.qty,0)-sellsBefore.reduce((a,t)=>a+t.qty,0));
           if(qtyAt<=0) continue;
-          const cashLocal=f.monto*qtyAt/100;
+          let cashLocal;
+          if(f.tipo==='amortizacion'){
+            cashLocal=f.monto*qtyAt/100;
+          } else {
+            const vnrIni=(SEED_BOND_META?.[ticker]?.vnrInicial)??100;
+            const vnrAt=calcVNR(bFlows, f.fechaCobro, vnrIni);
+            cashLocal=f.monto*qtyAt*vnrAt/10000;
+          }
           const cashUSD=buyCurrency==='USD'?cashLocal:cashLocal/getCCL(f.fechaCobro);
           flows.push({date:f.fechaCobro, amount:cashUSD});
         }
@@ -1078,7 +1092,15 @@ function App(){
         const sellsBefore=trades.filter(t=>t.ticker===ticker&&t.tipo==='venta'&&t.date<=f.fechaCobro);
         const qtyAt=Math.max(0,buysBefore.reduce((a,t)=>a+t.qty,0)-sellsBefore.reduce((a,t)=>a+t.qty,0));
         if(qtyAt<=0) continue;
-        const monto=f.monto*qtyAt/100;
+        const isAmortRow=f.tipo==='amortizacion';
+        let monto;
+        if(isAmortRow){
+          monto=f.monto*qtyAt/100;
+        } else {
+          const vnrIni=(SEED_BOND_META?.[ticker]?.vnrInicial)??100;
+          const vnrAt=calcVNR(bFlows, f.fechaCobro, vnrIni);
+          monto=f.monto*qtyAt*vnrAt/10000;
+        }
         const tipoLabel=f.tipo==='amortizacion'?'amortizacion':'cupon';
         couponRows.push([f.fechaCobro,ticker,`"${name.replace(/"/g,'""')}"`,tipoLabel,fmtNum(qtyAt,2),fmtNum(f.monto,6),cur,fmtNum(monto,2),"",fmtNum(monto,2),"",""].join(sep));
       }
@@ -1271,7 +1293,11 @@ function App(){
             return(
               <div style={{marginBottom:16,display:'flex',flexDirection:'column',gap:8}}>
                 {pending.map(f=>{
-                  const defaultTotal=+(f.monto*(f.qty/100)).toFixed(6);
+                  const vnrInicial=(SEED_BOND_META?.[f.ticker]?.vnrInicial)??100;
+                  const vnr=calcVNR(bondFlows[f.ticker]||[], f.date, vnrInicial);
+                  const isAmort=f.tipo==='amortizacion';
+                  // amort: sobre VN original; cupon: sobre VNR residual
+                  const defaultTotal=isAmort ? +(f.monto*(f.qty/100)).toFixed(6) : +(f.monto*f.qty*vnr/10000).toFixed(6);
                   const editKey=`${f.ticker}-${f.id}`;
                   const editVal=pendingCuponEdits?.[editKey];
                   const isEditing=editVal!==undefined;
@@ -1295,7 +1321,10 @@ function App(){
                                 style={{width:110,background:'var(--bg-input)',border:'1px solid var(--yellow)',borderRadius:5,padding:'2px 6px',color:'var(--text-primary)',fontSize:13,fontWeight:700,fontFamily:"'DM Mono',monospace"}}
                               />
                               <span style={{fontSize:10,color:'var(--text-muted)'}}>
-                                {f.qty>0&&+editVal>0?`= ${(+editVal/f.qty*100).toFixed(6)} por 100VN`:''}
+                                {f.qty>0&&+editVal>0?(isAmort
+                                  ? `= ${(+editVal/f.qty*100).toFixed(6)} por 100 VN`
+                                  : `= ${(+editVal/(f.qty*vnr/100)).toFixed(6)} por 100 VNR${vnr<100?` (VNR=${vnr.toFixed(4)}%)`:''}`
+                                ):''}
                               </span>
                             </span>
                           ):(
@@ -1321,7 +1350,10 @@ function App(){
                         <button onClick={()=>{
                           let montoFinal=f.monto;
                           if(isEditing&&+editVal>0&&f.qty>0){
-                            montoFinal=+editVal/f.qty*100;
+                            // amort → % VN original; cupon → tasa per 100 VNR
+                            montoFinal=isAmort
+                              ? +editVal/f.qty*100
+                              : +editVal/(f.qty*vnr/100);
                           }
                           setBondFlows(prev=>({...prev,[f.ticker]:(prev[f.ticker]||[]).map(x=>x.id===f.id?{...x,cobrado:true,fechaCobro:todayN,monto:montoFinal}:x)}));
                           setPendingCuponEdits(p=>{const n={...p};delete n[editKey];return n;});

@@ -47,8 +47,11 @@ split_log = []
 
 # ── Carga de tickers ─────────────────────────────────────────────────────────
 def load_portfolio_tickers():
-    """Lee tickers desde el sync endpoint (dinamico) + portfolio_tickers.json (fallback)."""
+    """Lee tickers desde el sync endpoint (dinamico) + portfolio_tickers.json (fallback).
+    Solo actualiza tickers con posicion activa (qty > 0). Los vendidos conservan
+    su historial existente pero no acumulan nuevas barras."""
     tickers = set()
+    sold_tickers = set()
     # 1. Sync endpoint
     try:
         r = requests.get("https://portafolio-rendimientos.vercel.app/api/sync", timeout=10)
@@ -56,16 +59,30 @@ def load_portfolio_tickers():
             data = r.json()
             port = data.get("port", [])
             trades = data.get("trades", [])
+            port_tickers = {item.get("ticker","") for item in port if item.get("ticker")}
             for item in port:
                 t = item.get("ticker", "")
                 if t:
                     tickers.add(t)
-            for item in trades:
-                t = item.get("ticker", "")
-                if t:
-                    tickers.add(t)
+            # Solo agregar tickers de trades si aun tienen posicion activa
+            qty_map = {}
+            for t in trades:
+                tk = t.get("ticker","")
+                if not tk: continue
+                qty = float(t.get("qty", 0))
+                if t.get("tipo") == "compra":
+                    qty_map[tk] = qty_map.get(tk, 0) + qty
+                elif t.get("tipo") == "venta":
+                    qty_map[tk] = qty_map.get(tk, 0) - qty
+            for tk, qty in qty_map.items():
+                if qty > 0.01:
+                    tickers.add(tk)
+                elif tk not in port_tickers:
+                    sold_tickers.add(tk)
             if tickers:
-                print(f"  Sync endpoint: {len(tickers)} tickers")
+                print(f"  Sync endpoint: {len(tickers)} tickers activos, {len(sold_tickers)} vendidos (no se actualizan)")
+                if sold_tickers:
+                    print(f"  Vendidos: {sorted(sold_tickers)}")
     except Exception as e:
         print(f"  ! Sync endpoint: {e}")
     # 2. Fallback
@@ -80,9 +97,9 @@ def load_portfolio_tickers():
     # 3. Hardcoded fallback
     if not tickers:
         tickers = set(BYMA_TICKERS_FALLBACK)
-    # Excluir FCI
-    tickers = {t for t in tickers if not t.startswith("FIMA")}
-    print(f"  Total tickers: {sorted(tickers)}")
+    # Excluir FCI y vendidos
+    tickers = {t for t in tickers if not t.startswith("FIMA") and t not in sold_tickers}
+    print(f"  Total tickers a actualizar: {sorted(tickers)}")
     return sorted(tickers)
 
 

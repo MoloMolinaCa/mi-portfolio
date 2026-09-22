@@ -225,8 +225,8 @@ export default function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,hist
 
       // CER benchmark — solo en modo ARS
       let cer100 = null;
-      if(currency==="ARS" && hist?.cer?.length){
-        const cerBars = hist.cer;
+      if(currency==="ARS" && (hist?.CER?.length||hist?.cer?.length)){
+        const cerBars = hist.CER||hist.cer;
         const startIdx = cerBars.findIndex(x=>x.date>=datesWithToday[0]);
         const cerStart = startIdx>=0 ? cerBars[startIdx] : cerBars[0];
         if(cerStart){

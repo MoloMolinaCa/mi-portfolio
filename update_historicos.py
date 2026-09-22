@@ -386,8 +386,11 @@ def main():
 
     # 7. Guardar
     print(f"\n[7] Guardando {OUTPUT_FILE}...")
-    # Limpiar entries vacias
+    # Limpiar entries vacias y barras con close nulo/cero
     data = {k: v for k, v in data.items() if v and isinstance(v, list) and len(v) > 0}
+    data = {k: [b for b in v if isinstance(b, dict) and b.get("close") is not None and b.get("close") != 0]
+            for k, v in data.items()}
+    data = {k: v for k, v in data.items() if v}
     # Limpiar NaN/Inf que no son JSON valido (fix: NaN rompe el parser del browser)
     def clean_nans(obj):
         if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):

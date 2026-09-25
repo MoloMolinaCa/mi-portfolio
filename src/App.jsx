@@ -7,7 +7,7 @@ import BondWizard from './components/BondWizard';
 import FlujoTab from './components/FlujoTab';
 import { fetchFXLive, fetchAllLivePrices, fetchTreasury10Y } from './utils/priceUtils';
 import Chart100 from './components/Chart100';
-import { calcTWR, calcXIRR, deannualizeXIRR, calcModifiedDietzReturn, calcSeriesPeriodReturn, calcPortValAtDate } from './utils/calcUtils';
+import { calcTWR, calcXIRR, deannualizeXIRR, calcModifiedDietzReturn, calcSeriesPeriodReturn, calcPortValAtDate, isBondTicker, setKnownBonds } from './utils/calcUtils';
 import OperacionesTab from './components/OperacionesTab';
 import RankingWidget from './components/RankingWidget';
 import DayMoversWidget from './components/DayMoversWidget';
@@ -543,6 +543,7 @@ function App(){
   },{}),[port,trades]);
 
   const today = todayAR();
+  setKnownBonds(port.filter(h=>String(h.type||'').startsWith('bono')).map(h=>h.ticker));
   const en = useMemo(()=>port.map(h=>{
     const live=livePrices[h.ticker];
     const isBondH=h.type==="bono_ars"; // solo ARS cotiza por 100 laminas diferente al historico
@@ -829,7 +830,7 @@ function App(){
         : trades.filter(t=>t.date>prevDec31&&t.date<=yEndDate);
       yearTrades.forEach(t=>{
         const T2=String(t.ticker||'').toUpperCase();
-        const isBondT2=T2.endsWith('D')||T2.startsWith('TZX')||T2.startsWith('GD')||T2.startsWith('AL')||T2.startsWith('AE')||T2.startsWith('AO')||T2.startsWith('TLCU');
+        const isBondT2=isBondTicker(T2);
         const qty2=t.qty||0; const qtyF2=isBondT2?qty2/100:qty2;
         const com2=t.comision?+t.comision:0;
         const amt=toUSD((t.price||0)*qtyF2+(t.tipo==='compra'?com2:-com2), t.currency||"ARS", t.date);
@@ -858,7 +859,7 @@ function App(){
       if(!trades.length||!en.length) return null;
       const cclBars=historicos?.CCL||[];
       const getCCL=(date)=>{let lo=0,hi=cclBars.length-1,res=-1;while(lo<=hi){const mid=(lo+hi)>>1;if(cclBars[mid].date<=date){res=mid;lo=mid+1;}else hi=mid-1;}return res>=0?cclBars[res].close:(fxRate||1);};
-      const isBondT=(tkr)=>{const T=String(tkr||'').toUpperCase();return T.endsWith('D')||T.startsWith('TZX')||T.startsWith('GD')||T.startsWith('AL')||T.startsWith('AE')||T.startsWith('AO')||T.startsWith('TLCU');};
+      const isBondT=isBondTicker;
       const flows=[];
       for(const t of trades){
         const isBond=isBondT(t.ticker);

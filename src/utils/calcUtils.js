@@ -2,6 +2,16 @@
 import { calcVNR } from './shared';
 import { SEED_BOND_META } from '../constants/bondFlows';
 
+// Tickers marcados como bono en el portfolio (type bono_*); los vendidos caen al regex
+const _knownBonds = new Set();
+export function setKnownBonds(tickers){ for(const t of tickers||[]) _knownBonds.add(String(t).toUpperCase()); }
+export function isBondTicker(tkr){
+  const T=String(tkr||'').toUpperCase();
+  if(_knownBonds.has(T)||SEED_BOND_META?.[T]) return true;
+  if(!/\d/.test(T)) return false;
+  return T.endsWith('D')||/^(TZX|TX|TY|TV|GD|AL|AE|AO|AN|TLCU|BP|S\d)/.test(T);
+}
+
 // ── Time-Weighted Return (TWR) ────────────────────────────────────────────────
 export function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRate, livePricesMap, customEnd=null, realTodayStr=null, bondFlows={}){
   if(!dates||dates.length<2) return [];
@@ -176,7 +186,7 @@ export function calcPortValAtDate(dateStr, trades, tickerBars, cclBars, fxRate) 
   const tbt = {};
   for(const t of trades){ if(!tbt[t.ticker]) tbt[t.ticker]=[]; tbt[t.ticker].push({...t,_ts:new Date(t.date).getTime()}); }
   function fp(bars,d){ if(!bars?.length)return null; let lo=0,hi=bars.length-1,res=-1; while(lo<=hi){const mid=(lo+hi)>>1;if(bars[mid].date<=d){res=mid;lo=mid+1;}else hi=mid-1;} return res>=0?bars[res].close||null:bars[0].close||null; }
-  const isBond=(tkr)=>{const T=String(tkr||'').toUpperCase();return T.endsWith('D')||T.startsWith('TZX')||T.startsWith('GD')||T.startsWith('AL')||T.startsWith('AE')||T.startsWith('AO')||T.startsWith('TLCU');};
+  const isBond=isBondTicker;
   // USD-denominated instruments: bonds ending in D, and trades with currency=USD
   const isUSDTicker=(tkr)=>{
     const T=String(tkr||'').toUpperCase();

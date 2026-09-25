@@ -1,6 +1,6 @@
 /* eslint-disable */
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { calcTWR, calcXIRR, deannualizeXIRR } from '../utils/calcUtils';
+import { calcTWR, calcXIRR, deannualizeXIRR, isBondTicker as isBondTickerU } from '../utils/calcUtils';
 import { todayAR } from '../utils/shared';
 import { SEED_BOND_META } from '../constants/bondFlows';
 import Chart100 from './Chart100';
@@ -274,7 +274,7 @@ export default function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,hist
     try{
       const _cclBarsXIRR=historicos?.CCL||[];
       const _getCCLForDate=(dateStr)=>{if(!_cclBarsXIRR.length)return liveFX?.CCL||fxRate||1;let lo=0,hi=_cclBarsXIRR.length-1,res=-1;while(lo<=hi){const mid=(lo+hi)>>1;if(_cclBarsXIRR[mid].date<=dateStr){res=mid;lo=mid+1;}else hi=mid-1;}return res>=0?_cclBarsXIRR[res].close:(liveFX?.CCL||fxRate||1);};
-      const isBondTicker=(tkr)=>{const T=String(tkr||'').toUpperCase();if(SEED_BOND_META&&SEED_BOND_META[T])return true;if(/\d/.test(T)&&(T.endsWith('D')||T.startsWith('TZX')||T.startsWith('GD')||T.startsWith('AL')||T.startsWith('AE')||T.startsWith('AO')||T.startsWith('TLCU')))return true;return false;};
+      const isBondTicker=(tkr)=>_bT[String(tkr||'').toUpperCase()]||isBondTickerU(tkr);
       const currencyByTicker={};for(const t0 of(trades||[])){if(!t0?.ticker||!t0?.currency)continue;currencyByTicker[String(t0.ticker).toUpperCase()]=String(t0.currency).toUpperCase();}
       const _findHistPrice=(ticker,dateStr)=>{const bars=(historicos?.[ticker]||[]);if(!bars.length)return 0;let lo=0,hi=bars.length-1,res=-1;while(lo<=hi){const mid=(lo+hi)>>1;if(bars[mid].date<=dateStr){res=mid;lo=mid+1;}else hi=mid-1;}if(res>=0)return bars[res].close||0;for(const b of bars){if(b.date>=dateStr)return b.close||0;}return 0;};
       const posAsOf=(dateStr,includeSameDay)=>{const pos={};for(const t of(trades||[])){if(!t?.ticker)continue;if(includeSameDay){if(t.date>dateStr)continue;}else{if(t.date>=dateStr)continue;}if(t.tipo==="compra")pos[t.ticker]=(pos[t.ticker]||0)+(+t.qty||0);if(t.tipo==="venta")pos[t.ticker]=(pos[t.ticker]||0)-(+t.qty||0);}return pos;};
@@ -561,7 +561,7 @@ export default function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,hist
         const fN=n=>{const d=toDisplay(n);const a=Math.abs(d);return(d>=0?"+":"\u2212")+sym+(a>=1e6?(a/1e6).toFixed(1)+"M":a>=1e3?Math.round(a).toLocaleString("es-AR"):a.toFixed(0));};
         const pcc=n=>n>=0?"var(--green)":"var(--red)";
         const pill=(l,v,col)=>{const bg=col==="#60A5FA"?"rgba(96,165,250,0.1)":v>=0?"rgba(16,185,129,0.1)":"rgba(239,68,68,0.1)";const bd=col==="#60A5FA"?"rgba(96,165,250,0.25)":v>=0?"rgba(16,185,129,0.25)":"rgba(239,68,68,0.25)";return(<div key={l} style={{display:"inline-flex",alignItems:"center",gap:isModal?8:5,background:bg,padding:isModal?"5px 14px":"3px 10px",borderRadius:8,border:"1px solid "+bd}}><span style={{fontSize:isModal?11:9,color:"var(--text-muted)",fontWeight:500}}>{l}</span><span style={{fontSize:isModal?16:12,fontWeight:700,color:col,fontFamily:"monospace"}}>{fN(v)}</span></div>);};
-        return(<div style={{display:"flex",alignItems:"center",gap:isModal?14:8,marginTop:isModal?10:6,paddingTop:isModal?10:6,borderTop:"1px solid var(--border)",flexWrap:"wrap"}}><span style={{fontSize:isModal?10:8,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1.5,fontWeight:700}}>P&L</span>{pill("Portfolio",portDollarPnL,pcc(portDollarPnL))}{spDollarPnL!=null&&pill("S&P 500",spDollarPnL,"#60A5FA")}<span style={{fontSize:isModal?9:7,color:"var(--text-muted)",marginLeft:"auto"}}>en el per\u00edodo</span></div>);
+        return(<div style={{display:"flex",alignItems:"center",gap:isModal?14:8,marginTop:isModal?10:6,paddingTop:isModal?10:6,borderTop:"1px solid var(--border)",flexWrap:"wrap"}}><span style={{fontSize:isModal?10:8,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1.5,fontWeight:700}}>P&L</span>{pill("Portfolio",portDollarPnL,pcc(portDollarPnL))}{spDollarPnL!=null&&pill("S&P 500",spDollarPnL,"#60A5FA")}<span style={{fontSize:isModal?9:7,color:"var(--text-muted)",marginLeft:"auto"}}>en el período</span></div>);
       })()}
 
     </div>

@@ -1296,67 +1296,89 @@ function App(){
                   const vnrInicial=(SEED_BOND_META?.[f.ticker]?.vnrInicial)??100;
                   const vnr=calcVNR(bondFlows[f.ticker]||[], f.date, vnrInicial);
                   const isAmort=f.tipo==='amortizacion';
-                  // amort: sobre VN original; cupon: sobre VNR residual
                   const defaultTotal=isAmort ? +(f.monto*(f.qty/100)).toFixed(6) : +(f.monto*f.qty*vnr/10000).toFixed(6);
                   const editKey=`${f.ticker}-${f.id}`;
-                  const editVal=pendingCuponEdits?.[editKey];
-                  const isEditing=editVal!==undefined;
-                  const displayTotal=isEditing?editVal:defaultTotal;
+                  const editState=pendingCuponEdits?.[editKey]; // {monto, fecha} o undefined
+                  const isEditing=editState!==undefined;
+                  const editMonto=editState?.monto??'';
+                  const editFecha=editState?.fecha??todayN;
+                  const displayTotal=isEditing&&editMonto!==''?editMonto:defaultTotal;
                   const cur=f.currency==='USD'?'US$':'$';
+                  const openEdit=()=>setPendingCuponEdits(p=>({...p,[editKey]:{monto:String(defaultTotal),fecha:todayN}}));
+                  const closeEdit=()=>setPendingCuponEdits(p=>{const n={...p};delete n[editKey];return n;});
                   return(
-                    <div key={f.id} style={{background:'rgba(251,191,36,0.08)',border:'1px solid rgba(251,191,36,0.25)',borderRadius:10,padding:'12px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}>
-                      <div style={{display:'flex',alignItems:'center',gap:10,flex:1,minWidth:0}}>
-                        <span style={{fontSize:18}}>💰</span>
+                    <div key={f.id} style={{background:'rgba(251,191,36,0.08)',border:'1px solid rgba(251,191,36,0.25)',borderRadius:10,padding:'12px 16px',display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}>
+                      <div style={{display:'flex',alignItems:'flex-start',gap:10,flex:1,minWidth:0}}>
+                        <span style={{fontSize:18,marginTop:2}}>💰</span>
                         <div style={{minWidth:0}}>
-                          <span style={{fontWeight:700,color:'var(--yellow)',fontSize:13}}>{f.ticker}</span>
-                          <span style={{color:'var(--text-secondary)',fontSize:12,marginLeft:8}}>{f.tipo==='amortizacion'?'Amortización':'Cupón'} · {f.date?.slice(8)+'/'+f.date?.slice(5,7)+'/'+f.date?.slice(0,4)}</span>
+                          <div style={{display:'flex',alignItems:'center',flexWrap:'wrap',gap:6}}>
+                            <span style={{fontWeight:700,color:'var(--yellow)',fontSize:13}}>{f.ticker}</span>
+                            <span style={{color:'var(--text-secondary)',fontSize:12}}>{f.tipo==='amortizacion'?'Amortización':'Cupón'} · vto {f.date?.slice(8)+'/'+f.date?.slice(5,7)+'/'+f.date?.slice(0,4)}</span>
+                          </div>
                           {isEditing?(
-                            <span style={{display:'inline-flex',alignItems:'center',gap:4,marginLeft:8}}>
-                              <span style={{fontSize:12,color:'var(--text-muted)'}}>{cur}</span>
-                              <input
-                                type="number" step="any" autoFocus
-                                value={editVal}
-                                onChange={e=>setPendingCuponEdits(p=>({...p,[editKey]:e.target.value}))}
-                                onKeyDown={e=>{if(e.key==='Escape')setPendingCuponEdits(p=>{const n={...p};delete n[editKey];return n;});}}
-                                style={{width:110,background:'var(--bg-input)',border:'1px solid var(--yellow)',borderRadius:5,padding:'2px 6px',color:'var(--text-primary)',fontSize:13,fontWeight:700,fontFamily:"'DM Mono',monospace"}}
-                              />
-                              <span style={{fontSize:10,color:'var(--text-muted)'}}>
-                                {f.qty>0&&+editVal>0?(isAmort
-                                  ? `= ${(+editVal/f.qty*100).toFixed(6)} por 100 VN`
-                                  : `= ${(+editVal/(f.qty*vnr/100)).toFixed(6)} por 100 VNR${vnr<100?` (VNR=${vnr.toFixed(4)}%)`:''}`
-                                ):''}
-                              </span>
-                            </span>
+                            <div style={{display:'flex',flexDirection:'column',gap:6,marginTop:6}}>
+                              {/* Monto */}
+                              <div style={{display:'flex',alignItems:'center',gap:4}}>
+                                <span style={{fontSize:11,color:'var(--text-muted)',width:52}}>Monto</span>
+                                <span style={{fontSize:12,color:'var(--text-muted)'}}>{cur}</span>
+                                <input
+                                  type="number" step="any"
+                                  value={editMonto}
+                                  onChange={e=>setPendingCuponEdits(p=>({...p,[editKey]:{...p[editKey],monto:e.target.value}}))}
+                                  onKeyDown={e=>{if(e.key==='Escape')closeEdit();}}
+                                  style={{width:110,background:'var(--bg-input)',border:'1px solid var(--yellow)',borderRadius:5,padding:'2px 6px',color:'var(--text-primary)',fontSize:13,fontWeight:700,fontFamily:"'DM Mono',monospace"}}
+                                />
+                                <span style={{fontSize:10,color:'var(--text-muted)'}}>
+                                  {f.qty>0&&+editMonto>0?(isAmort
+                                    ? `= ${(+editMonto/f.qty*100).toFixed(6)} por 100 VN`
+                                    : `= ${(+editMonto/(f.qty*vnr/100)).toFixed(6)} por 100 VNR${vnr<100?` (VNR=${vnr.toFixed(4)}%)`:''}`
+                                  ):''}
+                                </span>
+                              </div>
+                              {/* Fecha de cobro */}
+                              <div style={{display:'flex',alignItems:'center',gap:4}}>
+                                <span style={{fontSize:11,color:'var(--text-muted)',width:52}}>Fecha</span>
+                                <input
+                                  type="date"
+                                  value={editFecha}
+                                  max={todayN}
+                                  onChange={e=>setPendingCuponEdits(p=>({...p,[editKey]:{...p[editKey],fecha:e.target.value}}))}
+                                  style={{background:'var(--bg-input)',border:'1px solid var(--yellow)',borderRadius:5,padding:'2px 6px',color:'var(--text-primary)',fontSize:12,fontFamily:"'DM Mono',monospace"}}
+                                />
+                                <span style={{fontSize:10,color:'var(--text-muted)'}}>fecha de acreditación</span>
+                              </div>
+                            </div>
                           ):(
-                            <span style={{color:'var(--text-primary)',fontWeight:700,fontSize:13,marginLeft:8,fontFamily:"'DM Mono',monospace"}}>
+                            <span style={{color:'var(--text-primary)',fontWeight:700,fontSize:13,marginTop:4,display:'inline-block',fontFamily:"'DM Mono',monospace"}}>
                               {cur}{defaultTotal.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})}
+                              <span style={{fontWeight:400,fontSize:11,color:'var(--text-muted)',marginLeft:6}}>· cobro: {todayN.slice(8)+'/'+todayN.slice(5,7)+'/'+todayN.slice(0,4)}</span>
                             </span>
                           )}
                         </div>
                       </div>
-                      <div style={{display:'flex',gap:6,flexShrink:0}}>
+                      <div style={{display:'flex',gap:6,flexShrink:0,marginTop:2}}>
                         {!isEditing&&(
-                          <button onClick={()=>setPendingCuponEdits(p=>({...p,[editKey]:String(defaultTotal)}))}
+                          <button onClick={openEdit}
                             style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:6,padding:'5px 10px',color:'var(--text-muted)',cursor:'pointer',fontSize:12,whiteSpace:'nowrap'}}>
                             ✏️ Editar
                           </button>
                         )}
                         {isEditing&&(
-                          <button onClick={()=>setPendingCuponEdits(p=>{const n={...p};delete n[editKey];return n;})}
+                          <button onClick={closeEdit}
                             style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:6,padding:'5px 10px',color:'var(--text-muted)',cursor:'pointer',fontSize:12}}>
                             ✕
                           </button>
                         )}
                         <button onClick={()=>{
+                          const fechaFinal=isEditing&&editFecha?editFecha:todayN;
                           let montoFinal=f.monto;
-                          if(isEditing&&+editVal>0&&f.qty>0){
-                            // amort → % VN original; cupon → tasa per 100 VNR
+                          if(isEditing&&+editMonto>0&&f.qty>0){
                             montoFinal=isAmort
-                              ? +editVal/f.qty*100
-                              : +editVal/(f.qty*vnr/100);
+                              ? +editMonto/f.qty*100
+                              : +editMonto/(f.qty*vnr/100);
                           }
-                          setBondFlows(prev=>({...prev,[f.ticker]:(prev[f.ticker]||[]).map(x=>x.id===f.id?{...x,cobrado:true,fechaCobro:todayN,monto:montoFinal}:x)}));
-                          setPendingCuponEdits(p=>{const n={...p};delete n[editKey];return n;});
+                          setBondFlows(prev=>({...prev,[f.ticker]:(prev[f.ticker]||[]).map(x=>x.id===f.id?{...x,cobrado:true,fechaCobro:fechaFinal,monto:montoFinal}:x)}));
+                          closeEdit();
                         }} style={{background:'rgba(251,191,36,0.15)',border:'1px solid rgba(251,191,36,0.4)',borderRadius:6,padding:'5px 14px',color:'var(--yellow)',cursor:'pointer',fontSize:12,fontWeight:600,whiteSpace:'nowrap'}}>
                           ✓ Confirmar cobro
                         </button>

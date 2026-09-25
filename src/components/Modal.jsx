@@ -70,8 +70,7 @@ function VentaTickerSearch({port, value, onSelect}){
           placeholder="Escribí para filtrar (ej: AAPL, GD...)"
           style={{...inp,borderColor:value?"var(--green)":undefined}}
         />
-        {value&&<span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:13}}>â
-</span>}
+        {value&&<span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:13}}>✓</span>}
         {open&&filtered.length>0&&(
           <div style={{position:"absolute",top:"100%",left:0,right:0,background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:8,zIndex:50,maxHeight:200,overflowY:"auto",marginTop:4,boxShadow:"0 8px 24px rgba(0,0,0,0.4)"}}>
             {[...filtered].sort((a,b)=>a.ticker.localeCompare(b.ticker)).map(pos=>(
@@ -293,7 +292,7 @@ export default function Modal({h,port=[],onSave,onClose,darkMode=true}){
                   style={{...inp,border:`1px solid ${statusColor[tickerStatus]}`,paddingRight:36}}/>
                 <span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:14}}>
                   {tickerStatus==="checking"&&<span style={{animation:"spin 0.8s linear infinite",display:"inline-block"}}>⟳</span>}
-                  {tickerStatus==="confirmed"&&"â"}
+                  {tickerStatus==="confirmed"&&"✓"}
                   {tickerStatus==="notfound"&&"❓"}
                 </span>
 

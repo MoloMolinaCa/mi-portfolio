@@ -1065,8 +1065,7 @@ export default function FlujoTab({port, trades, bondFlows, setBondFlows, card, f
                             </td>
                             <td style={{padding:'10px 12px',fontSize:12}}>
                               {cobrado
-                                ?<span style={{color:'var(--green)'}}>â
- {fmtD(row.cupon?.fechaCobro||row.amort?.fechaCobro)}</span>
+                                ?<span style={{color:'var(--green)'}}>✓ {fmtD(row.cupon?.fechaCobro||row.amort?.fechaCobro)}</span>
                                 :!isFuture
                                   ?<button onClick={()=>confirmCobro(selected,row.ids)}
                                     style={{background:'rgba(52,211,153,0.1)',border:'1px solid rgba(52,211,153,0.3)',borderRadius:6,padding:'3px 10px',color:'var(--green)',cursor:'pointer',fontSize:11}}>

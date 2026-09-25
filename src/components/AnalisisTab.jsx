@@ -551,8 +551,7 @@ export default function AnalisisTab({en, historicos, fxRate, currency, card, liv
                         <span style={{color:h.usedBuyPrice?"var(--yellow)":"var(--text-muted)",fontFamily:"'DM Mono',monospace"}}>
                           {h.buyCurrency==="USD"?fmtU(h.basePrice,2):`$${h.basePrice.toLocaleString("es-AR",{maximumFractionDigits:2})}`}
                         </span>
-                        {h.usedBuyPrice&&<span title="Sin historial para este período — se usó precio de compra" style={{marginLeft:4,color:"var(--yellow)",fontSize:9}}>â
-pc</span>}
+                        {h.usedBuyPrice&&<span title="Sin historial para este período — se usó precio de compra" style={{marginLeft:4,color:"var(--yellow)",fontSize:9}}>ⓘ pc</span>}
                       </td>
                     )}
                     <td style={{padding:"8px 12px",textAlign:"right",fontWeight:600,color:pc(h.retPct)}}>{fmtP(h.retPct)}</td>
@@ -578,8 +577,7 @@ pc</span>}
           </table>
           {selP.key!=="todo" && contributionsSorted.some(h=>h.usedBuyPrice) && (
             <div style={{marginTop:8,fontSize:11,color:"var(--yellow)",display:"flex",gap:6,alignItems:"center"}}>
-              <span>â
-pc</span>
+              <span>ⓘ pc</span>
               <span>= sin datos históricos para este período — se usó precio de compra como base.</span>
             </div>
           )}
@@ -720,7 +718,7 @@ pc</span>
           const volWeighted = vols.reduce((a,v,i)=>a+weights[i]*v,0) * Math.sqrt(252) * 100;
 
           // Volatilidad real del portfolio (con correlaciones) — fórmula matricial
-          // Ï_p² = Î£_i Î£_j w_i * w_j * Ï_i * Ï_j * Ï_ij
+          // σ_p² = Σ_i Σ_j w_i * w_j * σ_i * σ_j * ρ_ij
           let varPort = 0;
           for(let i=0;i<activos.length;i++){
             for(let j=0;j<activos.length;j++){
@@ -734,7 +732,7 @@ pc</span>
           const divRatio = volWeighted>0 ? volWeighted/volPort : 1;
 
           // Contribución marginal al riesgo de cada activo
-          // MCTR_i = w_i * Î£_j (w_j * Ï_i * Ï_j * Ï_ij) / Ï_p
+          // MCTR_i = w_i * Σ_j (w_j * σ_i * σ_j * ρ_ij) / σ_p
           const sigmaP = Math.sqrt(Math.max(0,varPort));
           const mctr = activos.map((_,i)=>{
             if(sigmaP===0) return 0;

@@ -5,7 +5,7 @@ import { todayAR } from '../utils/shared';
 import { SEED_BOND_META } from '../constants/bondFlows';
 import Chart100 from './Chart100';
 
-export default function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=false,livePricesAll={},onExpand=null,xirrFull=null,totPnlTotal=null,bondFlows={}}){
+export default function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=false,livePricesAll={},onExpand=null,xirrFull=null,totPnlTotal=null,totPnlPrice=null,bondFlows={}}){
   const PERIODS=[{key:"mtd",label:"MTD",days:null,mtd:true},{key:"30d",label:"30d",days:30},{key:"90d",label:"90d",days:90},{key:"ytd",label:"YTD",days:null},{key:"1y",label:"1 año",days:365},{key:"3y",label:"3 años",days:1095}];
   // Persistir preferencias del gráfico en localStorage
   const _chartPrefs = ()=>{ try{ return JSON.parse(localStorage.getItem('gal_chart_prefs_v1')||'{}'); }catch{ return {}; } };
@@ -317,11 +317,14 @@ export default function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,hist
       const isFullPeriod = xirrFull && xirrFull.xirrTotal!=null && (
         startValUSD<=0 || (firstBuyDate && s<=firstBuyDate)
       );
+      // % Retorno: usar xirrFull cuando el periodo = historia completa (mas preciso que recalcular)
       const finalPortXIRR = isFullPeriod ? xirrFull.xirrTotal : portXIRR;
-      const finalPortDollarPnL = isFullPeriod&&totPnlTotal!=null ? totPnlTotal : portDollarPnL;
+      // P&L $: cuando es periodo completo, usar totPnlPrice (= totPnl + pnlRealizado de App.jsx)
+      // que es exactamente lo que muestra la tab Analisis (precio actual - precio compra, sin cupones)
+      const finalPortDollarPnL = (isFullPeriod && totPnlPrice!=null) ? totPnlPrice : portDollarPnL;
       return {portXIRR:finalPortXIRR,spyXIRR,alpha,portDollarPnL:finalPortDollarPnL,spDollarPnL};
     }catch(err){console.warn('XIRR error:',err);return {portXIRR:null,spyXIRR:null,alpha:null};}
-  },[cd,trades,en,fxRate,liveFX,currency,_bT,historicos,xirrFull,totPnlTotal]);
+  },[cd,trades,en,fxRate,liveFX,currency,_bT,historicos,xirrFull,totPnlTotal,totPnlPrice]);
 
   const series=cd?[
     {key:"port",data:cd.port100,color:"var(--green)",bold:true},

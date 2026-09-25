@@ -1546,7 +1546,7 @@ function App(){
                 })()}
                 <div style={{...card,padding:"10px 18px 18px",display:"flex",flexDirection:"column"}}>
                   <div style={{height:window.innerWidth<768?340:410}}>
-                    <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} livePricesAll={livePrices} onExpand={()=>setChartModal(true)} xirrFull={xirrFull} totPnlTotal={totPnlTotal} bondFlows={bondFlows}/>
+                    <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} livePricesAll={livePrices} onExpand={()=>setChartModal(true)} xirrFull={xirrFull} totPnlTotal={totPnlTotal} totPnlPrice={totPnl+pnlRealizado} bondFlows={bondFlows}/>
                   </div>
                 </div>
                 {chartModal&&(
@@ -1560,7 +1560,7 @@ function App(){
                       </button>
                     </div>
                     <div style={{flex:1,padding:"24px",minHeight:0}}>
-                      <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} isModal={true} livePricesAll={livePrices} xirrFull={xirrFull} totPnlTotal={totPnlTotal} bondFlows={bondFlows}/>
+                      <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} isModal={true} livePricesAll={livePrices} xirrFull={xirrFull} totPnlTotal={totPnlTotal} totPnlPrice={totPnl+pnlRealizado} bondFlows={bondFlows}/>
                     </div>
                   </div>
                 )}

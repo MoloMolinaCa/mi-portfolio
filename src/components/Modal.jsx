@@ -1,5 +1,6 @@
 /* eslint-disable */
 import React, { useState } from "react";
+import NumInput from './NumInput';
 import { ASSET_TYPES, todayAR } from '../utils/shared';
 
 const fmtU = (n,d=0) => new Intl.NumberFormat("es-AR",{style:"currency",currency:"USD",maximumFractionDigits:d}).format(n);
@@ -378,7 +379,7 @@ export default function Modal({h,port=[],onSave,onClose,darkMode=true}){
               <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>{f.operacion==="venta"?"Cantidad a vender":"Nominales"}</span>
               <div style={{display:"flex",gap:4}}>
                 <div style={{flex:1,position:"relative"}}>
-                  <input type="number" min="0" max={f.operacion==="venta"?availableQty:undefined} value={f.qty}
+                  <NumInput min="0" max={f.operacion==="venta"?availableQty:undefined} value={f.qty}
                     onChange={e=>{const v=+e.target.value;set("qty",f.operacion==="venta"?Math.min(v,availableQty):v||e.target.value);}}
                     style={{...inp,flex:1,width:"100%",color:"transparent",caretColor:"var(--text-primary)",borderColor:overSelling?"var(--red)":undefined}}/>
                   {/* Display formateado encima del input */}
@@ -402,7 +403,7 @@ export default function Modal({h,port=[],onSave,onClose,darkMode=true}){
             <div style={{display:"flex",flexDirection:"column",gap:4}}>
               <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>{f.operacion==="venta"?"Precio de venta":"Precio de compra (PPC)"}</span>
               <div style={{display:"flex",gap:8}}>
-                <input type="number" min="0" value={f.buyPrice} onChange={e=>{
+                <NumInput min="0" value={f.buyPrice} onChange={e=>{
                   set("buyPrice",e.target.value);
                   // Recalcular comision ARS si hay % cargado
                   if(f.comisionPct){
@@ -446,7 +447,7 @@ export default function Modal({h,port=[],onSave,onClose,darkMode=true}){
                       <div style={{display:"flex",alignItems:"center",gap:4,flex:1}}>
                         <span style={{fontSize:11,color:"var(--text-muted)"}}>{f.buyCurrency}</span>
                         <div style={{flex:1,position:"relative"}}>
-                          <input type="number" min="0" value={f.comision||""}
+                          <NumInput min="0" value={f.comision||""}
                             onChange={e=>{
                               const monto=+e.target.value;
                               setF(p=>({...p,comision:monto,netoManual:"",
@@ -464,7 +465,7 @@ export default function Modal({h,port=[],onSave,onClose,darkMode=true}){
                       <span style={{color:"var(--text-muted)",fontSize:12}}>↔</span>
                       {/* Porcentaje */}
                       <div style={{display:"flex",alignItems:"center",gap:4,flex:1}}>
-                        <input type="number" min="0" step="0.001" value={f.comisionPct??""}
+                        <NumInput min="0" step="0.001" value={f.comisionPct??""}
                           onChange={e=>{
                             const pct=parseFloat(e.target.value);
                             const com=(!isNaN(pct)&&brutoComision>0)?+(brutoComision*pct/100).toFixed(2):0;
@@ -488,7 +489,7 @@ export default function Modal({h,port=[],onSave,onClose,darkMode=true}){
                           : `$ ${netoCalc.toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}`}
                       </div>
                       {/* Input editable debajo (para ajuste manual) */}
-                      <input type="number" min="0"
+                      <NumInput min="0"
                         value={f.netoManual||""}
                         onChange={e=>{
                           const neto=+e.target.value;

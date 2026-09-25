@@ -1,6 +1,7 @@
 /* eslint-disable */
 // v2.2 - modular split
 import React, { useState, useEffect, useMemo, memo, useRef, useCallback } from "react";
+import NumInput from './components/NumInput';
 import { SEED_BOND_FLOWS, SEED_BOND_META } from './constants/bondFlows';
 import { computeBondFlowsDelta, expandBondFlowsDelta } from './utils/bondUtils';
 import { mergeSnapshots, sameSnapshot } from './utils/sync';
@@ -1138,8 +1139,8 @@ function App(){
                               <div style={{display:'flex',alignItems:'center',gap:4}}>
                                 <span style={{fontSize:11,color:'var(--text-muted)',width:52}}>Monto</span>
                                 <span style={{fontSize:12,color:'var(--text-muted)'}}>{cur}</span>
-                                <input
-                                  type="number" step="any"
+                                <NumInput
+                                   step="any"
                                   value={editMonto}
                                   onChange={e=>setPendingCuponEdits(p=>({...p,[editKey]:{...p[editKey],monto:e.target.value}}))}
                                   onKeyDown={e=>{if(e.key==='Escape')closeEdit();}}
@@ -1509,7 +1510,7 @@ function App(){
 
           {/* OPERACIONES */}
           {tab==="operaciones"&&visitedTabs.has("operaciones")&&(
-            <OperacionesTab trades={trades} port={port} setTrades={setTrades} setPort={setPort} card={card} livePrices={livePrices} darkMode={darkMode} bondFlows={bondFlows} en={en}/>
+            <OperacionesTab trades={trades} port={port} setTrades={setTrades} setPort={setPort} card={card} livePrices={livePrices} darkMode={darkMode} bondFlows={bondFlows} setBondFlows={setBondFlows} en={en}/>
           )}
           {tab==="flujos"&&visitedTabs.has("flujos")&&(
             <FlujoTab port={port} trades={trades} bondFlows={bondFlows} setBondFlows={setBondFlows} card={card} fxRate={fxRate} historicos={historicos} isMobile={isMobile}/>

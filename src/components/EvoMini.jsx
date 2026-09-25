@@ -1,5 +1,6 @@
 /* eslint-disable */
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import NumInput from './NumInput';
 import { calcTWR, calcXIRR, deannualizeXIRR, isBondTicker as isBondTickerU, calcPeriodPnL, applyCommissionsToBenchmark } from '../utils/calcUtils';
 import { todayAR } from '../utils/shared';
 import { SEED_BOND_META } from '../constants/bondFlows';
@@ -344,7 +345,7 @@ export default function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,hist
               </button>
               {showUVA&&<>
                 <span style={{fontSize:10,color:"#FB923C"}}>+</span>
-                <input type="number" min="0" max="20" step="0.1" value={uvaTasaStr}
+                <NumInput min="0" max="20" step="0.1" value={uvaTasaStr}
                   onChange={e=>{
                     setUvaTasaStr(e.target.value);
                     const n=parseFloat(e.target.value);

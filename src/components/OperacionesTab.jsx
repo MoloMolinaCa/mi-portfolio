@@ -1,9 +1,12 @@
 /* eslint-disable */
 import React, { useState, useMemo } from "react";
+import NumInput from './NumInput';
 import { calcVNR } from '../utils/shared';
+import { isBondTicker } from '../utils/calcUtils';
 import { SEED_BOND_META } from '../constants/bondFlows';
 
-export default function OperacionesTab({trades,port,setTrades,setPort,card,livePrices,darkMode,bondFlows={},en=[]}){
+export default function OperacionesTab({trades,port,setTrades,setPort,card,livePrices,darkMode,bondFlows={},setBondFlows,en=[]}){
+  const [editCoupon,setEditCoupon]=useState(null);
   const [editId,setEditId]=useState(null);
   const [editData,setEditData]=useState(null);
   const [confirmDelete,setConfirmDelete]=useState(null);
@@ -15,6 +18,29 @@ export default function OperacionesTab({trades,port,setTrades,setPort,card,liveP
   const fmtA=(n)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:2}).format(n);
   const fmtU=(n,d=2)=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"USD",maximumFractionDigits:d}).format(n);
   const inp={background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:6,padding:"6px 10px",color:"var(--text-primary)",fontSize:13,width:"100%"};
+
+  // Neto cobrado = monto (por 100 VN) × factor; el factor depende de la tenencia y el VNR a la fecha de cobro
+  const couponFactor=(ticker,flows,f,date)=>{
+    const qtyAt=Math.max(0,trades.filter(t=>t.ticker===ticker&&t.date<=date).reduce((a,t)=>a+(t.tipo==='compra'?+t.qty:-t.qty),0));
+    if(f.tipo==='amortizacion') return qtyAt/100;
+    const vnrIni=(SEED_BOND_META?.[ticker]?.vnrInicial)??100;
+    return qtyAt*calcVNR(flows,date,vnrIni)/10000;
+  };
+
+  const saveCoupon=()=>{
+    const {ticker,flowId,fecha,neto}=editCoupon;
+    const flows=bondFlows[ticker]||[];const f=flows.find(x=>x.id===flowId);
+    if(!f||!fecha||!(+neto>0)) return;
+    const factor=couponFactor(ticker,flows,f,fecha);
+    if(!(factor>0)){ window.alert('No había tenencia de '+ticker+' en esa fecha.'); return; }
+    setBondFlows(prev=>({...prev,[ticker]:(prev[ticker]||[]).map(x=>x.id===flowId?{...x,fechaCobro:fecha,monto:+neto/factor}:x)}));
+    setEditCoupon(null);
+  };
+
+  const anularCobro=(row)=>{
+    if(!window.confirm('¿Anular el cobro de este '+(row.tipo==='amortizacion'?'pago de amortización':'cupón')+' de '+row.ticker+'? Vuelve a quedar pendiente.')) return;
+    setBondFlows(prev=>({...prev,[row.ticker]:(prev[row.ticker]||[]).map(x=>x.id===row.flowId?{...x,cobrado:false,fechaCobro:null}:x)}));
+  };
 
   // Build coupon rows from confirmed bondFlows
   const couponRows = useMemo(()=>{
@@ -43,7 +69,7 @@ export default function OperacionesTab({trades,port,setTrades,setPort,card,liveP
           date:f.fechaCobro, ticker, name, currency,
           tipo: f.tipo==='amortizacion'?'amortizacion':'cupon',
           qty:qtyAt, price:f.monto, neto,
-          isCoupon:true,
+          isCoupon:true, flowId:f.id,
         });
       }
     }
@@ -64,9 +90,11 @@ export default function OperacionesTab({trades,port,setTrades,setPort,card,liveP
     })
     .sort((a,b)=>b.date.localeCompare(a.date)||(b.ts||0)-(a.ts||0));
 
-  const totalCompradoUSD = trades.filter(t=>t.tipo==="compra"&&t.currency==="USD").reduce((a,t)=>a+(+t.qty*+t.price+(+t.comision||0)),0);
-  const totalCompradoARS = trades.filter(t=>t.tipo==="compra"&&t.currency==="ARS").reduce((a,t)=>a+(+t.qty*+t.price+(+t.comision||0)),0);
-  const totalVendidoUSD  = trades.filter(t=>t.tipo==="venta"&&t.currency==="USD").reduce((a,t)=>a+(+t.qty*+t.price),0);
+  // Bonos cotizan por 100 VN
+  const bruto_=(t)=>+t.qty*+t.price*(isBondTicker(t.ticker)?0.01:1);
+  const totalCompradoUSD = trades.filter(t=>t.tipo==="compra"&&t.currency==="USD").reduce((a,t)=>a+(bruto_(t)+(+t.comision||0)),0);
+  const totalCompradoARS = trades.filter(t=>t.tipo==="compra"&&t.currency==="ARS").reduce((a,t)=>a+(bruto_(t)+(+t.comision||0)),0);
+  const totalVendidoUSD  = trades.filter(t=>t.tipo==="venta"&&t.currency==="USD").reduce((a,t)=>a+(bruto_(t)),0);
   const totalComisiones  = trades.reduce((a,t)=>a+(+t.comision||0),0);
 
   const tickerResumen = useMemo(()=>{
@@ -74,7 +102,7 @@ export default function OperacionesTab({trades,port,setTrades,setPort,card,liveP
     for(const t of trades){
       if(!map[t.ticker]) map[t.ticker]={ticker:t.ticker,name:t.name||t.ticker,compras:0,ventas:0,cantCompras:0,cantVentas:0,currency:t.currency||"ARS",comisiones:0};
       const m=map[t.ticker];
-      const importe=+t.qty*+t.price;
+      const importe=bruto_(t);
       const com=+t.comision||0;
       if(t.tipo==="compra"){m.compras+=importe+com;m.cantCompras++;}
       else{m.ventas+=importe;m.cantVentas++;}
@@ -87,7 +115,7 @@ export default function OperacionesTab({trades,port,setTrades,setPort,card,liveP
 
   const saveEdit=()=>{if(!window.confirm("Confirmar modificacion?"))return;
     if(!editData)return;
-    setTrades(prev=>prev.map(t=>t.id===editId?{...editData,qty:+editData.qty,price:+editData.price,tcCompra:editData.tcCompra?+editData.tcCompra:undefined}:t));
+    setTrades(prev=>prev.map(t=>t.id===editId?{...editData,qty:+editData.qty,price:+editData.price,comision:editData.comision?+editData.comision:0,tcCompra:editData.tcCompra?+editData.tcCompra:undefined}:t));
     setPort(prev=>prev.map(p=>{
       if(p.ticker!==editData.ticker)return p;
       return{...p,buyPrice:+editData.price};
@@ -254,9 +282,12 @@ export default function OperacionesTab({trades,port,setTrades,setPort,card,liveP
                   const tipoColor=t.tipo==='amortizacion'?"rgba(139,92,246,0.15)":"rgba(251,191,36,0.12)";
                   const tipoTextColor=t.tipo==='amortizacion'?"#a78bfa":"var(--yellow)";
                   const tipoLabel=t.tipo==='amortizacion'?'Amort.':'Cupón';
+                  const ec=editCoupon&&editCoupon.id===t.id?editCoupon:null;
                   return(
-                    <tr key={t.id} style={{borderTop:"1px solid var(--border)",background:"rgba(251,191,36,0.03)"}}>
-                      <td style={tdL}>{t.date}</td>
+                    <tr key={t.id} style={{borderTop:"1px solid var(--border)",background:ec?"rgba(37,99,235,0.06)":"rgba(251,191,36,0.03)"}}>
+                      <td style={tdL}>{ec
+                        ?<input type="date" value={ec.fecha} onChange={e=>setEditCoupon(p=>({...p,fecha:e.target.value}))} style={{...inp,width:130}}/>
+                        :t.date}</td>
                       <td style={{...tdL,fontWeight:700,fontFamily:"monospace",color:"var(--accent)"}}>{t.ticker}</td>
                       <td style={{...tdL,maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"var(--text-secondary)"}}>{t.name}</td>
                       <td style={tdL}>
@@ -269,13 +300,27 @@ export default function OperacionesTab({trades,port,setTrades,setPort,card,liveP
                       <td style={tdR}><span style={{color:"var(--text-muted)",fontSize:11}}>—</span></td>
                       <td style={tdR}><span style={{color:"var(--text-muted)",fontSize:11}}>—</span></td>
                       <td style={tdR}><span style={{color:"var(--text-muted)",fontSize:11}}>—</span></td>
-                      <td style={{...tdR,fontWeight:700,color:"var(--yellow)"}}>{t.currency==="USD"?fmtU(t.neto,2):fmtA(t.neto)}</td>
-                      <td style={{padding:"8px"}}></td>
+                      <td style={{...tdR,fontWeight:700,color:"var(--yellow)"}}>{ec
+                        ?<NumInput value={ec.neto} onChange={e=>setEditCoupon(p=>({...p,neto:e.target.value}))} placeholder="Neto cobrado" style={{...inp,width:110,textAlign:"right"}}/>
+                        :(t.currency==="USD"?fmtU(t.neto,2):fmtA(t.neto))}</td>
+                      <td style={{padding:"8px",textAlign:"right"}}>
+                        {ec?(
+                          <div style={{display:"flex",gap:4,justifyContent:"flex-end"}}>
+                            <button onClick={saveCoupon} title="Guardar" style={{padding:"4px 10px",background:"var(--green)",border:"none",borderRadius:5,color:"#fff",cursor:"pointer",fontSize:11,fontWeight:600}}>✓</button>
+                            <button onClick={()=>setEditCoupon(null)} title="Cancelar" style={{padding:"4px 8px",background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:5,color:"var(--text-muted)",cursor:"pointer",fontSize:11}}>✕</button>
+                          </div>
+                        ):setBondFlows&&(
+                          <div style={{display:"flex",gap:4,justifyContent:"flex-end"}}>
+                            <button onClick={()=>setEditCoupon({id:t.id,ticker:t.ticker,flowId:t.flowId,fecha:t.date,neto:String(+t.neto.toFixed(2))})} title="Editar cobro" style={{padding:"4px 8px",background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:5,color:"var(--text-muted)",cursor:"pointer",fontSize:11}}>✏️</button>
+                            <button onClick={()=>anularCobro(t)} title="Anular cobro (vuelve a pendiente)" style={{padding:"4px 8px",background:"rgba(248,113,113,0.1)",border:"1px solid rgba(248,113,113,0.3)",borderRadius:5,color:"var(--red)",cursor:"pointer",fontSize:11}}>↺</button>
+                          </div>
+                        )}
+                      </td>
                     </tr>
                   );
                 }
                 const isEditing=editId===t.id;
-                const bruto=+t.qty*+t.price;
+                const bruto=bruto_(t);
                 const com=t.comision?+t.comision:0;
                 const neto=t.tipo==="compra"?bruto+com:bruto-com;
                 return(
@@ -296,23 +341,23 @@ export default function OperacionesTab({trades,port,setTrades,setPort,card,liveP
                     </td>
                     <td style={tdR}>
                       {isEditing
-                        ?<input type="number" value={editData.qty} onChange={e=>setEditData(p=>({...p,qty:e.target.value}))} style={{...inp,width:90,textAlign:"right"}}/>
+                        ?<NumInput value={editData.qty} onChange={e=>setEditData(p=>({...p,qty:e.target.value}))} style={{...inp,width:90,textAlign:"right"}}/>
                         :Number(t.qty).toLocaleString("es-AR",{maximumFractionDigits:4})}
                     </td>
                     <td style={tdR}>
                       {isEditing
-                        ?<input type="number" value={editData.price} onChange={e=>setEditData(p=>({...p,price:e.target.value}))} style={{...inp,width:110,textAlign:"right"}}/>
+                        ?<NumInput value={editData.price} onChange={e=>setEditData(p=>({...p,price:e.target.value}))} style={{...inp,width:110,textAlign:"right"}}/>
                         :<span>{t.currency==="USD"?fmtU(t.price,2):fmtA(t.price)}<span style={{display:"block",fontSize:9,color:"var(--text-muted)"}}>{t.currency||"ARS"}</span></span>}
                     </td>
                     <td style={tdR}>
                       {isEditing&&(t.currency==="ARS")
-                        ?<input type="number" value={editData.tcCompra||""} onChange={e=>setEditData(p=>({...p,tcCompra:e.target.value}))} placeholder="TC" style={{...inp,width:90,textAlign:"right"}}/>
+                        ?<NumInput value={editData.tcCompra||""} onChange={e=>setEditData(p=>({...p,tcCompra:e.target.value}))} placeholder="TC" style={{...inp,width:90,textAlign:"right"}}/>
                         :<span style={{color:"var(--text-muted)",fontSize:11}}>{t.tcCompra?fmtA(t.tcCompra):"—"}</span>}
                     </td>
                     <td style={tdR}>{t.currency==="USD"?fmtU(bruto,2):fmtA(bruto)}</td>
                     <td style={tdR}>
                       {isEditing
-                        ?<input type="number" value={editData.comision||""} onChange={e=>setEditData(p=>({...p,comision:e.target.value}))} placeholder="0" style={{...inp,width:90,textAlign:"right"}}/>
+                        ?<NumInput value={editData.comision||""} onChange={e=>setEditData(p=>({...p,comision:e.target.value}))} placeholder="0" style={{...inp,width:90,textAlign:"right"}}/>
                         :<span style={{color:com>0?"var(--yellow)":"var(--text-muted)",fontSize:11}}>{com>0?(t.currency==="USD"?fmtU(com,2):fmtA(com)):"—"}</span>}
                     </td>
                     <td style={{...tdR,fontWeight:600}}>{t.currency==="USD"?fmtU(neto,2):fmtA(neto)}</td>

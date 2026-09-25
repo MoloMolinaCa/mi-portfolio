@@ -1,5 +1,6 @@
 /* eslint-disable */
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import NumInput from './NumInput';
 import { SEED_BOND_FLOWS, SEED_BOND_META } from '../constants/bondFlows';
 import { todayAR } from '../utils/shared';
 import BondWizard from './BondWizard';
@@ -684,7 +685,7 @@ export default function FlujoTab({port, trades, bondFlows, setBondFlows, card, f
                 {editingMeta ? (
                   <div style={{display:'flex',gap:8,alignItems:'center',background:'var(--bg-input)',border:'1px solid var(--accent)',borderRadius:8,padding:'6px 12px'}}>
                     <span style={{fontSize:11,color:'var(--text-muted)'}}>Cupón:</span>
-                    <input type="number" step="0.01" value={metaDraft.tna}
+                    <NumInput step="0.01" value={metaDraft.tna}
                       onChange={e=>setMetaDraft(p=>({...p,tna:e.target.value}))}
                       style={{...inp,width:70,textAlign:'right'}}/>
                     <span style={{fontSize:11,color:'var(--text-muted)'}}>%</span>
@@ -786,7 +787,7 @@ export default function FlujoTab({port, trades, bondFlows, setBondFlows, card, f
                 {(newFlow.tipo==='amortizacion'||newFlow.tipo==='ambos')&&(
                   <div style={{display:'flex',flexDirection:'column',gap:4,minWidth:110}}>
                     <span style={{fontSize:10,color:'var(--text-muted)'}}>Amort. % VN</span>
-                    <input type="number" step="0.0001" value={newFlow.amort} onChange={e=>setNewFlow(p=>({...p,amort:e.target.value}))} placeholder="ej: 4.5455" style={inp}/>
+                    <NumInput step="0.0001" value={newFlow.amort} onChange={e=>setNewFlow(p=>({...p,amort:e.target.value}))} placeholder="ej: 4.5455" style={inp}/>
                   </div>
                 )}
                 {/* Cupón — editable si modo edición, calculado si modo nuevo */}
@@ -794,7 +795,7 @@ export default function FlujoTab({port, trades, bondFlows, setBondFlows, card, f
                   <div style={{display:'flex',flexDirection:'column',gap:4,minWidth:110}}>
                     <span style={{fontSize:10,color:'var(--text-muted)'}}>{editingRowIds?'Cupón % VN':'Interés calculado'}</span>
                     {editingRowIds
-                      ? <input type="number" step="0.000001" value={newFlow.cuponMonto} onChange={e=>setNewFlow(p=>({...p,cuponMonto:e.target.value}))} placeholder="ej: 3.25" style={{...inp,color:'var(--accent)',fontWeight:700}}/>
+                      ? <NumInput step="0.000001" value={newFlow.cuponMonto} onChange={e=>setNewFlow(p=>({...p,cuponMonto:e.target.value}))} placeholder="ej: 3.25" style={{...inp,color:'var(--accent)',fontWeight:700}}/>
                       : <div style={{...inp,background:'transparent',color:'var(--accent)',fontWeight:700,textAlign:'right'}}>
                           {(()=>{
                             if(!newFlow.date) return '—';
@@ -899,7 +900,7 @@ export default function FlujoTab({port, trades, bondFlows, setBondFlows, card, f
                               <td style={{...tdP,color:'var(--text-muted)'}}>{dias}</td>
                               {/* Amort — input siempre visible en todas las filas */}
                               <td style={{...tdP,color:row.amortPct>0?'var(--yellow)':'var(--text-muted)',padding:'4px 6px'}}>
-                                <input type="number" step="0.0001" min="0"
+                                <NumInput step="0.0001" min="0"
                                     defaultValue={row.amortPct||0}
                                     key={'a-'+(row.amort?.id||row.date)+'-'+row.amortPct}
                                     onFocus={e=>{e.target.select();e.target.style.background='var(--bg-input)';e.target.style.color='var(--yellow)';e.target.style.border='1px solid var(--accent)';}}
@@ -928,7 +929,7 @@ export default function FlujoTab({port, trades, bondFlows, setBondFlows, card, f
                               {/* Interés — input siempre visible, estilo texto hasta focus */}
                               <td style={{...tdP,color:'var(--accent)',padding:'4px 6px'}}>
                                 {row.cupon
-                                  ?<input type="number" step="0.0001"
+                                  ?<NumInput step="0.0001"
                                       defaultValue={row.interestPct}
                                       key={'i-'+row.cupon.id+'-'+row.cupon.monto}
                                       onFocus={e=>{e.target.select();e.target.style.background='var(--bg-input)';e.target.style.color='var(--accent)';e.target.style.border='1px solid var(--accent)';}}

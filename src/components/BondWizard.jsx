@@ -1,5 +1,6 @@
 /* eslint-disable */
 import React, { useState, useEffect, useRef } from "react";
+import NumInput from './NumInput';
 import { SEED_BOND_FLOWS, SEED_BOND_META } from '../constants/bondFlows';
 
 export default function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
@@ -285,7 +286,7 @@ export default function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
               </div>
               <div>
                 <span style={lbl}>Tasa anual (% TNA)</span>
-                <input type="number" step="0.01" placeholder="ej: 7" value={params.tna} onChange={e=>set('tna',e.target.value)} style={inp}/>
+                <NumInput step="0.01" placeholder="ej: 7" value={params.tna} onChange={e=>set('tna',e.target.value)} style={inp}/>
               </div>
               <div>
                 <span style={lbl}>Frecuencia de cupón</span>
@@ -322,7 +323,7 @@ export default function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
               {params.amortTipo==='cuotas' && (
                 <div>
                   <span style={lbl}>Cantidad de cuotas de amort.</span>
-                  <input type="number" min="1" placeholder="ej: 10" value={params.cuotas} onChange={e=>set('cuotas',e.target.value)} style={inp}/>
+                  <NumInput min="1" placeholder="ej: 10" value={params.cuotas} onChange={e=>set('cuotas',e.target.value)} style={inp}/>
                 </div>
               )}
               <div>
@@ -410,13 +411,13 @@ export default function BondWizard({ticker, onConfirm, onSkip, darkMode=true}){
                         </div>
                       </td>
                       <td style={{padding:"4px 6px"}}>
-                        <input type="number" step="0.0001" min="0" max="100"
+                        <NumInput step="0.0001" min="0" max="100"
                           value={row.amort}
                           onChange={e=>updateRow(i,'amort',parseFloat(e.target.value)||0)}
                           style={{...inpS,color:"var(--yellow)",fontWeight:600,textAlign:"right"}}/>
                       </td>
                       <td style={{padding:"4px 6px"}}>
-                        <input type="number" step="0.0001" min="0"
+                        <NumInput step="0.0001" min="0"
                           value={row.cupon}
                           onChange={e=>updateRow(i,'cupon',parseFloat(e.target.value)||0)}
                           style={{...inpS,color:"var(--accent)",textAlign:"right"}}/>

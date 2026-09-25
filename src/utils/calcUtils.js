@@ -229,7 +229,11 @@ export function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currenc
   };
 
   const twr=[{date:dates[0],val:100}];
-  twr.meta={startVal:getPortVal(dates[0], new Date(dates[0]).getTime()), flows:[null]};
+  // El punto 100 es el inicio del primer día: posiciones previas a precio histórico; lo operado ese día
+  // entra como flujo a su precio real (igual que calcPeriodPnL), así la curva incluye todo el P&L.
+  const d0=new Date(dates[0]);d0.setUTCDate(d0.getUTCDate()-1);const dayBefore0=d0.toISOString().slice(0,10);
+  const startVal0=getPortVal(dates[0], new Date(dates[0]).getTime()-1);
+  twr.meta={startVal:startVal0, flows:[null]};
   let cumulative=1;
 
   for(let i=1;i<dates.length;i++){
@@ -238,11 +242,12 @@ export function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currenc
     const dateT=new Date(dateStr).getTime();
     const prevDateT=new Date(prevDateStr).getTime();
 
-    const valPrevClose=getPortVal(prevDateStr, prevDateT);
+    const fromStr=i===1?dayBefore0:prevDateStr;
+    const valPrevClose=i===1?startVal0:getPortVal(prevDateStr, prevDateT);
     const valToday=getPortVal(dateStr, dateT);
-    const netFlow=getNetFlowBetween(prevDateStr, dateStr);
-    twr.meta.flows.push(getFlowDetailBetween(prevDateStr, dateStr));
-    const couponsToday=getCouponValueBetween(prevDateStr, dateStr);
+    const netFlow=getNetFlowBetween(fromStr, dateStr);
+    twr.meta.flows.push(getFlowDetailBetween(fromStr, dateStr));
+    const couponsToday=getCouponValueBetween(fromStr, dateStr);
 
     let dayReturn;
     if(valPrevClose<=0){

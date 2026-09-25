@@ -12,6 +12,69 @@ export function isBondTicker(tkr){
   return T.endsWith('D')||/^(TZX|TX|TY|TV|GD|AL|AE|AO|AN|TLCU|BP|S\d)/.test(T);
 }
 
+// P&L de un período [s, e] por ticker, única fuente para gráfico, KPI y Análisis.
+// Posición inicial = trades con fecha < s (valuada a precio histórico); trades con fecha >= s son flujos
+// a su precio real + comisión, en USD al CCL de ese día. Si e es hoy, el valor final es el live de `en`.
+export function calcPeriodPnL({ s, e, trades, en, historicos, bondFlows = {}, today }) {
+  const cclBars = historicos?.CCL || [];
+  const lastLE = (bars, d) => { let lo = 0, hi = bars.length - 1, r = -1; while (lo <= hi) { const m = (lo + hi) >> 1; if (bars[m].date <= d) { r = m; lo = m + 1; } else hi = m - 1; } return r >= 0 ? bars[r] : null; };
+  const ccl = d => lastLE(cclBars, d)?.close || cclBars[0]?.close || 1;
+  const curOf = {};
+  for (const t of trades) if (!curOf[t.ticker]) curOf[t.ticker] = String(t.currency || 'ARS').toUpperCase();
+  for (const h of en) if (h.buyCurrency) curOf[h.ticker] = String(h.buyCurrency).toUpperCase();
+  const toUSD = (amt, tk, d) => curOf[tk] === 'USD' ? amt : amt / ccl(d);
+  const qtyF = (tk, q) => isBondTicker(tk) ? q / 100 : q;
+  const qtyAt = (tk, d, incl) => trades.reduce((a, t) => t.ticker === tk && (incl ? t.date <= d : t.date < d) ? a + (t.tipo === 'compra' ? +t.qty : -t.qty) : a, 0);
+  const priceAt = (tk, d) => {
+    const b = lastLE(historicos?.[tk] || [], d);
+    if (b?.close > 0) return b.close;
+    const lb = trades.filter(t => t.ticker === tk && t.tipo === 'compra' && t.date <= d).sort((a, b) => b.date.localeCompare(a.date))[0];
+    return lb ? +lb.price : 0;
+  };
+  const endIsToday = e >= today;
+  const tickers = [...new Set([...trades.map(t => t.ticker), ...en.map(h => h.ticker)])];
+  const byTicker = {};
+  const flows = [];
+  let total = 0;
+  for (const tk of tickers) {
+    const q0 = Math.max(0, qtyAt(tk, s, false));
+    const valStart = q0 > 0 ? toUSD(priceAt(tk, s) * qtyF(tk, q0), tk, s) : 0;
+    let buys = 0, sells = 0, coupons = 0;
+    for (const t of trades) {
+      if (t.ticker !== tk || t.date < s || t.date > e) continue;
+      const com = +t.comision || 0;
+      const gross = (+t.price || 0) * qtyF(tk, +t.qty || 0);
+      const usd = toUSD(t.tipo === 'compra' ? gross + com : gross - com, tk, t.date);
+      if (t.tipo === 'compra') buys += usd; else sells += usd;
+      flows.push({ date: t.date, amount: t.tipo === 'compra' ? -usd : usd });
+    }
+    const bf = bondFlows[tk] || [];
+    for (const f of bf) {
+      if (!f.cobrado || !f.fechaCobro || f.fechaCobro < s || f.fechaCobro > e) continue;
+      const q = Math.max(0, qtyAt(tk, f.fechaCobro, true));
+      if (q <= 0) continue;
+      const local = f.tipo === 'amortizacion' ? f.monto * q / 100 : f.monto * q * calcVNR(bf, f.fechaCobro, SEED_BOND_META?.[tk]?.vnrInicial ?? 100) / 10000;
+      const usd = toUSD(local, tk, f.fechaCobro);
+      coupons += usd;
+      flows.push({ date: f.fechaCobro, amount: usd });
+    }
+    let valEnd;
+    if (endIsToday) valEnd = en.filter(h => h.ticker === tk).reduce((a, h) => a + (h.valUSD || 0), 0);
+    else { const q1 = Math.max(0, qtyAt(tk, e, true)); valEnd = q1 > 0 ? toUSD(priceAt(tk, e) * qtyF(tk, q1), tk, e) : 0; }
+    if (!valStart && !valEnd && !buys && !sells && !coupons) continue;
+    const pnl = valEnd - valStart - buys + sells + coupons;
+    const invested = valStart + buys;
+    byTicker[tk] = { pnl, valStart, valEnd, buys, sells, coupons, retPct: invested > 0 ? pnl / invested * 100 : 0, cerrado: valEnd === 0 };
+    total += pnl;
+  }
+  const startVal = Object.values(byTicker).reduce((a, x) => a + x.valStart, 0);
+  const endVal = Object.values(byTicker).reduce((a, x) => a + x.valEnd, 0);
+  if (startVal > 0) flows.push({ date: s, amount: -startVal });
+  flows.push({ date: e, amount: endVal });
+  flows.sort((a, b) => a.date.localeCompare(b.date));
+  return { total, byTicker, flows, startVal, endVal };
+}
+
 // ── Time-Weighted Return (TWR) ────────────────────────────────────────────────
 export function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currency, fxRate, livePricesMap, customEnd=null, realTodayStr=null, bondFlows={}){
   if(!dates||dates.length<2) return [];

@@ -1,6 +1,6 @@
 ﻿/* eslint-disable */
 import React, { useState, useMemo } from "react";
-import { calcTWR } from '../utils/calcUtils';
+import { calcTWR, calcPeriodPnL } from '../utils/calcUtils';
 import { ASSET_TYPES, todayAR } from '../utils/shared';
 
 export default function AnalisisTab({en, historicos, fxRate, currency, card, livePrices, hideAmounts=false, trades=[], isMobile=false, bondFlows={}}) {
@@ -187,7 +187,7 @@ export default function AnalisisTab({en, historicos, fxRate, currency, card, liv
       qtyAtStart[ticker] = Math.max(0, qty);
     });
 
-    return todasPosiciones.map(h=>{
+    const legacy = todasPosiciones.map(h=>{
       const bars = historicos?.[h.ticker]||[];
       const endBar = [...bars].filter(b=>b.date<=endDate).pop();
       if(!endBar) return null;
@@ -331,6 +331,13 @@ export default function AnalisisTab({en, historicos, fxRate, currency, card, liv
       return {...h, retPct:retPctFinal, pnlUSD, valBuy:valInicio, valEnd, basePrice:adjBase, adjClose,
                usedBuyPrice, baseDate, qtyStart, buyPrice:h.buyPrice||0, cerrado:h.cerrado||false};
     }).filter(Boolean);
+
+    const pp = calcPeriodPnL({s:startDate, e:endDate, trades, en, historicos, bondFlows, today:todayAR()});
+    const detail = Object.fromEntries(legacy.map(x=>[x.ticker,x]));
+    return Object.entries(pp.byTicker).map(([ticker,r])=>{
+      const base = detail[ticker] || todasPosiciones.find(h=>h.ticker===ticker) || {ticker, name:ticker};
+      return {...base, basePrice:base.basePrice||base.buyPrice||0, retPct:r.retPct, pnlUSD:r.pnl, valBuy:r.valStart+r.buys, valEnd:r.valEnd, cerrado:r.cerrado};
+    });
   },[en,historicos,trades,startDate,endDate,fxRate,period,bondFlows]);
 
   const contributionsSorted = useMemo(()=>{

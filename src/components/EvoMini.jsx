@@ -1,6 +1,6 @@
 /* eslint-disable */
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { calcTWR, calcXIRR, deannualizeXIRR, isBondTicker as isBondTickerU } from '../utils/calcUtils';
+import { calcTWR, calcXIRR, deannualizeXIRR, isBondTicker as isBondTickerU, calcPeriodPnL } from '../utils/calcUtils';
 import { todayAR } from '../utils/shared';
 import { SEED_BOND_META } from '../constants/bondFlows';
 import Chart100 from './Chart100';
@@ -275,56 +275,22 @@ export default function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,hist
       const _cclBarsXIRR=historicos?.CCL||[];
       const _getCCLForDate=(dateStr)=>{if(!_cclBarsXIRR.length)return liveFX?.CCL||fxRate||1;let lo=0,hi=_cclBarsXIRR.length-1,res=-1;while(lo<=hi){const mid=(lo+hi)>>1;if(_cclBarsXIRR[mid].date<=dateStr){res=mid;lo=mid+1;}else hi=mid-1;}return res>=0?_cclBarsXIRR[res].close:(liveFX?.CCL||fxRate||1);};
       const isBondTicker=(tkr)=>_bT[String(tkr||'').toUpperCase()]||isBondTickerU(tkr);
-      const currencyByTicker={};for(const t0 of(trades||[])){if(!t0?.ticker||!t0?.currency)continue;currencyByTicker[String(t0.ticker).toUpperCase()]=String(t0.currency).toUpperCase();}
-      const _findHistPrice=(ticker,dateStr)=>{const bars=(historicos?.[ticker]||[]);if(!bars.length)return 0;let lo=0,hi=bars.length-1,res=-1;while(lo<=hi){const mid=(lo+hi)>>1;if(bars[mid].date<=dateStr){res=mid;lo=mid+1;}else hi=mid-1;}if(res>=0)return bars[res].close||0;for(const b of bars){if(b.date>=dateStr)return b.close||0;}return 0;};
-      const posAsOf=(dateStr,includeSameDay)=>{const pos={};for(const t of(trades||[])){if(!t?.ticker)continue;if(includeSameDay){if(t.date>dateStr)continue;}else{if(t.date>=dateStr)continue;}if(t.tipo==="compra")pos[t.ticker]=(pos[t.ticker]||0)+(+t.qty||0);if(t.tipo==="venta")pos[t.ticker]=(pos[t.ticker]||0)-(+t.qty||0);}return pos;};
-      const valuePosUSD=(posMap,dateStr)=>{const ccl=_getCCLForDate(dateStr);let v=0;for(const[tkr,qty]of Object.entries(posMap||{})){if(!qty||qty<=0)continue;const T=String(tkr).toUpperCase();let price=_findHistPrice(T,dateStr);if(!price||price<=0){const lastBuy=(trades||[]).filter(t=>String(t.ticker||'').toUpperCase()===T&&t.tipo==="compra"&&t.date<=dateStr).sort((a,b)=>(b.ts||0)-(a.ts||0))[0];price=lastBuy?(+lastBuy.price||0):0;}if(!price||price<=0)continue;const isBond=isBondTicker(T);const qtyF=isBond?qty/100:qty;const cur=currencyByTicker[T]||(en.find(h=>h.ticker===T)?.buyCurrency||'ARS');const isUSD=String(cur).toUpperCase()==="USD";v+=isUSD?price*qtyF:(price*qtyF)/ccl;}return v;};
-      const firstTradeDate=(trades||[]).map(t=>t?.date).filter(Boolean).sort()[0];
-      const includeStartDayAsPosition=(s===firstTradeDate);
-      const posStart=posAsOf(s,includeStartDayAsPosition);
-      const posEnd=posAsOf(e,true);
-      let startValUSD=valuePosUSD(posStart,s);
-      let endValUSD=valuePosUSD(posEnd,e);
-      const endValNow=en.reduce((a,h)=>a+h.valUSD,0);
-      // Si el período termina hoy, usar precios live (endValNow) para evitar
-      // que assets sin barra histórica para hoy subvalúen el portfolio
-      if(!endValUSD||endValUSD<=0||e>=todayAR())endValUSD=endValNow;
-      const periodTrades=(trades||[]).filter(t=>((t.date>s)||(t.date===s&&!includeStartDayAsPosition))&&t.date<e);
-      const flows=[];
-      flows.push({date:s,amount:-startValUSD});
-      for(const t of periodTrades){const T=String(t.ticker||'').toUpperCase();const isBond=isBondTicker(T);const rawAmt=(+t.qty||0)*(+t.price||0)*(isBond?0.01:1);const com=+t.comision||0;const amt=t.tipo==="compra"?rawAmt+com:rawAmt-com;const isUSD=(t.currency||'ARS')==='USD';const fxT=isUSD?1:_getCCLForDate(t.date);const usd=amt/fxT;flows.push({date:t.date,amount:t.tipo==="compra"?-usd:usd});}
-      flows.push({date:e,amount:endValUSD});
-      flows.sort((a,b)=>a.date.localeCompare(b.date));
-      // Dias del periodo para des-anualizar
+      const _pp=calcPeriodPnL({s,e,trades,en,historicos,bondFlows,today:todayAR()});
+      const startValUSD=_pp.startVal,endValUSD=_pp.endVal,portDollarPnL=_pp.total;
+      const periodTrades=(trades||[]).filter(t=>t.date>=s&&t.date<=e);
       const days=Math.max(1,Math.round((new Date(e)-new Date(s))/(1000*60*60*24)));
-      // P&L en dólares real: Modified Dietz numerator = endVal - startVal - flujos netos invertidos
-      // flows intermedios: compras = negativo (plata que sale), ventas = positivo (plata que entra)
-      const middleFlowsSum=flows.slice(1,-1).reduce((a,f)=>a+f.amount,0);
-      const portDollarPnL=endValUSD-startValUSD+middleFlowsSum;
-      // Portfolio XIRR: calcular anual y des-anualizar al periodo
       let portXIRR=null;
-      if(flows.length>=2&&startValUSD>0&&endValUSD>0){const rAnual=calcXIRR(flows);if(rAnual!=null)portXIRR=deannualizeXIRR(rAnual,days)*100;}
+      if(_pp.flows.length>=2&&endValUSD>0){const rAnual=calcXIRR(_pp.flows);if(rAnual!=null)portXIRR=deannualizeXIRR(rAnual,days)*100;}
       // SPY XIRR: mismos cashflows, terminal crecido por SPY, des-anualizado
       let spyXIRR=null;
       let spDollarPnL=null;
       // SPY benchmark: flujos netos por día (solo principal). Rotación=0 comisiones, capital nuevo=comisión de compra proporcional, retiro neto=comisión de venta proporcional
-      if(cd.spy100&&cd.spy100.length>=2){const spy100=cd.spy100;const spyEnd=spy100[spy100.length-1].val;const spyAt=(dateStr)=>{let best=spy100[0];for(const p of spy100){if(p.date<=dateStr)best=p;else break;}return best.val||100;};if(spyEnd>0){const _dm={};for(const t of periodTrades){const T=String(t.ticker||'').toUpperCase();const isBond=isBondTicker(T);const raw=(+t.qty||0)*(+t.price||0)*(isBond?0.01:1);const com=+t.comision||0;const isUSD=(t.currency||'ARS')==='USD';const fx=isUSD?1:_getCCLForDate(t.date);if(!_dm[t.date])_dm[t.date]={bP:0,sP:0,bC:0,sC:0};if(t.tipo==="compra"){_dm[t.date].bP+=raw/fx;_dm[t.date].bC+=com/fx;}else{_dm[t.date].sP+=raw/fx;_dm[t.date].sC+=com/fx;}}const spyFlows=[{date:s,amount:-startValUSD}];let spyComSunk=0;for(const[d,v]of Object.entries(_dm)){const net=v.bP-v.sP;if(Math.abs(net)<0.01)continue;spyFlows.push({date:d,amount:-net});if(net>0){spyComSunk+=v.bP>0?v.bC*(net/v.bP):0;}else{spyComSunk+=v.sP>0?v.sC*(-net/v.sP):0;}}let spyFinalVal=0;for(const fl of spyFlows){const g2=spyAt(fl.date)>0?spyEnd/spyAt(fl.date):1;spyFinalVal+=(-fl.amount)*g2;}const spyMidFlows=spyFlows.slice(1).reduce((a,f)=>a+f.amount,0);spDollarPnL=spyFinalVal-startValUSD+spyMidFlows-spyComSunk;spyFlows.push({date:e,amount:spyFinalVal});spyFlows.sort((a,b)=>a.date.localeCompare(b.date));if(spyFlows.length>=2&&startValUSD>0&&spyFinalVal>0){const rAnualSpy=calcXIRR(spyFlows);if(rAnualSpy!=null)spyXIRR=deannualizeXIRR(rAnualSpy,days)*100;}}}
+      if(cd.spy100&&cd.spy100.length>=2){const spy100=cd.spy100;const spyEnd=spy100[spy100.length-1].val;const spyAt=(dateStr)=>{let best=spy100[0];for(const p of spy100){if(p.date<=dateStr)best=p;else break;}return best.val||100;};if(spyEnd>0){const _dm={};for(const t of periodTrades){const T=String(t.ticker||'').toUpperCase();const isBond=isBondTicker(T);const raw=(+t.qty||0)*(+t.price||0)*(isBond?0.01:1);const com=+t.comision||0;const isUSD=(t.currency||'ARS')==='USD';const fx=isUSD?1:_getCCLForDate(t.date);if(!_dm[t.date])_dm[t.date]={bP:0,sP:0,bC:0,sC:0};if(t.tipo==="compra"){_dm[t.date].bP+=raw/fx;_dm[t.date].bC+=com/fx;}else{_dm[t.date].sP+=raw/fx;_dm[t.date].sC+=com/fx;}}const spyFlows=startValUSD>0?[{date:s,amount:-startValUSD}]:[];let spyComSunk=0;for(const[d,v]of Object.entries(_dm)){const net=v.bP-v.sP;if(Math.abs(net)<0.01)continue;spyFlows.push({date:d,amount:-net});if(net>0){spyComSunk+=v.bP>0?v.bC*(net/v.bP):0;}else{spyComSunk+=v.sP>0?v.sC*(-net/v.sP):0;}}let spyFinalVal=0;for(const fl of spyFlows){const g2=spyAt(fl.date)>0?spyEnd/spyAt(fl.date):1;spyFinalVal+=(-fl.amount)*g2;}const spyMidFlows=spyFlows.slice(startValUSD>0?1:0).reduce((a,f)=>a+f.amount,0);spDollarPnL=spyFinalVal-startValUSD+spyMidFlows-spyComSunk;spyFlows.push({date:e,amount:spyFinalVal});spyFlows.sort((a,b)=>a.date.localeCompare(b.date));if(spyFlows.length>=2&&spyFinalVal>0){const rAnualSpy=calcXIRR(spyFlows);if(rAnualSpy!=null)spyXIRR=deannualizeXIRR(rAnualSpy,days)*100;}}}
       const alpha=(portXIRR!=null&&spyXIRR!=null)?portXIRR-spyXIRR:null;
-      // Si el período cubre todo el historial, usar xirrFull/totPnlTotal para consistencia con tarjeta KPI y gráfico anual
-      // isFullPeriod: cuando el periodo cubre toda la historia, o el startVal es 0 (no había portfolio)
-      // En ese caso usar xirrFull/totPnlTotal para consistencia con KPI y analisis anual
-      const firstBuyDate=(trades||[]).filter(t=>t?.tipo==="compra").map(t=>t?.date).filter(Boolean).sort()[0];
-      const isFullPeriod = xirrFull && xirrFull.xirrTotal!=null && (
-        startValUSD<=0 || (firstBuyDate && s<=firstBuyDate)
-      );
-      // % Retorno: usar xirrFull cuando el periodo = historia completa (mas preciso que recalcular)
-      const finalPortXIRR = isFullPeriod ? xirrFull.xirrTotal : portXIRR;
-      // P&L $: cuando es periodo completo, usar totPnlPrice (= totPnl + pnlRealizado de App.jsx)
-      // que es exactamente lo que muestra la tab Analisis (precio actual - precio compra, sin cupones)
-      const finalPortDollarPnL = (isFullPeriod && totPnlPrice!=null) ? totPnlPrice : portDollarPnL;
+      const finalPortXIRR=portXIRR,finalPortDollarPnL=portDollarPnL;
       return {portXIRR:finalPortXIRR,spyXIRR,alpha,portDollarPnL:finalPortDollarPnL,spDollarPnL};
     }catch(err){console.warn('XIRR error:',err);return {portXIRR:null,spyXIRR:null,alpha:null};}
-  },[cd,trades,en,fxRate,liveFX,currency,_bT,historicos,xirrFull,totPnlTotal,totPnlPrice]);
+  },[cd,trades,en,fxRate,liveFX,currency,_bT,historicos,bondFlows]);
 
   const series=cd?[
     {key:"port",data:cd.port100,color:"var(--green)",bold:true},

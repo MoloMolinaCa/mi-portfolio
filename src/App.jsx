@@ -1,4 +1,4 @@
-﻿/* eslint-disable */
+/* eslint-disable */
 // v2.2 - modular split
 import React, { useState, useEffect, useMemo, memo, useRef, useCallback } from "react";
 import { SEED_BOND_FLOWS, SEED_BOND_META } from './constants/bondFlows';
@@ -7,7 +7,7 @@ import BondWizard from './components/BondWizard';
 import FlujoTab from './components/FlujoTab';
 import { fetchFXLive, fetchAllLivePrices, fetchTreasury10Y } from './utils/priceUtils';
 import Chart100 from './components/Chart100';
-import { calcTWR, calcXIRR, deannualizeXIRR, calcModifiedDietzReturn, calcSeriesPeriodReturn, calcPortValAtDate, isBondTicker, setKnownBonds } from './utils/calcUtils';
+import { calcTWR, calcXIRR, deannualizeXIRR, calcModifiedDietzReturn, calcSeriesPeriodReturn, calcPortValAtDate, isBondTicker, setKnownBonds, calcPeriodPnL } from './utils/calcUtils';
 import OperacionesTab from './components/OperacionesTab';
 import RankingWidget from './components/RankingWidget';
 import DayMoversWidget from './components/DayMoversWidget';
@@ -67,7 +67,6 @@ const GALICIA_PORTFOLIO = [
   { id:11, ticker:"MSFT",      name:"Microsoft Corp",                type:"cedear",   qty:46,       buyPrice:18943.81,  currentPrice:18480.00, buyCurrency:"ARS", rendPct:0.93,  buyDate:"2026-04-06" },
   { id:12, ticker:"VIST",      name:"Vista Oil & Gas",               type:"cedear",   qty:14,       buyPrice:35600.00,  currentPrice:34940.00, buyCurrency:"ARS", rendPct:-1.63, buyDate:"2026-03-30" },
   // FCI PESOS
-  { id:13, ticker:"FIMA-PREM", name:"FIMA Premium Cl A (TNA 19.3%)", type:"fci_ars",  qty:7599.32,  buyPrice:74.457340, currentPrice:78.767480,buyCurrency:"ARS", rendPct:0.26,  buyDate:"2026-01-01" },
   { id:14, ticker:"FIMA-AHP",  name:"FIMA Ahorro Pesos Cl A",        type:"fci_ars",  qty:9.88,     buyPrice:600.718,   currentPrice:600.718,  buyCurrency:"ARS", rendPct:0.23,  buyDate:"2026-04-01" },
   { id:15, ticker:"FIMA-AHPP", name:"FIMA Ahorro Plus Cl A",         type:"fci_ars",  qty:2.30,     buyPrice:147.952,   currentPrice:147.952,  buyCurrency:"ARS", rendPct:0.26,  buyDate:"2026-04-01" },
   // FCI USD
@@ -226,7 +225,6 @@ function App(){
     {id:3, ticker:"TLCUD",     tipo:"compra", qty:7000,     price:100.0,     currency:"USD", date:"2026-01-01", ts:3000,  name:"ON Telecom C28 05/03/29",         comision:0},
     {id:4, ticker:"AO27D",     tipo:"compra", qty:2954,     price:102.0,     currency:"USD", date:"2026-01-01", ts:4000,  name:"Bono Tesoro 6% V29/10/27",        comision:0},
     {id:5, ticker:"GD38D",     tipo:"compra", qty:1681,     price:78.0,      currency:"USD", date:"2026-01-01", ts:5000,  name:"BONOS REP ARG U\$S V09/01/38",    comision:0},
-    {id:6, ticker:"FIMA-PREM", tipo:"compra", qty:40284.34, price:74.457340, currency:"ARS", date:"2026-01-01", ts:6000,  name:"FIMA Premium Cl A",               comision:0},
     {id:7, ticker:"FIMA-AHP",  tipo:"compra", qty:9.88,     price:600.718,   currency:"ARS", date:"2026-01-01", ts:7000,  name:"FIMA Ahorro Pesos Cl A",          comision:0},
     {id:8, ticker:"FIMA-AHPP", tipo:"compra", qty:2.30,     price:147.952,   currency:"ARS", date:"2026-01-01", ts:8000,  name:"FIMA Ahorro Plus Cl A",           comision:0},
     {id:9, ticker:"FIMA-PREMD",tipo:"compra", qty:140,      price:1.012932,  currency:"USD", date:"2026-01-01", ts:9000,  name:"FIMA Premium Dólares Cl A",       comision:0},
@@ -642,76 +640,9 @@ function App(){
     return {totUSD,totCost,totPnl,totPct};
   },[en]);
 
-  // P&L realizado: suma de pnlAmt de todas las ventas ya ejecutadas
-  // pnlAmt en ARS → convertir a USD usando CCL de la fecha de la venta
-  const pnlRealizado = useMemo(()=>{
-    const cclBars = historicos?.CCL||[];
-    // Para cada venta, calcular P&L en USD comparando proceeds vs costo en USD
-    // Evita el problema de convertir pnlAmt en moneda local con cantidades nominales enormes
-    const cclCacheP={};
-    const toUSDamt = (monto, currency, date) => {
-      if(currency==="USD") return monto;
-      if(cclCacheP[date]) return monto/cclCacheP[date];
-      let lo=0,hi=cclBars.length-1,res=-1;
-      while(lo<=hi){ const mid=(lo+hi)>>1; if(cclBars[mid].date<=date){res=mid;lo=mid+1;}else hi=mid-1; }
-      const ccl = res>=0 ? cclBars[res].close : (cclBars.slice(-1)[0]?.close||1200);
-      cclCacheP[date]=ccl;
-      return monto/ccl;
-    };
-    const ventasTrades = trades.filter(t=>t.tipo==="venta");
-    return ventasTrades.reduce((acc, venta)=>{
-      const isBond = /\d/.test(venta.ticker);
-      const qty    = venta.qty||0;
-      const qtyF   = isBond ? qty/100 : qty;
-      // Proceeds en USD
-      const comVenta = venta.comision ? +venta.comision : 0;
-      const proceedsUSD = toUSDamt((venta.price||0)*qtyF - comVenta, venta.currency||"ARS", venta.date);
-      // Costo FIFO en USD: buscar lotes de compra anteriores
-      const buyLots = trades
-        .filter(t=>t.ticker===venta.ticker&&t.tipo==="compra"&&t.ts<venta.ts)
-        .sort((a,b)=>a.ts-b.ts);
-      let remaining=qty, costUSD=0;
-      for(const lot of buyLots){
-        if(remaining<=0) break;
-        const used = Math.min(lot.qty, remaining);
-        const lotQtyF = isBond ? used/100 : used;
-        const lotCom = lot.comision ? (+lot.comision * used / lot.qty) : 0;
-        costUSD += toUSDamt((lot.price||0)*lotQtyF + lotCom, lot.currency||"ARS", lot.date);
-        remaining -= used;
-      }
-      return acc + proceedsUSD - costUSD;
-    }, 0);
-  },[trades, historicos]);
 
-  // Flujos cobrados de bonos (cupones + amortizaciones confirmadas) — ingreso real de caja
-  const flujosCobradosTotal = useMemo(()=>{
-    const cclBars=historicos?.CCL||[];
-    const getCCL=(date)=>{let lo=0,hi=cclBars.length-1,res=-1;while(lo<=hi){const mid=(lo+hi)>>1;if(cclBars[mid].date<=date){res=mid;lo=mid+1;}else hi=mid-1;}return res>=0?cclBars[res].close:(fxRate||1);};
-    let total=0;
-    for(const [ticker, bFlows] of Object.entries(bondFlows||{})){
-      const pos=en.find(h=>h.ticker===ticker);
-      const buyCurrency=pos?.buyCurrency||(String(ticker).toUpperCase().endsWith('D')?'USD':'ARS');
-      for(const f of (bFlows||[])){
-        if(!f.cobrado||!f.fechaCobro) continue;
-        const buysBefore=trades.filter(t=>t.ticker===ticker&&t.tipo==='compra'&&t.date<=f.fechaCobro);
-        const sellsBefore=trades.filter(t=>t.ticker===ticker&&t.tipo==='venta'&&t.date<=f.fechaCobro);
-        const qtyAt=Math.max(0,buysBefore.reduce((a,t)=>a+t.qty,0)-sellsBefore.reduce((a,t)=>a+t.qty,0));
-        if(qtyAt<=0) continue;
-        let cashLocal;
-        if(f.tipo==='amortizacion'){
-          cashLocal=f.monto*qtyAt/100;
-        } else {
-          const vnrIni=(SEED_BOND_META?.[ticker]?.vnrInicial)??100;
-          const vnrAt=calcVNR(bFlows, f.fechaCobro, vnrIni);
-          cashLocal=f.monto*qtyAt*vnrAt/10000;
-        }
-        total+=buyCurrency==='USD'?cashLocal:cashLocal/getCCL(f.fechaCobro);
-      }
-    }
-    return total;
-  },[bondFlows,trades,en,historicos,fxRate]);
-
-  const totPnlTotal = totPnl + pnlRealizado + flujosCobradosTotal; // no realizado + realizado + cobros de bonos
+  const fullPnL = useMemo(()=>calcPeriodPnL({s:"0000-01-01", e:todayAR(), trades, en, historicos, bondFlows, today:todayAR()}),[trades,en,historicos,bondFlows]);
+  const totPnlTotal = fullPnL.total;
 
   // TWR anualizado + P&L real por año
   const twrStats = useMemo(()=>{
@@ -769,7 +700,6 @@ function App(){
     };
 
     // P&L por año: solo TWR % por año
-    // El P&L en USD total lo calculamos desde pnlRealizado + totPnl (más confiable)
     const years = [...new Set(allDates.map(d=>d.slice(0,4)))];
     const byYear = {};
 
@@ -821,89 +751,33 @@ function App(){
       const twrInicio = puntos[0].val;
       const twrFin    = puntos[puntos.length-1].val;
 
-      const portValStart = isFirstYear ? 0 : getPortValCached(prevDec31);
-      const portValEnd   = isCurrentYear ? totUSDnow : getPortValCached(yEndDate);
-
-      const xirrFlows = portValStart > 0 ? [{date:yStartRef, amount:-portValStart}] : [];
-      const yearTrades = isFirstYear
-        ? trades.filter(t=>t.date<=yEndDate)
-        : trades.filter(t=>t.date>prevDec31&&t.date<=yEndDate);
-      yearTrades.forEach(t=>{
-        const T2=String(t.ticker||'').toUpperCase();
-        const isBondT2=isBondTicker(T2);
-        const qty2=t.qty||0; const qtyF2=isBondT2?qty2/100:qty2;
-        const com2=t.comision?+t.comision:0;
-        const amt=toUSD((t.price||0)*qtyF2+(t.tipo==='compra'?com2:-com2), t.currency||"ARS", t.date);
-        xirrFlows.push({date:t.date, amount:t.tipo==='compra'?-amt:amt});
-      });
-      xirrFlows.push({date:yEndDate, amount:portValEnd});
-      xirrFlows.sort((a,b)=>a.date.localeCompare(b.date));
-
+      const ypp = calcPeriodPnL({s:isFirstYear?"0000-01-01":`${y}-01-01`, e:yEndDate, trades, en, historicos, bondFlows, today});
+      const xirrFlows = ypp.flows;
       const diasAnio = Math.max(1, Math.round((new Date(yEndDate)-new Date(xirrFlows[0].date))/(1000*60*60*24)));
       let rendAnio = ((twrFin/twrInicio)-1)*100;
       if(xirrFlows.length>=2){const rA=calcXIRR(xirrFlows);if(rA!=null)rendAnio=deannualizeXIRR(rA,diasAnio)*100;}
-
-      const middleFlowsSum = xirrFlows.slice(1,-1).reduce((a,f)=>a+f.amount,0);
-      const pnlAnio = portValEnd - portValStart + middleFlowsSum;
+      const pnlAnio = ypp.total;
 
       byYear[y] = { rend: rendAnio, pnl: pnlAnio, twrInicio, twrFin };
     });
 
     return { twrTotal: twrTotal*100, twrAnual, dias, serie, byYear, firstDate };
     }catch(e){ console.error("twrStats error:",e); return null; }
-  },[trades, en, historicos, fxRate]); // sin livePrices — no recalcular por cada precio
+  },[trades, en, historicos, fxRate, bondFlows]); // sin livePrices — no recalcular por cada precio
 
   // XIRR full-period: tasa real del inversor (money-weighted)
   const xirrFull = useMemo(()=>{
     try{
       if(!trades.length||!en.length) return null;
-      const cclBars=historicos?.CCL||[];
-      const getCCL=(date)=>{let lo=0,hi=cclBars.length-1,res=-1;while(lo<=hi){const mid=(lo+hi)>>1;if(cclBars[mid].date<=date){res=mid;lo=mid+1;}else hi=mid-1;}return res>=0?cclBars[res].close:(fxRate||1);};
-      const isBondT=isBondTicker;
-      const flows=[];
-      for(const t of trades){
-        const isBond=isBondT(t.ticker);
-        const qty=t.qty||0;
-        const qtyF=isBond?qty/100:qty;
-        const com=t.comision?+t.comision:0;
-        const amt=(t.price||0)*qtyF+(t.tipo==='compra'?com:-com);
-        const isUSD=(t.currency||'ARS')==='USD';
-        const usd=isUSD?amt:amt/getCCL(t.date);
-        flows.push({date:t.date, amount:t.tipo==='compra'?-usd:usd});
-      }
-      // Agregar flujos cobrados de bonos (cupones + amortizaciones confirmadas)
-      for(const [ticker, bFlows] of Object.entries(bondFlows||{})){
-        const pos=en.find(h=>h.ticker===ticker);
-        const buyCurrency=pos?.buyCurrency||(String(ticker).toUpperCase().endsWith('D')?'USD':'ARS');
-        for(const f of (bFlows||[])){
-          if(!f.cobrado||!f.fechaCobro) continue;
-          const buysBefore=trades.filter(t=>t.ticker===ticker&&t.tipo==='compra'&&t.date<=f.fechaCobro);
-          const sellsBefore=trades.filter(t=>t.ticker===ticker&&t.tipo==='venta'&&t.date<=f.fechaCobro);
-          const qtyAt=Math.max(0,buysBefore.reduce((a,t)=>a+t.qty,0)-sellsBefore.reduce((a,t)=>a+t.qty,0));
-          if(qtyAt<=0) continue;
-          let cashLocal;
-          if(f.tipo==='amortizacion'){
-            cashLocal=f.monto*qtyAt/100;
-          } else {
-            const vnrIni=(SEED_BOND_META?.[ticker]?.vnrInicial)??100;
-            const vnrAt=calcVNR(bFlows, f.fechaCobro, vnrIni);
-            cashLocal=f.monto*qtyAt*vnrAt/10000;
-          }
-          const cashUSD=buyCurrency==='USD'?cashLocal:cashLocal/getCCL(f.fechaCobro);
-          flows.push({date:f.fechaCobro, amount:cashUSD});
-        }
-      }
+      const flows=fullPnL.flows;
       const today=todayAR();
-      const endVal=en.reduce((a,h)=>a+h.valUSD,0);
-      flows.push({date:today, amount:endVal});
-      flows.sort((a,b)=>a.date.localeCompare(b.date));
       const rAnual=calcXIRR(flows);
       if(rAnual==null) return null;
       const firstDate=flows[0].date;
       const dias=Math.max(1,Math.round((new Date(today)-new Date(firstDate))/(1000*60*60*24)));
       return {xirrAnual:rAnual*100, xirrTotal:deannualizeXIRR(rAnual,dias)*100, dias};
     }catch(e){console.error("xirrFull error:",e);return null;}
-  },[trades,en,historicos,fxRate,bondFlows]);
+  },[fullPnL,trades,en]);
 
   const benchPct = twrStats
     ? (Math.pow(1+liveT10Y/100, twrStats.dias/365)-1)*100
@@ -1547,7 +1421,7 @@ function App(){
                 })()}
                 <div style={{...card,padding:"10px 18px 18px",display:"flex",flexDirection:"column"}}>
                   <div style={{height:window.innerWidth<768?340:410}}>
-                    <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} livePricesAll={livePrices} onExpand={()=>setChartModal(true)} xirrFull={xirrFull} totPnlTotal={totPnlTotal} totPnlPrice={totPnl+pnlRealizado} bondFlows={bondFlows}/>
+                    <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} livePricesAll={livePrices} onExpand={()=>setChartModal(true)} xirrFull={xirrFull} totPnlTotal={totPnlTotal} bondFlows={bondFlows}/>
                   </div>
                 </div>
                 {chartModal&&(
@@ -1561,7 +1435,7 @@ function App(){
                       </button>
                     </div>
                     <div style={{flex:1,padding:"24px",minHeight:0}}>
-                      <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} isModal={true} livePricesAll={livePrices} xirrFull={xirrFull} totPnlTotal={totPnlTotal} totPnlPrice={totPnl+pnlRealizado} bondFlows={bondFlows}/>
+                      <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} isModal={true} livePricesAll={livePrices} xirrFull={xirrFull} totPnlTotal={totPnlTotal} bondFlows={bondFlows}/>
                     </div>
                   </div>
                 )}
@@ -1649,8 +1523,8 @@ function App(){
                       <div style={{marginTop:12,display:"flex",flexDirection:"column",gap:6}}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                           <span style={{fontSize:10,color:"var(--text-muted)"}}>Realizado</span>
-                          <span style={{fontSize:12,fontWeight:600,color:pc(pnlRealizado),fontFamily:"'DM Mono',monospace"}}>
-                            {hideAmounts?"••••":(pnlRealizado>=0?"+":"")+fmtU(pnlRealizado,0)}
+                          <span style={{fontSize:12,fontWeight:600,color:pc(totPnlTotal-totPnl),fontFamily:"'DM Mono',monospace"}}>
+                            {hideAmounts?"••••":(totPnlTotal-totPnl>=0?"+":"")+fmtU(totPnlTotal-totPnl,0)}
                           </span>
                         </div>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>

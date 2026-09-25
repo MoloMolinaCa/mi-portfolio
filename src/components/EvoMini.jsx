@@ -286,7 +286,9 @@ export default function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,hist
       let startValUSD=valuePosUSD(posStart,s);
       let endValUSD=valuePosUSD(posEnd,e);
       const endValNow=en.reduce((a,h)=>a+h.valUSD,0);
-      if(!endValUSD||endValUSD<=0)endValUSD=endValNow;
+      // Si el período termina hoy, usar precios live (endValNow) para evitar
+      // que assets sin barra histórica para hoy subvalúen el portfolio
+      if(!endValUSD||endValUSD<=0||e>=todayAR())endValUSD=endValNow;
       const periodTrades=(trades||[]).filter(t=>((t.date>s)||(t.date===s&&!includeStartDayAsPosition))&&t.date<e);
       const flows=[];
       flows.push({date:s,amount:-startValUSD});

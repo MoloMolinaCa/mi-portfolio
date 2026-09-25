@@ -309,12 +309,14 @@ export default function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,hist
       if(cd.spy100&&cd.spy100.length>=2){const spy100=cd.spy100;const spyEnd=spy100[spy100.length-1].val;const spyAt=(dateStr)=>{let best=spy100[0];for(const p of spy100){if(p.date<=dateStr)best=p;else break;}return best.val||100;};if(spyEnd>0){const _dm={};for(const t of periodTrades){const T=String(t.ticker||'').toUpperCase();const isBond=isBondTicker(T);const raw=(+t.qty||0)*(+t.price||0)*(isBond?0.01:1);const com=+t.comision||0;const isUSD=(t.currency||'ARS')==='USD';const fx=isUSD?1:_getCCLForDate(t.date);if(!_dm[t.date])_dm[t.date]={bP:0,sP:0,bC:0,sC:0};if(t.tipo==="compra"){_dm[t.date].bP+=raw/fx;_dm[t.date].bC+=com/fx;}else{_dm[t.date].sP+=raw/fx;_dm[t.date].sC+=com/fx;}}const spyFlows=[{date:s,amount:-startValUSD}];let spyComSunk=0;for(const[d,v]of Object.entries(_dm)){const net=v.bP-v.sP;if(Math.abs(net)<0.01)continue;spyFlows.push({date:d,amount:-net});if(net>0){spyComSunk+=v.bP>0?v.bC*(net/v.bP):0;}else{spyComSunk+=v.sP>0?v.sC*(-net/v.sP):0;}}let spyFinalVal=0;for(const fl of spyFlows){const g2=spyAt(fl.date)>0?spyEnd/spyAt(fl.date):1;spyFinalVal+=(-fl.amount)*g2;}const spyMidFlows=spyFlows.slice(1).reduce((a,f)=>a+f.amount,0);spDollarPnL=spyFinalVal-startValUSD+spyMidFlows-spyComSunk;spyFlows.push({date:e,amount:spyFinalVal});spyFlows.sort((a,b)=>a.date.localeCompare(b.date));if(spyFlows.length>=2&&startValUSD>0&&spyFinalVal>0){const rAnualSpy=calcXIRR(spyFlows);if(rAnualSpy!=null)spyXIRR=deannualizeXIRR(rAnualSpy,days)*100;}}}
       const alpha=(portXIRR!=null&&spyXIRR!=null)?portXIRR-spyXIRR:null;
       // Si el período cubre todo el historial, usar xirrFull/totPnlTotal para consistencia con tarjeta KPI y gráfico anual
-      const isFullPeriod = firstTradeDate && s<=firstTradeDate && xirrFull;
-      const finalPortXIRR = isFullPeriod&&xirrFull.xirrTotal!=null ? xirrFull.xirrTotal : portXIRR;
+      // Usamos firstBuyDate (solo compras) igual que getDates(), para que coincida con chartData.startDate
+      const firstBuyDate=(trades||[]).filter(t=>t?.tipo==="compra").map(t=>t?.date).filter(Boolean).sort()[0];
+      const isFullPeriod = xirrFull && xirrFull.xirrTotal!=null && firstBuyDate && s<=firstBuyDate;
+      const finalPortXIRR = isFullPeriod ? xirrFull.xirrTotal : portXIRR;
       const finalPortDollarPnL = isFullPeriod&&totPnlTotal!=null ? totPnlTotal : portDollarPnL;
       return {portXIRR:finalPortXIRR,spyXIRR,alpha,portDollarPnL:finalPortDollarPnL,spDollarPnL};
     }catch(err){console.warn('XIRR error:',err);return {portXIRR:null,spyXIRR:null,alpha:null};}
-  },[cd,trades,en,fxRate,liveFX,currency,_bT,historicos]);
+  },[cd,trades,en,fxRate,liveFX,currency,_bT,historicos,xirrFull,totPnlTotal]);
 
   const series=cd?[
     {key:"port",data:cd.port100,color:"var(--green)",bold:true},

@@ -1,6 +1,6 @@
 /* eslint-disable */
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { calcTWR, calcXIRR, deannualizeXIRR, isBondTicker as isBondTickerU, calcPeriodPnL } from '../utils/calcUtils';
+import { calcTWR, calcXIRR, deannualizeXIRR, isBondTicker as isBondTickerU, calcPeriodPnL, applyCommissionsToBenchmark } from '../utils/calcUtils';
 import { todayAR } from '../utils/shared';
 import { SEED_BOND_META } from '../constants/bondFlows';
 import Chart100 from './Chart100';
@@ -203,6 +203,8 @@ export default function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,hist
       }
 
       const port100=calcTWR(datesWithToday,trades,en,tickerBars,cclBars,mepBars,currency,fxRate,livePricesMap,customEnd,realToday2,bondFlows);
+      const spy100Raw=spy100;
+      if(spy100) spy100=applyCommissionsToBenchmark(spy100,port100);
 
       // UVA benchmark — solo en modo ARS
       let uva100 = null;
@@ -240,7 +242,7 @@ export default function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,hist
       }
 
       setChartData({
-        port100,t10y100,spy100,ccl100,mep100,uva100,cer100,currency,
+        port100,t10y100,spy100,spy100Raw,ccl100,mep100,uva100,cer100,currency,
         portBase:null,
         startDate:dates[0],endDate:datesWithToday[datesWithToday.length-1],
         portRet:port100.length>0?(port100[port100.length-1].val-100).toFixed(2):"0.00",
@@ -285,7 +287,7 @@ export default function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,hist
       let spyXIRR=null;
       let spDollarPnL=null;
       // SPY benchmark: flujos netos por día (solo principal). Rotación=0 comisiones, capital nuevo=comisión de compra proporcional, retiro neto=comisión de venta proporcional
-      if(cd.spy100&&cd.spy100.length>=2){const spy100=cd.spy100;const spyEnd=spy100[spy100.length-1].val;const spyAt=(dateStr)=>{let best=spy100[0];for(const p of spy100){if(p.date<=dateStr)best=p;else break;}return best.val||100;};if(spyEnd>0){const _dm={};for(const t of periodTrades){const T=String(t.ticker||'').toUpperCase();const isBond=isBondTicker(T);const raw=(+t.qty||0)*(+t.price||0)*(isBond?0.01:1);const com=+t.comision||0;const isUSD=(t.currency||'ARS')==='USD';const fx=isUSD?1:_getCCLForDate(t.date);if(!_dm[t.date])_dm[t.date]={bP:0,sP:0,bC:0,sC:0};if(t.tipo==="compra"){_dm[t.date].bP+=raw/fx;_dm[t.date].bC+=com/fx;}else{_dm[t.date].sP+=raw/fx;_dm[t.date].sC+=com/fx;}}const spyFlows=startValUSD>0?[{date:s,amount:-startValUSD}]:[];let spyComSunk=0;for(const[d,v]of Object.entries(_dm)){const net=v.bP-v.sP;if(Math.abs(net)<0.01)continue;spyFlows.push({date:d,amount:-net});if(net>0){spyComSunk+=v.bP>0?v.bC*(net/v.bP):0;}else{spyComSunk+=v.sP>0?v.sC*(-net/v.sP):0;}}let spyFinalVal=0;for(const fl of spyFlows){const g2=spyAt(fl.date)>0?spyEnd/spyAt(fl.date):1;spyFinalVal+=(-fl.amount)*g2;}const spyMidFlows=spyFlows.slice(startValUSD>0?1:0).reduce((a,f)=>a+f.amount,0);spDollarPnL=spyFinalVal-startValUSD+spyMidFlows-spyComSunk;spyFlows.push({date:e,amount:spyFinalVal});spyFlows.sort((a,b)=>a.date.localeCompare(b.date));if(spyFlows.length>=2&&spyFinalVal>0){const rAnualSpy=calcXIRR(spyFlows);if(rAnualSpy!=null)spyXIRR=deannualizeXIRR(rAnualSpy,days)*100;}}}
+      if(cd.spy100&&cd.spy100.length>=2){const spy100=cd.spy100Raw||cd.spy100;const spyEnd=spy100[spy100.length-1].val;const spyAt=(dateStr)=>{let best=spy100[0];for(const p of spy100){if(p.date<=dateStr)best=p;else break;}return best.val||100;};if(spyEnd>0){const _dm={};for(const t of periodTrades){const T=String(t.ticker||'').toUpperCase();const isBond=isBondTicker(T);const raw=(+t.qty||0)*(+t.price||0)*(isBond?0.01:1);const com=+t.comision||0;const isUSD=(t.currency||'ARS')==='USD';const fx=isUSD?1:_getCCLForDate(t.date);if(!_dm[t.date])_dm[t.date]={bP:0,sP:0,bC:0,sC:0};if(t.tipo==="compra"){_dm[t.date].bP+=raw/fx;_dm[t.date].bC+=com/fx;}else{_dm[t.date].sP+=raw/fx;_dm[t.date].sC+=com/fx;}}const spyFlows=startValUSD>0?[{date:s,amount:-startValUSD}]:[];let spyComSunk=0;for(const[d,v]of Object.entries(_dm)){const net=v.bP-v.sP;if(Math.abs(net)<0.01)continue;spyFlows.push({date:d,amount:-net});if(net>0){spyComSunk+=v.bP>0?v.bC*(net/v.bP):0;}else{spyComSunk+=v.sP>0?v.sC*(-net/v.sP):0;}}let spyFinalVal=0;for(const fl of spyFlows){const g2=spyAt(fl.date)>0?spyEnd/spyAt(fl.date):1;spyFinalVal+=(-fl.amount)*g2;}const spyMidFlows=spyFlows.slice(startValUSD>0?1:0).reduce((a,f)=>a+f.amount,0);spDollarPnL=spyFinalVal-startValUSD+spyMidFlows-spyComSunk;spyFlows.push({date:e,amount:spyFinalVal});spyFlows.sort((a,b)=>a.date.localeCompare(b.date));if(spyFlows.length>=2&&spyFinalVal>0){const rAnualSpy=calcXIRR(spyFlows);if(rAnualSpy!=null)spyXIRR=deannualizeXIRR(rAnualSpy,days)*100;}}}
       const alpha=(portXIRR!=null&&spyXIRR!=null)?portXIRR-spyXIRR:null;
       const finalPortXIRR=portXIRR,finalPortDollarPnL=portDollarPnL;
       return {portXIRR:finalPortXIRR,spyXIRR,alpha,portDollarPnL:finalPortDollarPnL,spDollarPnL};

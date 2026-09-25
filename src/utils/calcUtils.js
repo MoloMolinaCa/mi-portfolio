@@ -195,6 +195,22 @@ export function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currenc
   };
 
   // Compras - ventas (precio real + comisión) con fecha en (from, to], en la moneda del gráfico
+  // Detalle bruto/comisión de compras y ventas en (from, to], para replicar comisiones en el benchmark
+  const getFlowDetailBetween=(from,to)=>{
+    const r={buyGross:0,buyCom:0,sellGross:0,sellCom:0};
+    for(const tk in tradesByTicker){
+      const h=posByT[tk];const isBond=bondT(h);const isUSD=h.buyCurrency==="USD";
+      for(const t of tradesByTicker[tk]){
+        if(!(t.date>from&&t.date<=to))continue;
+        const cclDay=cclBars.length?findPrice2(cclBars,t.date)||fxRate:fxRate;
+        const mepDay=mepBars.length?findPrice2(mepBars,t.date)||fxRate:fxRate;
+        const conv=a=>currency==="ARS"?(isUSD?a*cclDay:a):(isUSD?a:a/(currency==="USD_CCL"?cclDay:mepDay));
+        const gross=conv((+t.price||0)*(isBond?t.qty/100:t.qty)), com=conv(+t.comision||0);
+        if(t.tipo==="compra"){r.buyGross+=gross;r.buyCom+=com;}else{r.sellGross+=gross;r.sellCom+=com;}
+      }
+    }
+    return r;
+  };
   const getNetFlowBetween=(from,to)=>{
     let f=0;
     for(const tk in tradesByTicker){
@@ -213,6 +229,7 @@ export function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currenc
   };
 
   const twr=[{date:dates[0],val:100}];
+  twr.meta={startVal:getPortVal(dates[0], new Date(dates[0]).getTime()), flows:[null]};
   let cumulative=1;
 
   for(let i=1;i<dates.length;i++){
@@ -224,6 +241,7 @@ export function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currenc
     const valPrevClose=getPortVal(prevDateStr, prevDateT);
     const valToday=getPortVal(dateStr, dateT);
     const netFlow=getNetFlowBetween(prevDateStr, dateStr);
+    twr.meta.flows.push(getFlowDetailBetween(prevDateStr, dateStr));
     const couponsToday=getCouponValueBetween(prevDateStr, dateStr);
 
     let dayReturn;
@@ -241,6 +259,28 @@ export function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currenc
   }
 
   return twr;
+}
+
+// Benchmark base 100 que recibe los mismos aportes/retiros netos que el portfolio y paga comisión
+// en la misma proporción (compra neta → % de comisión de compra, retiro neto → % de venta; rotación = 0)
+export function applyCommissionsToBenchmark(benchPts, port100){
+  const meta=port100?.meta;
+  if(!benchPts?.length||!meta) return benchPts;
+  const px=d=>{let b=null;for(const p of benchPts){if(p.date<=d)b=p;else break;}return (b||benchPts[0]).val;};
+  let S=meta.startVal, cum=1, prevPx=px(port100[0].date);
+  const out=[{date:port100[0].date,val:100}];
+  for(let i=1;i<port100.length;i++){
+    const d=port100[i].date, p=px(d), f=meta.flows[i]||{buyGross:0,buyCom:0,sellGross:0,sellCom:0};
+    const net=f.buyGross-f.sellGross;
+    const com=net>0?(f.buyGross>0?net*f.buyCom/f.buyGross:0):(net<0&&f.sellGross>0?-net*f.sellCom/f.sellGross:0);
+    const grown=S*(prevPx>0?p/prevPx:1);
+    if(S>0) cum*=(grown-com)/S;
+    else if(net>0) cum*=(net-com)/net;
+    S=Math.max(0,grown-com+net);
+    out.push({date:d,val:parseFloat((100*cum).toFixed(4))});
+    prevPx=p;
+  }
+  return out;
 }
 
 // ── XIRR — Newton-Raphson + biseccion ────────────────────────────────────────

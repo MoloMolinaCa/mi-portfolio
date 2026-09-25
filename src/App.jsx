@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, memo, useRef, useCallback } from "react";
 import { SEED_BOND_FLOWS, SEED_BOND_META } from './constants/bondFlows';
 import { computeBondFlowsDelta, expandBondFlowsDelta } from './utils/bondUtils';
+import { mergeSnapshots, sameSnapshot } from './utils/sync';
 import BondWizard from './components/BondWizard';
 import FlujoTab from './components/FlujoTab';
 import { fetchFXLive, fetchAllLivePrices, fetchTreasury10Y } from './utils/priceUtils';
@@ -312,167 +313,122 @@ function App(){
   const REPO = "MoloMolinaCa/mi-portfolio";
   const DATA_FILE = "public/portfolio_data.json";
   const [syncStatus, setSyncStatus] = useState("idle"); // idle|loading|saving|error
-  const [ghSha, setGhSha] = useState(null); // SHA del archivo en GitHub para updates
 
-  // GitHub data se carga via /api/sync (unica fuente de verdad)
+  // ── Sync entre dispositivos ───────────────────────────────────────────────
+  // El servidor guarda una revisión (dataVersion). Un dispositivo solo puede guardar si parte de la
+  // última revisión; si no, descarga lo nuevo y combina sus cambios propios (merge de 3 vías contra la base).
+  const LS_REV='gal_data_version', LS_BASE='gal_sync_base';
+  const readMeta=()=>{ try{ return JSON.parse(localStorage.getItem('gal_bond_meta_v1')||'{}'); }catch{ return {}; } };
+  const normSnap=(s)=>({
+    port: fixNames(s.port||[]),
+    trades: fixNames(s.trades||[]),
+    bondFlowsDelta: computeBondFlowsDelta(expandBondFlowsDelta(s.bondFlowsDelta||{})),
+    bondMeta: s.bondMeta||{},
+  });
+  const stateRef = React.useRef(null);
+  stateRef.current = {port, trades, bondFlows};
+  const localSnap=()=>normSnap({port:stateRef.current.port, trades:stateRef.current.trades, bondFlowsDelta:computeBondFlowsDelta(stateRef.current.bondFlows), bondMeta:readMeta()});
+  const getBase=()=>{ try{ return JSON.parse(localStorage.getItem(LS_BASE)||'null'); }catch{ return null; } };
+  const getRev=()=>{ const v=localStorage.getItem(LS_REV); return v==null?null:+v; };
+  const setBase=(snap,rev)=>{ localStorage.setItem(LS_BASE,JSON.stringify(snap)); localStorage.setItem(LS_REV,String(rev)); };
+  const applySnap=(s)=>{
+    setPort(s.port); setTrades(s.trades); setBondFlows(expandBondFlowsDelta(s.bondFlowsDelta));
+    try{ localStorage.setItem('gal_bond_meta_v1',JSON.stringify(s.bondMeta||{})); }catch{}
+    stateRef.current={port:s.port, trades:s.trades, bondFlows:expandBondFlowsDelta(s.bondFlowsDelta)};
+  };
+  const syncBusy = React.useRef(false);
 
-  // Guardar datos via /api/sync (Vercel serverless — token seguro en servidor)
-  const saveToGitHub = async (newPort, newTrades, newFlows, newMeta) => {
-    try{
-      setSyncStatus("saving");
-      const deviceId = localStorage.getItem('gal_device_id')||'unknown';
-      const res = await fetch('/api/sync', {
-        method: 'PUT',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          port: newPort, trades: newTrades,
-          bondFlowsDelta: newFlows||{}, bondMeta: newMeta||{},
-          sha: ghSha, deviceId,
-          dataVersion: +localStorage.getItem('gal_data_version')||0
-        })
-      });
-      if(res.ok){
-        const d = await res.json();
-        if(d.sha) setGhSha(d.sha);
-        localStorage.setItem('gal_last_save', Date.now().toString());
-        setSyncStatus("idle");
-      } else if(res.status===409){
-        // SHA desactualizado o datos editados en otra versión: descargar lo del servidor
-        try{
-          const r2 = await fetch('/api/sync');
-          if(r2.ok){
-            const d2=await r2.json(); setGhSha(d2.sha);
-            if((+d2.dataVersion||0) > (+localStorage.getItem('gal_data_version')||0)) applyRemoteData(d2);
-          }
-        }catch{}
-        setSyncStatus("idle"); // reintentar en el próximo save
-      } else {
-        console.warn("Sync save error:", res.status);
-        setSyncStatus("error");
-      }
-    }catch(e){
-      console.warn("Sync save error:", e);
-      setSyncStatus("error");
-    }
+  const pushLocal = async () => {
+    const base=getBase(), rev=getRev();
+    if(!base||rev==null) return;
+    const local=localSnap();
+    if(sameSnapshot(local,base)) return;
+    setSyncStatus("saving");
+    const res = await fetch('/api/sync',{method:'PUT',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({...local, rev, deviceId:localStorage.getItem('gal_device_id')||'unknown'})});
+    if(res.ok){ const d=await res.json(); setBase(local,d.dataVersion); setSyncStatus("idle"); return; }
+    if(res.status===409){ await pullRemote(true); return; }
+    throw new Error('save '+res.status);
   };
 
-  const applyRemoteData = (data) => {
-    isLoadingFromGH.current = true;
-    if(data.port?.length)   setPort(fixNames(data.port));
-    if(data.trades?.length) setTrades(fixNames(data.trades));
-    if(data.bondFlowsDelta && Object.keys(data.bondFlowsDelta).length){
-      setBondFlows(expandBondFlowsDelta(data.bondFlowsDelta));
-    } else if(data.bondFlows && Object.keys(data.bondFlows).length){
-      setBondFlows(expandBondFlowsDelta(computeBondFlowsDelta({...SEED_BOND_FLOWS,...data.bondFlows})));
+  // Trae lo último del servidor y lo combina con los cambios locales no guardados
+  const pullRemote = async (thenPush=false) => {
+    const r=await fetch('/api/sync?t='+Date.now(),{cache:'no-store'});
+    if(!r.ok) throw new Error('load '+r.status);
+    const data=await r.json();
+    const serverRev=+data.dataVersion||0;
+    const server=normSnap(data);
+    const base=getBase(), local=localSnap();
+    const serverEmpty=!server.port.length&&!server.trades.length;
+    if(serverEmpty){
+      // Servidor vacío: subir lo local como primera versión
+      setBase(normSnap({}),serverRev);
+      if(local.port.length||local.trades.length) await pushLocal();
+      return;
     }
-    localStorage.setItem('gal_last_save', new Date(data.updatedAt||0).getTime().toString());
-    localStorage.setItem('gal_data_version', String(+data.dataVersion||0));
-    setTimeout(()=>{ isLoadingFromGH.current = false; }, 3000);
+    if(getRev()===serverRev && base){ if(thenPush) await pushLocal(); return; }
+    // Sin base (dispositivo nuevo o versión anterior de la app): el servidor manda
+    const merged = (!base||sameSnapshot(local,base)) ? server : mergeSnapshots(base,local,server);
+    setBase(server,serverRev);
+    if(!sameSnapshot(merged,local)) applySnap(merged);
+    if(!sameSnapshot(merged,server)) await pushLocal();
+  };
+
+  const runSync = async (fn) => {
+    if(syncBusy.current) return;
+    syncBusy.current=true;
+    try{ await fn(); setSyncStatus(s=>s==="saving"||s==="loading"?"idle":s); }
+    catch(e){ console.warn("Sync error:",e); setSyncStatus("error"); }
+    finally{ syncBusy.current=false; }
   };
 
   // ── Storage ───────────────────────────────────────────────────────────────
-  const [bondMetaFromGH, setBondMetaFromGH] = useState(null);
   useEffect(()=>{
-    // 0. Generar device ID único para este dispositivo
     if(!localStorage.getItem('gal_device_id')){
       localStorage.setItem('gal_device_id', Math.random().toString(36).slice(2)+Date.now().toString(36));
     }
-
-    // 1. Cargar localStorage inmediatamente (siempre)
-
     try{
       const sp=localStorage.getItem("gal_port_v1");
       const st=localStorage.getItem("gal_trades_v3");
       if(sp) setPort(fixNames(JSON.parse(sp)));
       if(st) setTrades(fixNames(JSON.parse(st)));
       const bf=localStorage.getItem('gal_bond_flows_v1');
-      if(bf){
-        const saved=JSON.parse(bf);
-        const merged={...SEED_BOND_FLOWS,...saved};
-        setBondFlows(merged);
-      }
+      if(bf) setBondFlows({...SEED_BOND_FLOWS,...JSON.parse(bf)});
+      stateRef.current={port:sp?fixNames(JSON.parse(sp)):port, trades:st?fixNames(JSON.parse(st)):trades, bondFlows:bf?{...SEED_BOND_FLOWS,...JSON.parse(bf)}:bondFlows};
     }catch{}
     setStorageReady(true);
-
-    // 2. Cargar desde /api/sync — SOLO si localStorage está vacío (dispositivo nuevo)
-    const localPortData = localStorage.getItem("gal_port_v1");
-    const localTradesData = localStorage.getItem("gal_trades_v3");
-    const localHasData = localPortData && JSON.parse(localPortData||'[]').length > 0;
-
-    // Cargar desde GitHub y aplicar si es de otro dispositivo o no hay datos locales
     setSyncStatus("loading");
-    fetch('/api/sync')
-      .then(r=>r.ok?r.json():null)
-      .then(data=>{
-        if(!data){ setSyncChecked(true); setSyncStatus("idle"); return; }
-        if(data.sha) setGhSha(data.sha);
-        const myDeviceId = localStorage.getItem('gal_device_id');
-        const ghDeviceId = data.deviceId;
-        const localTs = parseInt(localStorage.getItem('gal_last_save')||'0');
-        const ghTs = new Date(data.updatedAt||0).getTime();
-        // Aplicar si: no tengo datos locales, O si GitHub es más nuevo que el último guardado local
-        const ghVer = +data.dataVersion||0, localVer = +localStorage.getItem('gal_data_version')||0;
-        const shouldApply = !localHasData || ghTs > localTs || ghVer > localVer;
-        if(shouldApply) applyRemoteData(data);
-        setSyncChecked(true);
-        setSyncStatus("idle");
-        // Si GitHub no tiene datos pero hay datos locales -> guardar inmediatamente
-        if(!data.port?.length && !data.trades?.length) {
-          try {
-            const lp=JSON.parse(localStorage.getItem("gal_port_v1")||"[]");
-            const lt=JSON.parse(localStorage.getItem("gal_trades_v3")||"[]");
-            const lf=JSON.parse(localStorage.getItem("gal_bond_flows_v1")||"{}");
-            const lm=JSON.parse(localStorage.getItem("gal_bond_meta_v1")||"{}");
-            if(lp.length>0||lt.length>0) {
-              saveToGitHub(lp, lt, computeBondFlowsDelta({...SEED_BOND_FLOWS,...lf}), lm);
-            }
-          } catch{}
-        }
-      })
-      .catch(()=>{ setSyncChecked(true); setSyncStatus("idle"); });
+    runSync(()=>pullRemote()).finally(()=>setSyncChecked(true));
+    // Traer lo último al volver a la app y cada 30s
+    const onVisible=()=>{ if(document.visibilityState!=='hidden'||document.hasFocus()) runSync(()=>pullRemote(true)); };
+    document.addEventListener('visibilitychange',onVisible);
+    window.addEventListener('focus',onVisible);
+    window.addEventListener('online',onVisible);
+    const iv=setInterval(()=>runSync(()=>pullRemote(true)),30000);
+    return ()=>{ document.removeEventListener('visibilitychange',onVisible); window.removeEventListener('focus',onVisible); window.removeEventListener('online',onVisible); clearInterval(iv); };
   },[]);
 
-  // Guardar en localStorage + GitHub cuando cambian los datos
-  const saveTimerRef = React.useRef(null);
   useEffect(()=>{
     if(!storageReady) return;
-    try{ 
-      localStorage.setItem("gal_port_v1",JSON.stringify(port));
-    }catch{}
+    try{ localStorage.setItem("gal_port_v1",JSON.stringify(port)); }catch{}
   },[port,storageReady]);
 
   useEffect(()=>{
     if(!storageReady) return;
-    try{
-      localStorage.setItem("gal_trades_v3",JSON.stringify(trades));
-    }catch{}
+    try{ localStorage.setItem("gal_trades_v3",JSON.stringify(trades)); }catch{}
   },[trades,storageReady]);
 
   useEffect(()=>{
     if(!storageReady) return;
-    try{
-      localStorage.setItem("gal_bond_flows_v1",JSON.stringify(bondFlows));
-    }catch{}
+    try{ localStorage.setItem("gal_bond_flows_v1",JSON.stringify(bondFlows)); }catch{}
   },[bondFlows,storageReady]);
 
-  // Sync a GitHub con debounce de 2s — solo si hubo cambio local reciente
-  const isLoadingFromGH = React.useRef(false); // true mientras se cargan datos de GitHub
-  const lastSyncRef = React.useRef(0); // timestamp del último sync exitoso
+  // Guardar en el servidor solo cuando hay cambios propios respecto de la última versión sincronizada
+  const saveTimerRef = React.useRef(null);
   useEffect(()=>{
     if(!storageReady || !syncChecked) return;
     if(saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    const saveTs = Date.now();
-    saveTimerRef.current = setTimeout(()=>{
-      // No guardar si estamos cargando datos desde GitHub
-      if(isLoadingFromGH.current) return;
-      // No sobreescribir GitHub si tenemos menos datos
-      if(port.length===0 && trades.length===0) return;
-      // Solo guardar si este save es más nuevo que el último sync
-      if(saveTs < lastSyncRef.current) return;
-      const meta = (() => { try{ return JSON.parse(localStorage.getItem('gal_bond_meta_v1')||'{}'); }catch{ return {}; } })();
-      lastSyncRef.current = saveTs;
-      saveToGitHub(port, trades, computeBondFlowsDelta(bondFlows), meta);
-    }, 800);
+    saveTimerRef.current = setTimeout(()=>runSync(()=>pullRemote(true)), 800);
     return ()=>{ if(saveTimerRef.current) clearTimeout(saveTimerRef.current); };
   },[port, trades, bondFlows, storageReady, syncChecked]);
 
@@ -517,15 +473,7 @@ function App(){
       const ivMarket=setInterval(()=>setMarketOpen(isMarketOpen()),60*1000);
       // Auto-sync cuando el usuario vuelve a la app (ej: cel)
       const onVisible=()=>{
-        if(document.visibilityState==='visible'){if(isLoadingFromGH.current)return;
-          fetch('/api/sync').then(r=>r.ok?r.json():null).then(data=>{
-            if(!data) return;
-            const localTs=parseInt(localStorage.getItem('gal_last_save')||'0');
-            const ghTs=new Date(data.updatedAt||0).getTime();
-            if(ghTs>localTs||(+data.dataVersion||0)>(+localStorage.getItem('gal_data_version')||0)) applyRemoteData(data);
-          }).catch(()=>{});
-          refreshPrices();
-        }
+        if(document.visibilityState==='visible') refreshPrices();
       };
       document.addEventListener('visibilitychange',onVisible);
       return()=>{clearInterval(iv);clearInterval(ivMarket);document.removeEventListener('visibilitychange',onVisible);};

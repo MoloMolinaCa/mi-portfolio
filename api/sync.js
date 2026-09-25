@@ -22,7 +22,7 @@ export default async function handler(req, res) {
   // GET — leer datos
   if (req.method === 'GET') {
     try {
-      const r = await fetch(API, { headers });
+      const r = await fetch(API + '?t=' + Date.now(), { headers });
       if (!r.ok) return res.status(r.status).json({ error: 'Error leyendo GitHub' });
       const data = await r.json();
 
@@ -49,12 +49,13 @@ export default async function handler(req, res) {
   if (req.method === 'PUT') {
     try {
       const { port, trades, bondFlowsDelta, bondMeta, deviceId } = req.body;
-      const clientVer = +req.body.dataVersion || 0;
+      // rev = revisión del servidor de la que parte este dispositivo; sin rev (clientes viejos) no se guarda
+      const clientRev = req.body.rev;
       let { sha } = req.body;
 
       // Siempre obtener el SHA actual para evitar conflictos
       let serverVer = 0;
-      const rGet = await fetch(API, { headers });
+      const rGet = await fetch(API + '?t=' + Date.now(), { headers });
       if (rGet.ok) {
         const dGet = await rGet.json(); sha = dGet.sha;
         try {
@@ -63,12 +64,11 @@ export default async function handler(req, res) {
           serverVer = +JSON.parse(txt).dataVersion || 0;
         } catch {}
       }
-      // Un dispositivo con datos de una versión anterior (edición manual posterior) no puede pisarlos
-      if (clientVer < serverVer) return res.status(409).json({ error: 'stale dataVersion', dataVersion: serverVer });
+      if (clientRev == null || +clientRev !== serverVer) return res.status(409).json({ error: 'stale rev', dataVersion: serverVer });
 
       const payload = {
         version: 2,
-        dataVersion: serverVer,
+        dataVersion: serverVer + 1,
         updatedAt: new Date().toISOString(),
         deviceId: deviceId || 'unknown',
         port,
@@ -88,7 +88,7 @@ export default async function handler(req, res) {
       }
 
       const d2 = await r.json();
-      return res.status(200).json({ sha: d2.content?.sha });
+      return res.status(200).json({ sha: d2.content?.sha, dataVersion: serverVer + 1 });
     } catch(e) {
       return res.status(500).json({ error: e.message });
     }

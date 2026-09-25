@@ -179,7 +179,7 @@ export default function EvoTab({en,trades,totUSD,totPct,benchPct,alpha,liveT10Y,
       }
 
       // Histórico por ticker desde JSON pre-generado
-      const allTickers = [...new Set(en.map(h=>h.ticker))];
+      const allTickers = [...new Set([...en.map(h=>h.ticker),...(trades||[]).map(t=>t.ticker)])];
       const tickerBars = {};
       for(const ticker of allTickers){
         const bars = _getTicker(ticker);

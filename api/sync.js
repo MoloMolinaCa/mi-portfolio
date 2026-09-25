@@ -49,14 +49,26 @@ export default async function handler(req, res) {
   if (req.method === 'PUT') {
     try {
       const { port, trades, bondFlowsDelta, bondMeta, deviceId } = req.body;
+      const clientVer = +req.body.dataVersion || 0;
       let { sha } = req.body;
 
       // Siempre obtener el SHA actual para evitar conflictos
+      let serverVer = 0;
       const rGet = await fetch(API, { headers });
-      if (rGet.ok) { const dGet = await rGet.json(); sha = dGet.sha; }
+      if (rGet.ok) {
+        const dGet = await rGet.json(); sha = dGet.sha;
+        try {
+          let raw = (dGet.content || '').replace(/\s/g, '');
+          const txt = raw ? Buffer.from(raw, 'base64').toString('utf-8') : (dGet.download_url ? await (await fetch(dGet.download_url)).text() : '{}');
+          serverVer = +JSON.parse(txt).dataVersion || 0;
+        } catch {}
+      }
+      // Un dispositivo con datos de una versión anterior (edición manual posterior) no puede pisarlos
+      if (clientVer < serverVer) return res.status(409).json({ error: 'stale dataVersion', dataVersion: serverVer });
 
       const payload = {
         version: 2,
+        dataVersion: serverVer,
         updatedAt: new Date().toISOString(),
         deviceId: deviceId || 'unknown',
         port,

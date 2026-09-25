@@ -81,7 +81,7 @@ export default function AnalisisTab({en, historicos, fxRate, currency, card, liv
     const cclBars = historicos?.CCL||[];
     const mepBars = historicos?.MEP||[];
     const tickerBars = {};
-    en.forEach(h=>{ const b=historicos?.[h.ticker]; if(b) tickerBars[h.ticker]=b; });
+    [...en.map(h=>h.ticker),...trades.map(t=>t.ticker)].forEach(tk=>{ const b=historicos?.[tk]; if(b) tickerBars[tk]=b; });
     const allDates = [...new Set(
       en.flatMap(h=>(historicos?.[h.ticker]||[]).map(b=>b.date))
     )].filter(d=>d>=startDate&&d<=endDate).sort();

@@ -100,16 +100,22 @@ export function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currenc
     return bars[0].close||null;
   }
 
+  // Todos los activos operados (incluye cerrados), no solo los que se tienen hoy
+  const enByT={};for(const h of en)enByT[h.ticker]=h;
+  const allPos=Object.keys(tradesByTicker).map(tk=>enByT[tk]||{ticker:tk,type:isBondTicker(tk)?"bono":"otro",buyCurrency:String(tradesByTicker[tk][0].currency||"ARS").toUpperCase()});
+  for(const h of en)if(!tradesByTicker[h.ticker])allPos.push(h);
+  const posByT={};for(const h of allPos)posByT[h.ticker]=h;
+  const bondT=h=>h.type==="bono_usd"||h.type==="bono_ars"||h.type==="bono";
   const getPortVal=(dateStr, dateT)=>{
     let total=0;
     const isToday=dateStr===todayStr;
-    for(const h of en){
+    for(const h of allPos){
       const ticks=tradesByTicker[h.ticker]||[];
       const buys=ticks.filter(t=>t.tipo==="compra"&&t._ts<=dateT);
       const sells=ticks.filter(t=>t.tipo==="venta"&&t._ts<=dateT);
       const qty=Math.max(0,buys.reduce((a,t)=>a+t.qty,0)-sells.reduce((a,t)=>a+t.qty,0));
       if(qty<=0)continue;
-      const isBond=h.type==="bono_usd"||h.type==="bono_ars";
+      const isBond=bondT(h);
       const qtyFactor=isBond?qty/100:qty;
       const bars=tickerBars[h.ticker];
       let price;
@@ -156,6 +162,8 @@ export function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currenc
     }
   }
 
+  const couponDates=Object.keys(couponsByDate);
+  const getCouponValueBetween=(from,to)=>couponDates.reduce((a,d)=>d>from&&d<=to?a+getCouponValueOnDate(d):a,0);
   const getCouponValueOnDate=(dateStr)=>{
     const list=couponsByDate[dateStr];
     if(!list?.length) return 0;
@@ -186,6 +194,24 @@ export function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currenc
     return total;
   };
 
+  // Compras - ventas (precio real + comisión) con fecha en (from, to], en la moneda del gráfico
+  const getNetFlowBetween=(from,to)=>{
+    let f=0;
+    for(const tk in tradesByTicker){
+      const h=posByT[tk];const isBond=bondT(h);const isUSD=h.buyCurrency==="USD";
+      for(const t of tradesByTicker[tk]){
+        if(!(t.date>from&&t.date<=to))continue;
+        const com=+t.comision||0;const gross=(+t.price||0)*(isBond?t.qty/100:t.qty);
+        const amt=t.tipo==="compra"?gross+com:gross-com;
+        const cclDay=cclBars.length?findPrice2(cclBars,t.date)||fxRate:fxRate;
+        const mepDay=mepBars.length?findPrice2(mepBars,t.date)||fxRate:fxRate;
+        const v=currency==="ARS"?(isUSD?amt*cclDay:amt):(isUSD?amt:amt/(currency==="USD_CCL"?cclDay:mepDay));
+        f+=t.tipo==="compra"?v:-v;
+      }
+    }
+    return f;
+  };
+
   const twr=[{date:dates[0],val:100}];
   let cumulative=1;
 
@@ -196,15 +222,16 @@ export function calcTWR(dates, trades, en, tickerBars, cclBars, mepBars, currenc
     const prevDateT=new Date(prevDateStr).getTime();
 
     const valPrevClose=getPortVal(prevDateStr, prevDateT);
-    const dateT_before=dateT-1;
-    const valTodayBeforeFlow=getPortVal(dateStr, dateT_before);
-    const couponsToday=getCouponValueOnDate(dateStr);
+    const valToday=getPortVal(dateStr, dateT);
+    const netFlow=getNetFlowBetween(prevDateStr, dateStr);
+    const couponsToday=getCouponValueBetween(prevDateStr, dateStr);
 
     let dayReturn;
     if(valPrevClose<=0){
-      dayReturn=1;
+      // Primer día con posición: del precio de compra al cierre
+      dayReturn=netFlow>0?(valToday+couponsToday)/netFlow:1;
     } else {
-      dayReturn=(valTodayBeforeFlow+couponsToday)/valPrevClose;
+      dayReturn=(valToday-netFlow+couponsToday)/valPrevClose;
     }
 
     if(!isFinite(dayReturn)||dayReturn<=0||dayReturn>3)dayReturn=1;

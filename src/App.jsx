@@ -327,7 +327,8 @@ function App(){
         body: JSON.stringify({
           port: newPort, trades: newTrades,
           bondFlowsDelta: newFlows||{}, bondMeta: newMeta||{},
-          sha: ghSha, deviceId
+          sha: ghSha, deviceId,
+          dataVersion: +localStorage.getItem('gal_data_version')||0
         })
       });
       if(res.ok){
@@ -336,10 +337,13 @@ function App(){
         localStorage.setItem('gal_last_save', Date.now().toString());
         setSyncStatus("idle");
       } else if(res.status===409){
-        // SHA desactualizado — refrescar y reintentar una vez
+        // SHA desactualizado o datos editados en otra versión: descargar lo del servidor
         try{
           const r2 = await fetch('/api/sync');
-          if(r2.ok){ const d2=await r2.json(); setGhSha(d2.sha); }
+          if(r2.ok){
+            const d2=await r2.json(); setGhSha(d2.sha);
+            if((+d2.dataVersion||0) > (+localStorage.getItem('gal_data_version')||0)) applyRemoteData(d2);
+          }
         }catch{}
         setSyncStatus("idle"); // reintentar en el próximo save
       } else {
@@ -350,6 +354,20 @@ function App(){
       console.warn("Sync save error:", e);
       setSyncStatus("error");
     }
+  };
+
+  const applyRemoteData = (data) => {
+    isLoadingFromGH.current = true;
+    if(data.port?.length)   setPort(fixNames(data.port));
+    if(data.trades?.length) setTrades(fixNames(data.trades));
+    if(data.bondFlowsDelta && Object.keys(data.bondFlowsDelta).length){
+      setBondFlows(expandBondFlowsDelta(data.bondFlowsDelta));
+    } else if(data.bondFlows && Object.keys(data.bondFlows).length){
+      setBondFlows(expandBondFlowsDelta(computeBondFlowsDelta({...SEED_BOND_FLOWS,...data.bondFlows})));
+    }
+    localStorage.setItem('gal_last_save', new Date(data.updatedAt||0).getTime().toString());
+    localStorage.setItem('gal_data_version', String(+data.dataVersion||0));
+    setTimeout(()=>{ isLoadingFromGH.current = false; }, 3000);
   };
 
   // ── Storage ───────────────────────────────────────────────────────────────
@@ -393,19 +411,9 @@ function App(){
         const localTs = parseInt(localStorage.getItem('gal_last_save')||'0');
         const ghTs = new Date(data.updatedAt||0).getTime();
         // Aplicar si: no tengo datos locales, O si GitHub es más nuevo que el último guardado local
-        const shouldApply = !localHasData || ghTs > localTs;
-        if(shouldApply){
-          isLoadingFromGH.current = true;
-          if(data.port?.length)   setPort(fixNames(data.port));
-          if(data.trades?.length) setTrades(fixNames(data.trades));
-          if(data.bondFlowsDelta && Object.keys(data.bondFlowsDelta).length){
-            setBondFlows(expandBondFlowsDelta(data.bondFlowsDelta));
-          } else if(data.bondFlows && Object.keys(data.bondFlows).length){
-            setBondFlows(expandBondFlowsDelta(computeBondFlowsDelta({...SEED_BOND_FLOWS,...data.bondFlows})));
-          }
-          localStorage.setItem('gal_last_save', ghTs.toString());
-          setTimeout(()=>{ isLoadingFromGH.current = false; }, 3000);
-        }
+        const ghVer = +data.dataVersion||0, localVer = +localStorage.getItem('gal_data_version')||0;
+        const shouldApply = !localHasData || ghTs > localTs || ghVer > localVer;
+        if(shouldApply) applyRemoteData(data);
         setSyncChecked(true);
         setSyncStatus("idle");
         // Si GitHub no tiene datos pero hay datos locales -> guardar inmediatamente
@@ -514,14 +522,7 @@ function App(){
             if(!data) return;
             const localTs=parseInt(localStorage.getItem('gal_last_save')||'0');
             const ghTs=new Date(data.updatedAt||0).getTime();
-            if(ghTs>localTs){
-              isLoadingFromGH.current=true;
-              if(data.port?.length) setPort(data.port);
-              if(data.trades?.length) setTrades(data.trades);
-              if(data.bondFlowsDelta&&Object.keys(data.bondFlowsDelta).length) setBondFlows(expandBondFlowsDelta(data.bondFlowsDelta)); else if(data.bondFlows&&Object.keys(data.bondFlows).length) setBondFlows(expandBondFlowsDelta(computeBondFlowsDelta({...SEED_BOND_FLOWS,...data.bondFlows})));
-              localStorage.setItem('gal_last_save',ghTs.toString());
-              setTimeout(()=>{isLoadingFromGH.current=false;},3000);
-            }
+            if(ghTs>localTs||(+data.dataVersion||0)>(+localStorage.getItem('gal_data_version')||0)) applyRemoteData(data);
           }).catch(()=>{});
           refreshPrices();
         }

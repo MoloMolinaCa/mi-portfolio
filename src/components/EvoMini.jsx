@@ -178,7 +178,7 @@ export default function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,hist
         // Fallback sintético si no hay datos
         t10y100=dates.map(d=>{const days=Math.max(0,(new Date(d)-new Date(dates[0]))/(1000*60*60*24));return{date:d,val:100*Math.pow(1+liveT10Y/100,days/365)};});
       }
-      const allTickers=[...new Set(en.map(h=>h.ticker))];
+      const allTickers=[...new Set([...en.map(h=>h.ticker),...(trades||[]).map(t=>t.ticker)])];
       const tickerBars={};
       for(const ticker of allTickers){const bars=_getTicker(ticker);if(bars)tickerBars[ticker]=bars;}
 

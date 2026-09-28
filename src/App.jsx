@@ -1262,7 +1262,7 @@ function App(){
                   {
                     icon:"📈", lbl:"Rendimiento acumulado",
                     main:twrStats?fmtP(twrStats.twrTotal):fmtP(totPct),
-                    sub:(hideAmounts?"••••":(totPnlTotal>=0?"+":"")+fmtU(totPnlTotal))+(twrStats?" · "+fmtP(twrStats.twrAnual)+" anual":""),
+                    sub:(hideAmounts?"••••":(totPnlTotal>=0?"+":"")+fmtU(totPnlTotal))+(twrStats&&twrStats.dias>=365?" · "+fmtP(twrStats.twrAnual)+" anual":""),
                     subLabel:twrStats?"P&L · desde "+twrStats.firstDate.split("-").reverse().join("/")+" ("+twrStats.dias+"d)":"No realizado",
                     mainColor:twrStats?pc(twrStats.twrTotal):pc(totPct),
                     trend:twrStats?twrStats.twrTotal:totPct,
@@ -1408,18 +1408,22 @@ function App(){
                           {twrStats.twrTotal>=0?"+":""}{twrStats.twrTotal.toFixed(1)}%
                         </div>
                       </div>
-                      <div style={{textAlign:"right"}}>
+                      {twrStats.dias>=365&&<div style={{textAlign:"right"}}>
                         <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8}}>Anualizado</div>
                         <div style={{fontSize:18,fontWeight:700,color:pc(twrStats.twrAnual),fontFamily:"'DM Mono',monospace"}}>
                           {twrStats.twrAnual>=0?"+":""}{twrStats.twrAnual.toFixed(1)}%<span style={{fontSize:11,fontWeight:400,opacity:0.6}}>/año</span>
                         </div>
-                      </div>
-                      {xirrFull&&<div style={{textAlign:"right"}} title="Tasa interna de retorno: rendimiento anual de tu plata según cuándo la pusiste y la sacaste">
-                        <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8}}>TIR sobre tu plata</div>
-                        <div style={{fontSize:14,fontWeight:600,color:pc(xirrFull.xirrAnual),fontFamily:"'DM Mono',monospace",opacity:0.85}}>
-                          {xirrFull.xirrAnual>=0?"+":""}{xirrFull.xirrAnual.toFixed(1)}%<span style={{fontSize:10,fontWeight:400,opacity:0.6}}>/año</span>
-                        </div>
                       </div>}
+                      {xirrFull&&(()=>{
+                        // Con menos de un año se muestra la TIR acumulada del período, no anualizada
+                        const anual=xirrFull.dias>=365, v=anual?xirrFull.xirrAnual:xirrFull.xirrTotal;
+                        return <div style={{textAlign:"right"}} title="Rendimiento de tu plata según cuándo la pusiste y la sacaste (TIR)">
+                          <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8}}>TIR sobre tu plata</div>
+                          <div style={{fontSize:14,fontWeight:600,color:pc(v),fontFamily:"'DM Mono',monospace",opacity:0.85}}>
+                            {v>=0?"+":""}{v.toFixed(1)}%{anual&&<span style={{fontSize:10,fontWeight:400,opacity:0.6}}>/año</span>}
+                          </div>
+                        </div>;
+                      })()}
                     </div>
                   </div>
 

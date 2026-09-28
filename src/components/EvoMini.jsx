@@ -6,12 +6,14 @@ import { todayAR } from '../utils/shared';
 import { SEED_BOND_META } from '../constants/bondFlows';
 import Chart100 from './Chart100';
 
-export default function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=false,livePricesAll={},onExpand=null,xirrFull=null,totPnlTotal=null,totPnlPrice=null,bondFlows={}}){
+export default function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,historicos,isModal=false,livePricesAll={},onExpand=null,xirrFull=null,totPnlTotal=null,totPnlPrice=null,bondFlows={},currency:currencyProp=null,onCurrencyChange=null}){
   const PERIODS=[{key:"mtd",label:"MTD",days:null,mtd:true},{key:"30d",label:"30d",days:30},{key:"90d",label:"90d",days:90},{key:"ytd",label:"YTD",days:null},{key:"1y",label:"1 año",days:365},{key:"3y",label:"3 años",days:1095}];
   // Persistir preferencias del gráfico en localStorage
   const _chartPrefs = ()=>{ try{ return JSON.parse(localStorage.getItem('gal_chart_prefs_v1')||'{}'); }catch{ return {}; } };
   const [period,setPeriodRaw]=useState(()=>_chartPrefs().period||"90d");
-  const [currency,setCurrencyRaw]=useState(()=>_chartPrefs().currency||"USD_CCL");
+  const [currencyLocal,setCurrencyRaw]=useState(()=>_chartPrefs().currency||"USD_CCL");
+  // Si App controla la moneda (para que la tarjeta use la misma), se usa esa
+  const currency=currencyProp||currencyLocal;
   const [showUVA,setShowUVARaw]=useState(()=>_chartPrefs().showUVA??true);
   const [uvaTasa,setUvaTasaRaw]=useState(()=>_chartPrefs().uvaTasa??2.5);
   const [uvaTasaStr,setUvaTasaStr]=useState(()=>String(_chartPrefs().uvaTasa??2.5));
@@ -30,7 +32,7 @@ export default function EvoMini({en,trades,fxRate,liveT10Y,liveFX,liveSP500,hist
     }catch{}
   };
   const setPeriod = v => { setPeriodRaw(v); savePrefs({period:v}); };
-  const setCurrency = v => { setCurrencyRaw(v); savePrefs({currency:v}); };
+  const setCurrency = v => { setCurrencyRaw(v); savePrefs({currency:v}); onCurrencyChange&&onCurrencyChange(v); };
   const setShowUVA = fn => setShowUVARaw(prev=>{ const v=typeof fn==='function'?fn(prev):fn; savePrefs({showUVA:v}); return v; });
   const setUvaTasa = v => { setUvaTasaRaw(v); setUvaTasaStr(String(v)); savePrefs({uvaTasa:v}); };
   const setShowCER = fn => setShowCERRaw(prev=>{ const v=typeof fn==='function'?fn(prev):fn; savePrefs({showCER:v}); return v; });

@@ -487,6 +487,8 @@ function App(){
   const today = todayAR();
   setKnownBonds(port.filter(h=>String(h.type||'').startsWith('bono')).map(h=>h.ticker));
   // Cantidades desde las operaciones (fuente de verdad); port aporta tipo, nombre, moneda y precio
+  // Moneda del gráfico base 100, compartida con la tarjeta de rendimiento y la sección anual
+  const [chartCurrency,setChartCurrency]=useState(()=>{ try{ return JSON.parse(localStorage.getItem("gal_chart_prefs_v1")||"{}").currency||"USD_CCL"; }catch{ return "USD_CCL"; } });
   const holdings = useMemo(()=>holdingsFromTrades(trades),[trades]);
   const en = useMemo(()=>port.map(h0=>({...h0,qty:holdings[h0.ticker]??h0.qty})).filter(h=>h.qty>1e-9).map(h=>{
     const live=livePrices[h.ticker];
@@ -624,7 +626,7 @@ function App(){
 
     const liveMap = {};
     for(const h of en) if(h.isLive) liveMap[h.ticker]=h.currentPrice;
-    const serie = calcTWR(allDates, trades, en, tickerBars, cclBars, mepBars, "USD_CCL", fxRate, liveMap, null, today, bondFlows);
+    const serie = calcTWR(allDates, trades, en, tickerBars, cclBars, mepBars, chartCurrency, fxRate, liveMap, null, today, bondFlows);
     if(!serie||serie.length<2) return null;
 
     const first = serie[0]?.val||100;
@@ -710,7 +712,7 @@ function App(){
 
     return { twrTotal: twrTotal*100, twrAnual, dias, serie, byYear, firstDate };
     }catch(e){ console.error("twrStats error:",e); return null; }
-  },[trades, en, historicos, fxRate, bondFlows]); // sin livePrices — no recalcular por cada precio
+  },[trades, en, historicos, fxRate, bondFlows, chartCurrency]); // sin livePrices — no recalcular por cada precio
 
   // XIRR full-period: tasa real del inversor (money-weighted)
   const xirrFull = useMemo(()=>{
@@ -1266,7 +1268,7 @@ function App(){
                     icon:"📈", lbl:"Rendimiento acumulado",
                     main:twrStats?fmtP(twrStats.twrTotal):fmtP(totPct),
                     sub:(hideAmounts?"••••":(totPnlTotal>=0?"+":"")+fmtU(totPnlTotal))+(twrStats&&twrStats.dias>=365?" · "+fmtP(twrStats.twrAnual)+" anual":""),
-                    subLabel:twrStats?"P&L · desde "+twrStats.firstDate.split("-").reverse().join("/")+" ("+twrStats.dias+"d)":"No realizado",
+                    subLabel:twrStats?"P&L · desde "+twrStats.firstDate.split("-").reverse().join("/")+" · rend. en "+({USD_CCL:"USD CCL",USD_MEP:"USD MEP",ARS:"pesos"}[chartCurrency]||chartCurrency):"No realizado",
                     mainColor:twrStats?pc(twrStats.twrTotal):pc(totPct),
                     trend:twrStats?twrStats.twrTotal:totPct,
                   },
@@ -1368,7 +1370,7 @@ function App(){
                 })()}
                 <div style={{...card,padding:"10px 18px 18px",display:"flex",flexDirection:"column"}}>
                   <div style={{height:window.innerWidth<768?340:410}}>
-                    <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} livePricesAll={livePrices} onExpand={()=>setChartModal(true)} xirrFull={xirrFull} totPnlTotal={totPnlTotal} bondFlows={bondFlows}/>
+                    <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} livePricesAll={livePrices} onExpand={()=>setChartModal(true)} xirrFull={xirrFull} totPnlTotal={totPnlTotal} bondFlows={bondFlows} currency={chartCurrency} onCurrencyChange={setChartCurrency}/>
                   </div>
                 </div>
                 {chartModal&&(
@@ -1382,7 +1384,7 @@ function App(){
                       </button>
                     </div>
                     <div style={{flex:1,padding:"24px",minHeight:0}}>
-                      <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} isModal={true} livePricesAll={livePrices} xirrFull={xirrFull} totPnlTotal={totPnlTotal} bondFlows={bondFlows}/>
+                      <EvoMini en={en} trades={trades} fxRate={fxRate} liveT10Y={liveT10Y} liveFX={liveFX} liveSP500={liveSP500} historicos={historicos} isModal={true} livePricesAll={livePrices} xirrFull={xirrFull} totPnlTotal={totPnlTotal} bondFlows={bondFlows} currency={chartCurrency} onCurrencyChange={setChartCurrency}/>
                     </div>
                   </div>
                 )}

@@ -619,7 +619,9 @@ function App(){
     const allDates = [...allDatesSet].sort();
     if(allDates.length<2) return null;
 
-    const serie = calcTWR(allDates, trades, en, tickerBars, cclBars, mepBars, "USD_CCL", fxRate, {}, null, today);
+    const liveMap = {};
+    for(const h of en) if(h.isLive) liveMap[h.ticker]=h.currentPrice;
+    const serie = calcTWR(allDates, trades, en, tickerBars, cclBars, mepBars, "USD_CCL", fxRate, liveMap, null, today, bondFlows);
     if(!serie||serie.length<2) return null;
 
     const first = serie[0]?.val||100;
@@ -691,14 +693,13 @@ function App(){
 
       const puntos = serie.filter(p=>p.date>=yStartRef&&p.date<=yEndDate);
       if(!puntos.length) return;
-      const twrInicio = puntos[0].val;
+      // Punta a punta sobre la curva base 100: desde el cierre del año anterior (o el inicio) al último punto del año
+      const prevPt = serie.filter(p=>p.date<yStartRef).pop();
+      const twrInicio = prevPt ? prevPt.val : serie[0].val;
       const twrFin    = puntos[puntos.length-1].val;
 
       const ypp = calcPeriodPnL({s:isFirstYear?"0000-01-01":`${y}-01-01`, e:yEndDate, trades, en, historicos, bondFlows, today});
-      const xirrFlows = ypp.flows;
-      const diasAnio = Math.max(1, Math.round((new Date(yEndDate)-new Date(xirrFlows[0].date))/(1000*60*60*24)));
-      let rendAnio = ((twrFin/twrInicio)-1)*100;
-      if(xirrFlows.length>=2){const rA=calcXIRR(xirrFlows);if(rA!=null)rendAnio=deannualizeXIRR(rA,diasAnio)*100;}
+      const rendAnio = ((twrFin/twrInicio)-1)*100;
       const pnlAnio = ypp.total;
 
       byYear[y] = { rend: rendAnio, pnl: pnlAnio, twrInicio, twrFin };
@@ -1259,12 +1260,12 @@ function App(){
                     bigSub:true,
                   },
                   {
-                    icon:"📈", lbl:"Retorno anualizado",
-                    main:xirrFull?fmtP(xirrFull.xirrAnual):fmtP(totPct),
-                    sub:xirrFull?(hideAmounts?"••••":fmtU(totPnlTotal))+" · "+xirrFull.dias+"d":(hideAmounts?"••••":fmtU(totPnl)),
-                    subLabel:xirrFull?"P&L total del período":"No realizado",
-                    mainColor:xirrFull?pc(xirrFull.xirrAnual):pc(totPct),
-                    trend:xirrFull?xirrFull.xirrAnual:totPct,
+                    icon:"📈", lbl:"Rendimiento acumulado",
+                    main:twrStats?fmtP(twrStats.twrTotal):fmtP(totPct),
+                    sub:(hideAmounts?"••••":(totPnlTotal>=0?"+":"")+fmtU(totPnlTotal))+(twrStats?" · "+fmtP(twrStats.twrAnual)+" anual":""),
+                    subLabel:twrStats?"P&L · desde "+twrStats.firstDate.split("-").reverse().join("/")+" ("+twrStats.dias+"d)":"No realizado",
+                    mainColor:twrStats?pc(twrStats.twrTotal):pc(totPct),
+                    trend:twrStats?twrStats.twrTotal:totPct,
                   },
 
                   {
@@ -1402,17 +1403,23 @@ function App(){
                     </div>
                     <div style={{display:"flex",gap:20,alignItems:"center"}}>
                       <div style={{textAlign:"right"}}>
-                        <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8}}>Retorno anualizado</div>
-                        <div style={{fontSize:18,fontWeight:700,color:pc(xirrFull?.xirrAnual??twrStats.twrAnual),fontFamily:"'DM Mono',monospace"}}>
-                          {(xirrFull?.xirrAnual??twrStats.twrAnual)>=0?"+":""}{(xirrFull?.xirrAnual??twrStats.twrAnual).toFixed(1)}%<span style={{fontSize:11,fontWeight:400,opacity:0.6}}>/año</span>
+                        <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8}}>Acumulado</div>
+                        <div style={{fontSize:18,fontWeight:700,color:pc(twrStats.twrTotal),fontFamily:"'DM Mono',monospace"}}>
+                          {twrStats.twrTotal>=0?"+":""}{twrStats.twrTotal.toFixed(1)}%
                         </div>
                       </div>
                       <div style={{textAlign:"right"}}>
-                        <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8}}>Acumulado</div>
-                        <div style={{fontSize:18,fontWeight:700,color:pc(xirrFull?.xirrTotal??twrStats.twrTotal),fontFamily:"'DM Mono',monospace"}}>
-                          {(xirrFull?.xirrTotal??twrStats.twrTotal)>=0?"+":""}{(xirrFull?.xirrTotal??twrStats.twrTotal).toFixed(1)}%
+                        <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8}}>Anualizado</div>
+                        <div style={{fontSize:18,fontWeight:700,color:pc(twrStats.twrAnual),fontFamily:"'DM Mono',monospace"}}>
+                          {twrStats.twrAnual>=0?"+":""}{twrStats.twrAnual.toFixed(1)}%<span style={{fontSize:11,fontWeight:400,opacity:0.6}}>/año</span>
                         </div>
                       </div>
+                      {xirrFull&&<div style={{textAlign:"right"}} title="Tasa interna de retorno: rendimiento anual de tu plata según cuándo la pusiste y la sacaste">
+                        <div style={{fontSize:9,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:0.8}}>TIR sobre tu plata</div>
+                        <div style={{fontSize:14,fontWeight:600,color:pc(xirrFull.xirrAnual),fontFamily:"'DM Mono',monospace",opacity:0.85}}>
+                          {xirrFull.xirrAnual>=0?"+":""}{xirrFull.xirrAnual.toFixed(1)}%<span style={{fontSize:10,fontWeight:400,opacity:0.6}}>/año</span>
+                        </div>
+                      </div>}
                     </div>
                   </div>
 
@@ -1424,7 +1431,7 @@ function App(){
                       <div style={{display:"flex",gap:0,alignItems:"flex-end",borderBottom:"1px solid var(--border)"}}>
                         {entries.map(([year,data],i)=>{
                           const isCurrentY = year===todayAR().slice(0,4);
-                          const rend = isCurrentY&&xirrFull?.xirrTotal!=null ? xirrFull.xirrTotal : data.rend;
+                          const rend = data.rend;
                           const pnlY = isCurrentY ? totPnlTotal : data.pnl;
                           const isPos = rend>=0;
                           const barH  = Math.max(3, Math.abs(rend)/maxAbs*BAR_MAX);

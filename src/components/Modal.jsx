@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import NumInput from './NumInput';
 import { ASSET_TYPES, todayAR } from '../utils/shared';
+import { maxSellable } from '../utils/positions';
 
 const fmtU = (n,d=0) => new Intl.NumberFormat("es-AR",{style:"currency",currency:"USD",maximumFractionDigits:d}).format(n);
 const fmtA = (n) => new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:0}).format(n);
@@ -129,7 +130,7 @@ function inferCurrency(item, endpoint){
 }
 
 
-export default function Modal({h,port=[],onSave,onClose,darkMode=true}){
+export default function Modal({h,port=[],trades=[],onSave,onClose,darkMode=true}){
   const blank={ticker:"",name:"",type:"accion_ar",qty:"",buyPrice:"",buyCurrency:"ARS",buyDate:todayAR(),operacion:"compra",comision:"",comisionPct:"",netoManual:""};
   const [f,setF]=useState(h?{...h,operacion:"compra",buyPrice:""}:blank);
   const [tickerStatus,setTickerStatus]=useState(h?"confirmed":"idle");
@@ -244,7 +245,8 @@ export default function Modal({h,port=[],onSave,onClose,darkMode=true}){
 
   const typeLabel=(t)=>ASSET_TYPES[t]?.label||t;
   const statusColor={idle:"var(--border)",checking:"var(--yellow)",found:"var(--green)",notfound:"rgba(251,191,36,0.6)",confirmed:"var(--green)"};
-  const availableQty=f.operacion==="venta"?(port.find(x=>x.ticker===f.ticker)?.qty||0):Infinity;
+  // Tope de venta: lo que había a la fecha de la venta sin dejar negativa ninguna venta posterior
+  const availableQty=f.operacion==="venta"?maxSellable(trades,f.ticker,f.buyDate||todayAR()):Infinity;
   const overSelling=f.operacion==="venta"&&+f.qty>availableQty;
   const canSave=f.ticker&&f.qty&&f.buyPrice&&!overSelling&&(f.operacion==="venta"||tickerStatus==="confirmed"||tickerStatus==="found"||tickerStatus==="notfound");
 
@@ -377,16 +379,10 @@ export default function Modal({h,port=[],onSave,onClose,darkMode=true}){
             <label style={{display:"flex",flexDirection:"column",gap:4}}>
               <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:1}}>{f.operacion==="venta"?"Cantidad a vender":"Nominales"}</span>
               <div style={{display:"flex",gap:4}}>
-                <div style={{flex:1,position:"relative"}}>
-                  <NumInput min="0" max={f.operacion==="venta"?availableQty:undefined} value={f.qty}
-                    onChange={e=>{const v=+e.target.value;set("qty",f.operacion==="venta"?Math.min(v,availableQty):v||e.target.value);}}
-                    style={{...inp,flex:1,width:"100%",color:"transparent",caretColor:"var(--text-primary)",borderColor:overSelling?"var(--red)":undefined}}/>
-                  {/* Display formateado encima del input */}
-                  <div style={{position:"absolute",top:0,left:0,right:0,bottom:0,padding:"8px 12px",
-                    fontSize:14,color:"var(--text-primary)",pointerEvents:"none",
-                    display:"flex",alignItems:"center"}}>
-                    {f.qty?Number(f.qty).toLocaleString("es-AR"):""}
-                  </div>
+                <div style={{flex:1}}>
+                  <NumInput value={f.qty}
+                    onChange={e=>{const raw=e.target.value;set("qty",f.operacion==="venta"&&+raw>availableQty?String(availableQty):raw);}}
+                    style={{...inp,flex:1,width:"100%",borderColor:overSelling?"var(--red)":undefined}}/>
                 </div>
                 {f.operacion==="venta"&&f.ticker&&(
                   <button onClick={()=>set("qty",availableQty)}

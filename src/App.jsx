@@ -5,6 +5,7 @@ import NumInput from './components/NumInput';
 import { SEED_BOND_FLOWS, SEED_BOND_META } from './constants/bondFlows';
 import { computeBondFlowsDelta, expandBondFlowsDelta } from './utils/bondUtils';
 import { mergeSnapshots, sameSnapshot } from './utils/sync';
+import { holdingsFromTrades, tradeProblems } from './utils/positions';
 import BondWizard from './components/BondWizard';
 import FlujoTab from './components/FlujoTab';
 import { fetchFXLive, fetchAllLivePrices, fetchTreasury10Y } from './utils/priceUtils';
@@ -485,7 +486,9 @@ function App(){
 
   const today = todayAR();
   setKnownBonds(port.filter(h=>String(h.type||'').startsWith('bono')).map(h=>h.ticker));
-  const en = useMemo(()=>port.map(h=>{
+  // Cantidades desde las operaciones (fuente de verdad); port aporta tipo, nombre, moneda y precio
+  const holdings = useMemo(()=>holdingsFromTrades(trades),[trades]);
+  const en = useMemo(()=>port.map(h0=>({...h0,qty:holdings[h0.ticker]??h0.qty})).filter(h=>h.qty>1e-9).map(h=>{
     const live=livePrices[h.ticker];
     const isBondH=h.type==="bono_ars"; // solo ARS cotiza por 100 laminas diferente al historico
     const livePrice=live?live.price:null;
@@ -562,7 +565,7 @@ function App(){
     const pnlUSD=valUSD-costUSD;
     const pnlPct=costUSD>0?(pnlUSD/costUSD)*100:0;
     return{...h,currentPrice,liveChangePct,valUSD,costUSD,pnlUSD,pnlPct,isLive:!!live,ppc};
-  }),[port,trades,livePrices,historicos,fxRate,ppcByTicker,today]);
+  }),[port,trades,holdings,livePrices,historicos,fxRate,ppcByTicker,today]);
 
   const enGrouped = useMemo(()=>Object.values(en.reduce((acc,h)=>{
     if(!acc[h.ticker]){acc[h.ticker]={...h};return acc;}
@@ -767,7 +770,7 @@ function App(){
           const ts=Date.now();
           const live=livePrices[pos.ticker];
           const sellPrice=live?live.price:pos.currentPrice;
-          setTrades(t=>[...t,{id:ts,ticker:pos.ticker,tipo:"venta",qty:pos.qty,price:sellPrice,currency:pos.buyCurrency,date:todayAR(),ts,name:pos.name}]);
+          setTrades(t=>[...t,{id:ts,ticker:pos.ticker,tipo:"venta",qty:holdings[pos.ticker]??pos.qty,price:sellPrice,currency:pos.buyCurrency,date:todayAR(),ts,name:pos.name}]);
         }
         setPort(p=>p.filter(x=>x.id!==id));
       }
@@ -1599,7 +1602,7 @@ function App(){
         </div>
       )}
 
-      {modal&&<Modal h={modal==="add"?null:modal} port={port} onSave={saveOrDelete} onClose={()=>setModal(null)} darkMode={darkMode}/>}
+      {modal&&<Modal h={modal==="add"?null:modal} port={en} trades={trades} onSave={saveOrDelete} onClose={()=>setModal(null)} darkMode={darkMode}/>}
       {bondWizard&&(
         <BondWizard
           ticker={bondWizard.ticker}

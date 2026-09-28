@@ -3,6 +3,7 @@ import React, { useState, useMemo } from "react";
 import NumInput from './NumInput';
 import { calcVNR } from '../utils/shared';
 import { isBondTicker } from '../utils/calcUtils';
+import { tradeProblems } from '../utils/positions';
 import { SEED_BOND_META } from '../constants/bondFlows';
 
 export default function OperacionesTab({trades,port,setTrades,setPort,card,livePrices,darkMode,bondFlows={},setBondFlows,en=[]}){
@@ -113,9 +114,18 @@ export default function OperacionesTab({trades,port,setTrades,setPort,card,liveP
 
   const startEdit=(t)=>{setEditId(t.id);setEditData({...t});};
 
-  const saveEdit=()=>{if(!window.confirm("Confirmar modificacion?"))return;
+  // Rechaza cambios que dejen alguna venta sin tenencia suficiente
+  const newProblem=(next)=>{const before=new Set(tradeProblems(trades).map(p=>p.ticker));return tradeProblems(next).find(p=>!before.has(p.ticker));};
+  const fmtQ=n=>Number(n).toLocaleString("es-AR",{maximumFractionDigits:4});
+
+  const saveEdit=()=>{
     if(!editData)return;
-    setTrades(prev=>prev.map(t=>t.id===editId?{...editData,qty:+editData.qty,price:+editData.price,comision:editData.comision?+editData.comision:0,tcCompra:editData.tcCompra?+editData.tcCompra:undefined}:t));
+    const edited={...editData,qty:+editData.qty,price:+editData.price,comision:editData.comision?+editData.comision:0,tcCompra:editData.tcCompra?+editData.tcCompra:undefined};
+    const next=trades.map(t=>t.id===editId?edited:t);
+    const p=newProblem(next);
+    if(p){window.alert("No se puede guardar: con este cambio la venta de "+p.ticker+" del "+p.date+" supera la tenencia en "+fmtQ(p.faltante)+" nominales.");return;}
+    if(!window.confirm("Confirmar modificacion?"))return;
+    setTrades(next);
     setPort(prev=>prev.map(p=>{
       if(p.ticker!==editData.ticker)return p;
       return{...p,buyPrice:+editData.price};
@@ -125,6 +135,8 @@ export default function OperacionesTab({trades,port,setTrades,setPort,card,liveP
 
   const deleteTrade=(trade)=>{
     const newTrades=trades.filter(t=>t.id!==trade.id);
+    const p=newProblem(newTrades);
+    if(p){window.alert("No se puede eliminar: la venta de "+p.ticker+" del "+p.date+" quedaría sin tenencia (faltan "+fmtQ(p.faltante)+" nominales). Eliminá o corregí esa venta primero.");setConfirmDelete(null);return;}
     setTrades(newTrades);
     const remaining=newTrades.filter(t=>t.ticker===trade.ticker&&t.tipo==="compra");
     const sold=newTrades.filter(t=>t.ticker===trade.ticker&&t.tipo==="venta");
@@ -163,6 +175,11 @@ export default function OperacionesTab({trades,port,setTrades,setPort,card,liveP
 
   return(
     <div className="fi" style={{display:"grid",gap:14}}>
+      {tradeProblems(trades).map(p=>(
+        <div key={p.ticker} style={{...card,padding:"10px 16px",borderColor:"var(--red)",color:"var(--red)",fontSize:12}}>
+          ⚠ {p.ticker}: la venta del {p.date} supera la tenencia en {fmtQ(p.faltante)} nominales. Falta cargar una compra o corregir esa venta.
+        </div>
+      ))}
       {/* KPIs */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:10}}>
         {[

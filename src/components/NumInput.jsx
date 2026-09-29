@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 
 // Input numérico con formato es-AR (1.234.567,89) mientras se escribe.
 // onChange recibe {target:{value}} con el número en formato JS ("1234567.89"), igual que un input type=number.
-const toDisplay = (raw) => {
+export const toDisplay = (raw) => {
   if (raw === "" || raw == null) return "";
   const s = String(raw);
   const neg = s.startsWith("-");
@@ -12,7 +12,7 @@ const toDisplay = (raw) => {
   return (neg ? "-" : "") + intFmt + (dec !== undefined ? "," + dec : "");
 };
 
-const toRaw = (text) => {
+export const toRaw = (text) => {
   const neg = text.trim().startsWith("-");
   const clean = text.replace(/[^\d,]/g, "");
   const [int, ...rest] = clean.split(",");

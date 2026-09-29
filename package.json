@@ -4,25 +4,19 @@
   "private": true,
   "dependencies": {
     "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-scripts": "5.0.1"
+    "react-dom": "^18.2.0"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build"
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead"
-    ],
-    "development": [
-      "last 1 chrome version"
-    ]
+    "dev": "vite",
+    "start": "vite",
+    "test": "vitest run",
+    "build": "vitest run && vite build",
+    "preview": "vite preview"
   },
   "devDependencies": {
-    "caniuse-lite": "^1.0.30001812",
-    "es-abstract": "^1.24.2",
-    "webpack": "^5.111.1"
-  }
+    "@vitejs/plugin-react": "^4.7.0",
+    "vite": "^6.4.3",
+    "vitest": "^3.2.7"
+  },
+  "type": "module"
 }

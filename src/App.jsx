@@ -1526,7 +1526,7 @@ function App(){
 
           {/* OPERACIONES */}
           {tab==="operaciones"&&visitedTabs.has("operaciones")&&(
-            <OperacionesTab trades={trades} port={port} setTrades={setTrades} setPort={setPort} card={card} livePrices={livePrices} darkMode={darkMode} bondFlows={bondFlows} setBondFlows={setBondFlows} en={en}/>
+            <OperacionesTab trades={trades} port={port} setTrades={setTrades} setPort={setPort} card={card} livePrices={livePrices} darkMode={darkMode} bondFlows={bondFlows} setBondFlows={setBondFlows} en={en} historicos={historicos}/>
           )}
           {tab==="flujos"&&visitedTabs.has("flujos")&&(
             <FlujoTab port={port} trades={trades} bondFlows={bondFlows} setBondFlows={setBondFlows} card={card} fxRate={fxRate} historicos={historicos} isMobile={isMobile}/>

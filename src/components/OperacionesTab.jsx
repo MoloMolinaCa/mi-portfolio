@@ -4,9 +4,19 @@ import NumInput from './NumInput';
 import { calcVNR } from '../utils/shared';
 import { isBondTicker } from '../utils/calcUtils';
 import { tradeProblems } from '../utils/positions';
+import { buildTaxReport, taxReportCSV } from '../utils/taxReport';
+import { todayAR } from '../utils/shared';
 import { SEED_BOND_META } from '../constants/bondFlows';
 
-export default function OperacionesTab({trades,port,setTrades,setPort,card,livePrices,darkMode,bondFlows={},setBondFlows,en=[]}){
+export default function OperacionesTab({trades,port,setTrades,setPort,card,livePrices,darkMode,bondFlows={},setBondFlows,en=[],historicos={}}){
+  const years=[...new Set(trades.map(t=>t.date.slice(0,4)))].sort().reverse();
+  const [taxYear,setTaxYear]=useState(()=>years[0]||todayAR().slice(0,4));
+  const downloadTax=()=>{
+    const r=buildTaxReport({year:taxYear,trades,port,historicos,bondFlows,today:todayAR()});
+    const blob=new Blob([taxReportCSV(r)],{type:"text/csv;charset=utf-8"});
+    const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="reporte_impositivo_"+taxYear+".csv";
+    document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+  };
   const [editCoupon,setEditCoupon]=useState(null);
   const [editId,setEditId]=useState(null);
   const [editData,setEditData]=useState(null);
@@ -240,6 +250,10 @@ export default function OperacionesTab({trades,port,setTrades,setPort,card,liveP
               ✕ Limpiar
             </button>
           )}
+          <div style={{display:"flex",gap:6,alignItems:"flex-end"}} title="Ventas con costo FIFO, cupones cobrados y tenencia al 31/12. Resumen informativo para tu declaración.">
+            <select value={taxYear} onChange={e=>setTaxYear(e.target.value)} style={{...inp,width:"auto"}}>{years.map(y=><option key={y} value={y}>{y}</option>)}</select>
+            <button onClick={downloadTax} style={{padding:"6px 12px",background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:6,color:"var(--text-secondary)",cursor:"pointer",fontSize:12,whiteSpace:"nowrap"}}>⬇ Reporte impositivo</button>
+          </div>
           <span style={{fontSize:11,color:"var(--text-muted)",marginLeft:"auto",alignSelf:"flex-end"}}>
             {sorted.length} de {allOps.length} operación{allOps.length!==1?"es":""}
           </span>
